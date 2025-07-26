@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kolkata Container Shipment Analysis with AI Insights</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Amber & Stone -->
+    <!-- Application Structure Plan: A top-down dashboard structure was chosen for optimal user experience. The flow starts with high-level, aggregate KPIs at the top for an immediate overview. This is followed by interactive filters, allowing users to control the data view. A new AI section provides LLM-powered summaries and actions. The main content area is a responsive grid, placing key visualizations (charts) next to the detailed data (table). This structure allows users to see the big picture, ask questions via filters, get AI-driven insights, see the visual answer in the charts, and then inspect the raw data for confirmation. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Total value, quantity, volume, weight -> Goal: Inform -> Viz: KPI Cards -> Interaction: Dynamic updates on filter -> Justification: Provides a quick, scannable summary of the container's overall metrics.
+        - Report Info: Value distribution per client -> Goal: Compare/Proportion -> Viz: Donut Chart (Chart.js) -> Interaction: Hover tooltips -> Justification: Best way to show parts-of-a-whole relationships for financial contribution.
+        - Report Info: Volume distribution per supplier -> Goal: Compare -> Viz: Bar Chart (Chart.js) -> Interaction: Hover tooltips -> Justification: Ideal for comparing discrete categories (suppliers) on a common logistical metric (CBM).
+        - Report Info: Item-level details -> Goal: Organize/Explore -> Viz: Interactive HTML Table -> Interaction: Filter and Search -> Justification: Allows users to drill down to the ground-truth data and find specific items.
+        - Report Info: Filtered data context -> Goal: Synthesize/Summarize -> Viz: AI-Generated Text Block -> Interaction: Button click -> Justification: Provides a narrative summary of the current data view, powered by the Gemini API.
+        - Report Info: Client-specific data -> Goal: Communicate -> Viz: AI-Generated Email Draft -> Interaction: Button click on client filter -> Justification: Automates routine client communication, saving time.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f5f5f4; /* stone-100 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 320px;
+            }
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e7e5e4; /* stone-200 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a8a29e; /* stone-400 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #78716c; /* stone-500 */
+        }
+        .kpi-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(245, 158, 11, 0.3);
+            border-radius: 50%;
+            border-top-color: #f59e0b; /* amber-500 */
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-stone-800">
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-stone-900">Kolkata DTD Container Shipment</h1>
+            <p class="text-stone-500 mt-2">Interactive Dashboard with AI Insights | August 8, 2024</p>
+        </header>
+
+        <section id="kpi-section" class="mb-8">
+             <div class="text-left mb-4">
+                <h2 class="text-2xl font-semibold text-stone-800">Shipment Overview</h2>
+                <p class="text-stone-500">This section provides a high-level summary of the entire container's contents. These key performance indicators (KPIs) will update dynamically as you apply filters below.</p>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                <div class="kpi-card">
+                    <p class="text-sm font-medium text-stone-500">Total Value</p>
+                    <p id="total-value" class="text-2xl md:text-3xl font-bold text-amber-600 mt-1"></p>
+                </div>
+                <div class="kpi-card">
+                    <p class="text-sm font-medium text-stone-500">Total Items</p>
+                    <p id="total-items" class="text-2xl md:text-3xl font-bold text-amber-600 mt-1"></p>
+                </div>
+                <div class="kpi-card">
+                    <p class="text-sm font-medium text-stone-500">Total Volume (CBM)</p>
+                    <p id="total-cbm" class="text-2xl md:text-3xl font-bold text-amber-600 mt-1"></p>
+                </div>
+                <div class="kpi-card">
+                    <p class="text-sm font-medium text-stone-500">Total Weight (WT)</p>
+                    <p id="total-wt" class="text-2xl md:text-3xl font-bold text-amber-600 mt-1"></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="filters-section" class="mb-8 p-6 bg-white rounded-xl shadow-sm">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="client-filter" class="block text-sm font-medium text-stone-700 mb-2">Filter by Client</label>
+                    <select id="client-filter" class="w-full p-2 border border-stone-300 rounded-lg shadow-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                        <option value="All">All Clients</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="supplier-filter" class="block text-sm font-medium text-stone-700 mb-2">Filter by Supplier</label>
+                    <select id="supplier-filter" class="w-full p-2 border border-stone-300 rounded-lg shadow-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                        <option value="All">All Suppliers</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section id="ai-insights-section" class="mb-8 p-6 bg-white rounded-xl shadow-lg">
+            <h2 class="text-2xl font-semibold text-stone-800 mb-2">✨ AI-Powered Insights</h2>
+            <p class="text-stone-500 mb-4">Use the Gemini API to generate summaries and draft communications based on the current data view.</p>
+            
+            <div id="summary-section">
+                <h3 class="text-lg font-semibold text-stone-800">Shipment Summary</h3>
+                <p class="text-sm text-stone-500 mb-4">Get a quick, human-readable overview of the filtered shipment data.</p>
+                <button id="generate-summary-btn" class="flex items-center justify-center px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg shadow-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-75 transition">
+                    Generate Summary
+                </button>
+                <div id="summary-output-container" class="mt-4 hidden">
+                    <div id="summary-spinner" class="spinner mx-auto"></div>
+                    <p id="summary-output" class="text-stone-600 bg-stone-50 p-4 rounded-lg"></p>
+                </div>
+            </div>
+
+            <div id="client-draft-section" class="mt-8 hidden">
+                <h3 class="text-lg font-semibold text-stone-800">Client Communication</h3>
+                <p class="text-sm text-stone-500 mb-4">Draft a professional shipment update for the selected client.</p>
+                <button id="generate-draft-btn" class="flex items-center justify-center px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg shadow-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-75 transition">
+                    Draft Update for Client
+                </button>
+                <div id="draft-output-container" class="mt-4 hidden">
+                    <div id="draft-spinner" class="spinner mx-auto"></div>
+                    <div class="relative">
+                        <textarea id="draft-output" rows="8" class="w-full p-4 border border-stone-300 rounded-lg shadow-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="AI-generated draft will appear here..."></textarea>
+                        <button id="copy-draft-btn" class="absolute top-2 right-2 px-3 py-1 bg-stone-200 text-stone-600 text-xs font-semibold rounded-md hover:bg-stone-300">Copy</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <main class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <div class="lg:col-span-2 flex flex-col gap-8">
+                <div class="p-6 bg-white rounded-xl shadow-lg">
+                    <h3 class="text-lg font-semibold text-stone-800 mb-1">Value by Client</h3>
+                    <p class="text-sm text-stone-500 mb-4">This chart shows the percentage of the container's total value attributed to each client.</p>
+                    <div class="chart-container">
+                        <canvas id="client-chart"></canvas>
+                    </div>
+                </div>
+                <div class="p-6 bg-white rounded-xl shadow-lg">
+                    <h3 class="text-lg font-semibold text-stone-800 mb-1">Volume by Supplier</h3>
+                    <p class="text-sm text-stone-500 mb-4">This chart visualizes the total cubic meters (CBM) of space occupied by goods from each supplier.</p>
+                    <div class="chart-container">
+                        <canvas id="supplier-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-span-3 p-6 bg-white rounded-xl shadow-lg">
+                 <h3 class="text-lg font-semibold text-stone-800 mb-1">Shipment Details</h3>
+                 <p class="text-sm text-stone-500 mb-4">A detailed, sortable list of all items in the shipment. Use the filters above to narrow down the results.</p>
+                <div class="overflow-x-auto max-h-[800px]">
+                    <table class="w-full text-sm text-left text-stone-500">
+                        <thead class="text-xs text-stone-700 uppercase bg-stone-100 sticky top-0">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Item No.</th>
+                                <th scope="col" class="px-6 py-3">Description</th>
+                                <th scope="col" class="px-6 py-3">Amount</th>
+                                <th scope="col" class="px-6 py-3">Client</th>
+                                <th scope="col" class="px-6 py-3">Supplier</th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-table">
+                            
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+<script>
+    const rawData = [
+        {"ITEM NO.": "KV-101", "DESCRIPTION": "FILE BAG", "PRICE": 0.3, "QTY": 480, "CTNS": 17, "T.QTY": 8160, "AMOUNT": 2448, "CBM": 0.095, "T.CBM": 1.615, "WT": 19.5, "T.WT": 331.5, "SUPPLIER": "SUJI STOCK", "CLIENT": "YOGESH", "CARRYING": 23094.5},
+        {"ITEM NO.": "KI-5", "DESCRIPTION": "BELT", "PRICE": 2.1, "QTY": 360, "CTNS": 10, "T.QTY": 3600, "AMOUNT": 7560, "CBM": 0.09, "T.CBM": 0.9, "WT": 45, "T.WT": 450, "SUPPLIER": "45908", "CLIENT": null, "CARRYING": 18000},
+        {"ITEM NO.": "CH-212F", "DESCRIPTION": "16CC FOLDER DOUBLE POCKET", "PRICE": 0.81, "QTY": 600, "CTNS": 20, "T.QTY": 12000, "AMOUNT": 9720, "CBM": 0.11, "T.CBM": 2.2, "WT": 34, "T.WT": 680, "SUPPLIER": "TOPPER", "CLIENT": "RAJESH ARORA", "CARRYING": 32560},
+        {"ITEM NO.": "CH-T112F WHITE", "DESCRIPTION": "25CC FOLDER SINGLE POCKET", "PRICE": 0.82, "QTY": 480, "CTNS": 20, "T.QTY": 9600, "AMOUNT": 7872, "CBM": 0.1, "T.CBM": 2, "WT": 25.5, "T.WT": 510, "SUPPLIER": null, "CLIENT": null, "CARRYING": 29600},
+        {"ITEM NO.": "CH-T112F", "DESCRIPTION": "25CC FOLDER SINGLE POCKET", "PRICE": 0.81, "QTY": 600, "CTNS": 1, "T.QTY": 600, "AMOUNT": 486, "CBM": 0.05, "T.CBM": 0.05, "WT": 16.5, "T.WT": 16.5, "SUPPLIER": null, "CLIENT": null, "CARRYING": null},
+        {"ITEM NO.": "CH-T112F BLACK", "DESCRIPTION": "25CC FOLDER SINGLE POCKET", "PRICE": 0.82, "QTY": 600, "CTNS": 9, "T.QTY": 5400, "AMOUNT": 4428, "CBM": 0.05, "T.CBM": 0.45, "WT": 16.5, "T.WT": 148.5, "SUPPLIER": null, "CLIENT": null, "CARRYING": 16428},
+        {"ITEM NO.": "CH-525F", "DESCRIPTION": "A4 PUNCH FOLDER 12 POCKET", "PRICE": 0.82, "QTY": 600, "CTNS": 20, "T.QTY": 12000, "AMOUNT": 9840, "CBM": 0.12, "T.CBM": 2.4, "WT": 36, "T.WT": 720, "SUPPLIER": null, "CLIENT": null, "CARRYING": 38160},
+        {"ITEM NO.": "CRYSTAL-106", "DESCRIPTION": "8\" White Hex RUBBER BALL", "PRICE": 1.2, "QTY": 500, "CTNS": 25, "T.QTY": 12500, "AMOUNT": 15000, "CBM": 0.081, "T.CBM": 2.025, "WT": 34, "T.WT": 850, "SUPPLIER": "CRYSTAL", "CLIENT": null, "CARRYING": 36550},
+        {"ITEM NO.": "CRYSTAL-107", "DESCRIPTION": "9\" White Hex RUBBER BALL", "PRICE": 1.28, "QTY": 500, "CTNS": 24, "T.QTY": 12000, "AMOUNT": 15360, "CBM": 0.081, "T.CBM": 1.944, "WT": 39, "T.WT": 936, "SUPPLIER": null, "CLIENT": null, "CARRYING": 40248},
+        {"ITEM NO.": "CRYSTAL-103", "DESCRIPTION": "GREEN/Pink Hand Basket", "PRICE": 4.6, "QTY": 150, "CTNS": 11, "T.QTY": 1650, "AMOUNT": 7590, "CBM": 0.072, "T.CBM": 0.792, "WT": 31.5, "T.WT": 346.5, "SUPPLIER": null, "CLIENT": null, "CARRYING": 14899.5},
+        {"ITEM NO.": null, "DESCRIPTION": "04 FLINT 2.2*7MM Black", "PRICE": 2.8, "QTY": 600, "CTNS": 24, "T.QTY": 14400, "AMOUNT": 40320, "CBM": 0.013, "T.CBM": 0.312, "WT": 25.5, "T.WT": 612, "SUPPLIER": "JAMES", "CLIENT": "DEEPAK KOL", "CARRYING": 24480},
+        {"ITEM NO.": null, "DESCRIPTION": "lighter ACCESSORIES 8.3MM WHEEL", "PRICE": 180, "QTY": 2, "CTNS": 48, "T.QTY": 96, "AMOUNT": 17280, "CBM": 0.013, "T.CBM": 0.624, "WT": 20.5, "T.WT": 984, "SUPPLIER": "JAMES", "CLIENT": null, "CARRYING": 39360},
+        {"ITEM NO.": null, "DESCRIPTION": "lighter ACCESSORIES 8.3MM WHEEL", "PRICE": 180, "QTY": 4, "CTNS": 1, "T.QTY": 4, "AMOUNT": 720, "CBM": 0.03, "T.CBM": 0.03, "WT": 2, "T.WT": 2, "SUPPLIER": null, "CLIENT": null, "CARRYING": 720}
+    ];
+
+    let clientChart, supplierChart;
+    let processedData = [];
+    let currentFilteredData = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        processedData = processData(rawData);
+        currentFilteredData = processedData;
+        populateFilters(processedData);
+        initializeCharts();
+        render(processedData);
+
+        document.getElementById('client-filter').addEventListener('change', handleFilterChange);
+        document.getElementById('supplier-filter').addEventListener('change', handleFilterChange);
+        document.getElementById('generate-summary-btn').addEventListener('click', handleGenerateSummary);
+        document.getElementById('generate-draft-btn').addEventListener('click', handleGenerateDraft);
+        document.getElementById('copy-draft-btn').addEventListener('click', copyDraftToClipboard);
+    });
+    
+    function processData(data) {
+        let lastClient = null;
+        let lastSupplier = null;
+        return data.map(row => {
+            if (row.CLIENT) lastClient = row.CLIENT;
+            if (row.SUPPLIER) lastSupplier = row.SUPPLIER;
+            return {
+                ...row,
+                CLIENT: row.CLIENT || lastClient || 'Unknown',
+                SUPPLIER: row.SUPPLIER || lastSupplier || 'Unknown'
+            };
+        });
+    }
+
+    function populateFilters(data) {
+        const clientFilter = document.getElementById('client-filter');
+        const supplierFilter = document.getElementById('supplier-filter');
+
+        const clients = [...new Set(data.map(item => item.CLIENT))].sort();
+        const suppliers = [...new Set(data.map(item => item.SUPPLIER))].sort();
+
+        clients.forEach(client => {
+            const option = document.createElement('option');
+            option.value = client;
+            option.textContent = client;
+            clientFilter.appendChild(option);
+        });
+
+        suppliers.forEach(supplier => {
+            const option = document.createElement('option');
+            option.value = supplier;
+            option.textContent = supplier;
+            supplierFilter.appendChild(option);
+        });
+    }
+
+    function handleFilterChange() {
+        const selectedClient = document.getElementById('client-filter').value;
+        const selectedSupplier = document.getElementById('supplier-filter').value;
+        const clientDraftSection = document.getElementById('client-draft-section');
+        const generateDraftBtn = document.getElementById('generate-draft-btn');
+
+        let filteredData = processedData;
+
+        if (selectedClient !== 'All') {
+            filteredData = filteredData.filter(item => item.CLIENT === selectedClient);
+            clientDraftSection.classList.remove('hidden');
+            generateDraftBtn.textContent = `Draft Update for ${selectedClient}`;
+        } else {
+            clientDraftSection.classList.add('hidden');
+        }
+
+        if (selectedSupplier !== 'All') {
+            filteredData = filteredData.filter(item => item.SUPPLIER === selectedSupplier);
+        }
+        
+        currentFilteredData = filteredData;
+        render(currentFilteredData);
+    }
+
+    function render(data) {
+        renderKPIs(data);
+        renderTable(data);
+        updateCharts(data);
+    }
+    
+    function renderKPIs(data) {
+        const totalValue = data.reduce((sum, item) => sum + (item.AMOUNT || 0), 0);
+        const totalItems = data.reduce((sum, item) => sum + (item['T.QTY'] || 0), 0);
+        const totalCbm = data.reduce((sum, item) => sum + (item['T.CBM'] || 0), 0);
+        const totalWt = data.reduce((sum, item) => sum + (item['T.WT'] || 0), 0);
+        
+        document.getElementById('total-value').textContent = `$${totalValue.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+        document.getElementById('total-items').textContent = totalItems.toLocaleString();
+        document.getElementById('total-cbm').textContent = `${totalCbm.toFixed(2)}`;
+        document.getElementById('total-wt').textContent = `${totalWt.toFixed(2)}`;
+    }
+
+    function renderTable(data) {
+        const tableBody = document.getElementById('data-table');
+        tableBody.innerHTML = '';
+        if (data.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-stone-500">No data matches your filters.</td></tr>`;
+            return;
+        }
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            row.className = 'bg-white border-b hover:bg-stone-50';
+            row.innerHTML = `
+                <td class="px-6 py-4 font-medium text-stone-900 whitespace-nowrap">${item['ITEM NO.'] || 'N/A'}</td>
+                <td class="px-6 py-4">${item.DESCRIPTION || 'N/A'}</td>
+                <td class="px-6 py-4">$${(item.AMOUNT || 0).toLocaleString()}</td>
+                <td class="px-6 py-4">${item.CLIENT || 'N/A'}</td>
+                <td class="px-6 py-4">${item.SUPPLIER || 'N/A'}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+    
+    function initializeCharts() {
+        const clientCtx = document.getElementById('client-chart').getContext('2d');
+        clientChart = new Chart(clientCtx, {
+            type: 'doughnut',
+            data: { labels: [], datasets: [{ label: 'Value by Client', data: [], backgroundColor: ['#d97706', '#f59e0b', '#fbbf24', '#fcd34d', '#fef3c7'], borderColor: '#f5f5f4', borderWidth: 4, }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', }, tooltip: { callbacks: { label: (c) => `${c.label}: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c.parsed)}` } } } }
+        });
+
+        const supplierCtx = document.getElementById('supplier-chart').getContext('2d');
+        supplierChart = new Chart(supplierCtx, {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Volume (CBM) by Supplier', data: [], backgroundColor: '#f59e0b', borderColor: '#b45309', borderWidth: 1 }] },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, }, scales: { x: { beginAtZero: true, title: { display: true, text: 'Total Cubic Meters (CBM)' } } } }
+        });
+    }
+
+    function updateCharts(data) {
+        const clientData = aggregateBy(data, 'CLIENT', 'AMOUNT');
+        clientChart.data.labels = clientData.labels;
+        clientChart.data.datasets[0].data = clientData.values;
+        clientChart.update();
+        
+        const supplierData = aggregateBy(data, 'SUPPLIER', 'T.CBM');
+        supplierChart.data.labels = supplierData.labels;
+        supplierChart.data.datasets[0].data = supplierData.values;
+        supplierChart.update();
+    }
+    
+    function aggregateBy(data, key, valueKey) {
+        const aggregation = data.reduce((acc, item) => {
+            const group = item[key] || 'Unknown';
+            acc[group] = (acc[group] || 0) + (item[valueKey] || 0);
+            return acc;
+        }, {});
+        const sorted = Object.entries(aggregation).sort((a,b) => b[1] - a[1]);
+        return { labels: sorted.map(e => e[0]), values: sorted.map(e => e[1]) };
+    }
+
+    async function callGemini(prompt) {
+        let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+        const payload = { contents: chatHistory };
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                throw new Error(`API call failed with status: ${response.status}`);
+            }
+            const result = await response.json();
+            if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                return "No content received from AI. The response might be empty or blocked due to safety settings.";
+            }
+        } catch (error) {
+            console.error("Gemini API call error:", error);
+            return "An error occurred while contacting the AI. Please check the console for details.";
+        }
+    }
+
+    async function handleGenerateSummary() {
+        const container = document.getElementById('summary-output-container');
+        const spinner = document.getElementById('summary-spinner');
+        const output = document.getElementById('summary-output');
+        
+        container.classList.remove('hidden');
+        spinner.classList.remove('hidden');
+        output.classList.add('hidden');
+
+        const dataSummary = currentFilteredData.map(d => ({
+            description: d.DESCRIPTION,
+            amount: d.AMOUNT,
+            client: d.CLIENT,
+            supplier: d.SUPPLIER,
+            cbm: d['T.CBM']
+        }));
+
+        const prompt = `You are a logistics analyst. Analyze the following JSON data representing a shipment and provide a concise, insightful summary in 2-3 sentences for a manager. Mention the top client by value and the most significant items. Data: ${JSON.stringify(dataSummary.slice(0, 10))}`;
+
+        const result = await callGemini(prompt);
+        
+        output.textContent = result;
+        spinner.classList.add('hidden');
+        output.classList.remove('hidden');
+    }
+
+    async function handleGenerateDraft() {
+        const container = document.getElementById('draft-output-container');
+        const spinner = document.getElementById('draft-spinner');
+        const output = document.getElementById('draft-output');
+        
+        container.classList.remove('hidden');
+        spinner.classList.remove('hidden');
+        output.classList.add('hidden');
+
+        const selectedClient = document.getElementById('client-filter').value;
+        const clientData = currentFilteredData.filter(d => d.CLIENT === selectedClient).map(d => ({
+            description: d.DESCRIPTION,
+            quantity: d['T.QTY'],
+            amount: d.AMOUNT
+        }));
+        
+        const totalValue = clientData.reduce((sum, item) => sum + item.amount, 0);
+
+        const prompt = `You are a helpful logistics assistant. Write a brief and professional shipment update email for our client, ${selectedClient}. Inform them that their shipment is being processed. Mention that the total value of their goods in this shipment is approximately $${totalValue.toLocaleString('en-US', {maximumFractionDigits:0})}. List up to 3 key items from their order. Keep the tone friendly and professional. Data for their items: ${JSON.stringify(clientData)}`;
+
+        const result = await callGemini(prompt);
+        
+        output.value = result;
+        spinner.classList.add('hidden');
+        output.classList.remove('hidden');
+    }
+    
+    function copyDraftToClipboard() {
+        const textarea = document.getElementById('draft-output');
+        textarea.select();
+        document.execCommand('copy');
+        alert('Draft copied to clipboard!');
+    }
+
+</script>
+</body>
+</html>
