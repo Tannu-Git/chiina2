@@ -23,6 +23,9 @@ import { Button } from '@/components/ui/button'
 import { Input, SearchInput } from '@/components/ui/input'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, getStatusColor, formatDate } from '@/lib/utils'
+import QCInspector from '@/components/warehouse/QCInspector'
+import LoopBackMonitor from '@/components/warehouse/LoopBackMonitor'
+import ContainerPlanner3D from '@/components/warehouse/ContainerPlanner3D'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
@@ -34,6 +37,10 @@ const Warehouse = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [showLoopbackModal, setShowLoopbackModal] = useState(false)
+  const [showQCInspector, setShowQCInspector] = useState(false)
+  const [qcOrder, setQcOrder] = useState(null)
+  const [containers, setContainers] = useState([])
+  const [availableItems, setAvailableItems] = useState([])
 
   // Fetch warehouse dashboard data
   const fetchDashboardData = async () => {
@@ -137,27 +144,27 @@ const Warehouse = () => {
     }
   }
 
-  const handleQCInspection = async (order) => {
-    try {
-      setSelectedOrder(order)
-      // This would typically open a QC inspection modal
-      // For now, we'll simulate a successful QC inspection
-      const inspectionData = {
-        orderId: order._id,
-        itemInspections: order.items.map((item, index) => ({
-          itemIndex: index,
-          status: 'PASSED',
-          notes: 'Quality check completed',
-          defectQty: 0
-        }))
-      }
+  const handleQCInspection = (order) => {
+    setQcOrder(order)
+    setShowQCInspector(true)
+  }
 
-      await axios.post('/api/warehouse/qc-inspection', inspectionData)
-      toast.success('QC inspection completed for ' + order.orderNumber)
-      fetchDashboardData() // Refresh data
+  const handleQCResult = async (result) => {
+    try {
+      if (result.success) {
+        toast.success('QC inspection completed successfully!')
+
+        // If loop-back is needed, automatically create it
+        if (result.needsLoopback) {
+          toast.info('Creating loop-back order for shortages/damages...')
+          // The loop-back creation is handled by the QC backend
+        }
+
+        fetchDashboardData() // Refresh data
+      }
     } catch (error) {
-      console.error('QC inspection error:', error)
-      toast.error('Failed to complete QC inspection')
+      console.error('QC result handling error:', error)
+      toast.error('Failed to process QC results')
     }
   }
 
@@ -308,7 +315,9 @@ const Warehouse = () => {
               { id: 'overview', name: 'Overview', icon: BarChart3 },
               { id: 'orders', name: 'Ready Orders', icon: Package },
               { id: 'containers', name: 'Active Containers', icon: Container },
-              { id: 'qc', name: 'Quality Control', icon: CheckCircle }
+              { id: 'qc', name: 'Quality Control', icon: CheckCircle },
+              { id: 'loopback', name: 'Loop-back Monitor', icon: RotateCcw },
+              { id: 'planner', name: 'Container Planner', icon: Container }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -627,20 +636,88 @@ const Warehouse = () => {
               <CardDescription>Manage quality inspections and approvals</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12">
-                <CheckCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Quality Control Interface</h3>
-                <p className="text-gray-500 mb-6">
-                  Advanced QC inspection tools will be available here
-                </p>
-                <Button variant="gradient">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Start New Inspection
-                </Button>
+              <div className="space-y-6">
+                {/* QC Orders List */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {readyOrders.map((order) => (
+                    <div key={order._id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(order.status)}
+                          <div>
+                            <h3 className="font-semibold text-sm">{order.orderNumber}</h3>
+                            <p className="text-xs text-gray-500">{order.clientName}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2 mb-4">
+                        <div className="text-xs text-gray-600">
+                          Items: {order.items?.length || 0}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Total: {formatCurrency(order.totalAmount || 0)}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={() => handleQCInspection(order)}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Start QC Inspection
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
         </motion.div>
+      )}
+
+      {/* Loop-back Monitor Tab */}
+      {selectedTab === 'loopback' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <LoopBackMonitor onCreateLoopback={() => setShowLoopbackModal(true)} />
+        </motion.div>
+      )}
+
+      {/* Container Planner Tab */}
+      {selectedTab === 'planner' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <ContainerPlanner3D
+            items={availableItems}
+            containers={containers}
+            onAllocationChange={(item, newQty) => {
+              console.log('Allocation changed:', item, newQty)
+              // Handle allocation change
+            }}
+            onOptimize={(plan) => {
+              console.log('Optimization plan:', plan)
+              toast.success('Container allocation optimized!')
+            }}
+          />
+        </motion.div>
+      )}
+
+      {/* QC Inspector Modal */}
+      {showQCInspector && qcOrder && (
+        <QCInspector
+          order={qcOrder}
+          onResult={handleQCResult}
+          onClose={() => {
+            setShowQCInspector(false)
+            setQcOrder(null)
+          }}
+        />
       )}
     </div>
   )

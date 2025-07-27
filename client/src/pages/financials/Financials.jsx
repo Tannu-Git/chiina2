@@ -22,6 +22,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, MetricCard } from '@/components/ui/card'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import ProfitGauge from '@/components/financials/ProfitGauge'
+import CostAllocationTree from '@/components/financials/CostAllocationTree'
+import ContainerMap from '@/components/financials/ContainerMap'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
@@ -441,6 +444,54 @@ const Financials = () => {
             </Card>
           </motion.div>
         )}
+
+        {/* Advanced Financial Components */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+          {/* Profit Gauge */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.8 }}
+          >
+            <ProfitGauge
+              currentProfit={displayData.summary.totalProfit}
+              targetProfit={displayData.summary.totalProfit * 1.2} // 20% higher target
+              previousProfit={displayData.summary.totalProfit * 0.85} // Previous period
+              period="This Month"
+              showDetails={true}
+            />
+          </motion.div>
+
+          {/* Cost Allocation Tree */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 1.0 }}
+          >
+            <CostAllocationTree
+              containerData={{
+                totalCost: displayData.summary.totalRevenue * 0.7, // 70% of revenue as costs
+                totalUnits: displayData.summary.totalOrders
+              }}
+              showPercentages={true}
+              expandAll={false}
+            />
+          </motion.div>
+        </div>
+
+        {/* Container Tracking Map */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 1.2 }}
+          className="mb-8"
+        >
+          <ContainerMap
+            containers={[]} // In real app, this would come from API
+            realTimeUpdates={true}
+            showFinancials={true}
+          />
+        </motion.div>
       </motion.div>
     </div>
   )

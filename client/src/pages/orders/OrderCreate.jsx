@@ -11,11 +11,15 @@ import {
   User,
   Calendar,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Grid,
+  List
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input, ExcelInput } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import OrderCreationGrid from '@/components/orders/OrderCreationGrid'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, calculateCarryingCharge } from '@/lib/utils'
 import axios from 'axios'
@@ -27,6 +31,7 @@ const OrderCreate = () => {
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [viewMode, setViewMode] = useState('grid') // 'grid' or 'form'
   const [orderData, setOrderData] = useState({
     clientName: '',
     deadline: '',
@@ -394,7 +399,7 @@ const OrderCreate = () => {
           </div>
         </div>
 
-        {/* Excel-like Items Grid */}
+        {/* Items Section with Tabs */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -402,35 +407,65 @@ const OrderCreate = () => {
                 <Package className="h-5 w-5 mr-2" />
                 Order Items
               </CardTitle>
-              <CardDescription>Excel-like grid for item entry with real-time calculations</CardDescription>
+              <CardDescription>Choose between Excel-like grid or traditional form view</CardDescription>
             </div>
-            <Button onClick={addItem} variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+              >
+                <Grid className="h-4 w-4 mr-2" />
+                Excel Grid
+              </Button>
+              <Button
+                variant={viewMode === 'form' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('form')}
+              >
+                <List className="h-4 w-4 mr-2" />
+                Form View
+              </Button>
+              {viewMode === 'form' && (
+                <Button onClick={addItem} variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="excel-grid w-full">
-                <thead>
-                  <tr>
-                    <th className="excel-header w-4">#</th>
-                    <th className="excel-header min-w-32">Item Code *</th>
-                    <th className="excel-header min-w-48">Description *</th>
-                    <th className="excel-header w-20">Qty</th>
-                    <th className="excel-header w-24">Unit Price</th>
-                    <th className="excel-header w-24">Total Price</th>
-                    <th className="excel-header w-20">Weight (kg)</th>
-                    <th className="excel-header w-20">CBM</th>
-                    <th className="excel-header w-20">Cartons</th>
-                    <th className="excel-header min-w-32">Supplier</th>
-                    <th className="excel-header w-32">Payment</th>
-                    <th className="excel-header w-24">Charge Basis</th>
-                    <th className="excel-header w-20">Rate</th>
-                    <th className="excel-header w-24">Charge Amount</th>
-                    <th className="excel-header w-16">Actions</th>
-                  </tr>
-                </thead>
+            {viewMode === 'grid' ? (
+              <OrderCreationGrid
+                initialData={orderData.items}
+                onSave={(items) => {
+                  setOrderData(prev => ({ ...prev, items }))
+                  toast.success('Items updated successfully!')
+                }}
+              />
+            ) : (
+              <div>
+              <div className="overflow-x-auto">
+                <table className="excel-grid w-full">
+                  <thead>
+                    <tr>
+                      <th className="excel-header w-4">#</th>
+                      <th className="excel-header min-w-32">Item Code *</th>
+                      <th className="excel-header min-w-48">Description *</th>
+                      <th className="excel-header w-20">Qty</th>
+                      <th className="excel-header w-24">Unit Price</th>
+                      <th className="excel-header w-24">Total Price</th>
+                      <th className="excel-header w-20">Weight (kg)</th>
+                      <th className="excel-header w-20">CBM</th>
+                      <th className="excel-header w-20">Cartons</th>
+                      <th className="excel-header min-w-32">Supplier</th>
+                      <th className="excel-header w-32">Payment</th>
+                      <th className="excel-header w-24">Charge Basis</th>
+                      <th className="excel-header w-20">Rate</th>
+                      <th className="excel-header w-24">Charge Amount</th>
+                      <th className="excel-header w-16">Actions</th>
+                    </tr>
+                  </thead>
                 <tbody>
                   {orderData.items.map((item, index) => (
                     <tr key={index} className="hover:bg-gray-50">
@@ -565,22 +600,8 @@ const OrderCreate = () => {
                 </tfoot>
               </table>
             </div>
-
-            {/* Help Text */}
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-              <div className="flex items-start">
-                <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-2" />
-                <div className="text-sm text-blue-700">
-                  <p className="font-medium mb-1">Excel-like Features:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Real-time calculations as you type</li>
-                    <li>Carrying charges calculated automatically based on basis (carton/CBM/weight)</li>
-                    <li>Tab navigation between cells</li>
-                    <li>Add/remove rows dynamically</li>
-                  </ul>
-                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>

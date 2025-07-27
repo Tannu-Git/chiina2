@@ -172,7 +172,13 @@ const orderSchema = new mongoose.Schema({
     ref: 'User'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  optimisticConcurrency: true // Enable optimistic locking
+});
+
+// Add version field for optimistic locking
+orderSchema.add({
+  __v: { type: Number, default: 0 }
 });
 
 // Indexes for better query performance
@@ -198,6 +204,38 @@ orderSchema.pre('save', function(next) {
 orderSchema.statics.generateOrderNumber = async function() {
   const count = await this.countDocuments();
   return `ORD-${(count + 1).toString().padStart(6, '0')}`;
+};
+
+// Optimistic locking methods
+orderSchema.methods.updateWithLock = async function(updateData, expectedVersion) {
+  if (expectedVersion !== undefined && this.__v !== expectedVersion) {
+    const error = new Error('Document has been modified by another user. Please refresh and try again.');
+    error.name = 'VersionError';
+    error.code = 'OPTIMISTIC_LOCK_ERROR';
+    throw error;
+  }
+
+  // Increment version
+  updateData.__v = this.__v + 1;
+
+  const result = await this.constructor.findOneAndUpdate(
+    { _id: this._id, __v: this.__v },
+    updateData,
+    { new: true, runValidators: true }
+  );
+
+  if (!result) {
+    const error = new Error('Document has been modified by another user. Please refresh and try again.');
+    error.name = 'VersionError';
+    error.code = 'OPTIMISTIC_LOCK_ERROR';
+    throw error;
+  }
+
+  return result;
+};
+
+orderSchema.statics.findByIdWithLock = function(id) {
+  return this.findById(id).select('+__v');
 };
 
 module.exports = mongoose.model('Order', orderSchema);
