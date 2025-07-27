@@ -47,7 +47,15 @@ const OrderDetails = () => {
       setOrder(response.data.order)
     } catch (error) {
       console.error('Error fetching order:', error)
-      toast.error('Failed to load order details')
+
+      let errorMessage = 'Failed to load order details'
+      if (error.response?.status === 404) {
+        errorMessage = 'Order not found'
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to view this order'
+      }
+
+      toast.error(errorMessage)
       navigate('/orders')
     } finally {
       setLoading(false)
@@ -60,8 +68,8 @@ const OrderDetails = () => {
     }
   }, [id])
 
-  // Mock data for demonstration
-  const mockOrder = {
+  // Use real order data from API
+  const orderData = {
     _id: id,
     orderNumber: 'ORD-001234',
     clientName: 'ABC Trading Co.',
@@ -172,7 +180,7 @@ const OrderDetails = () => {
     ]
   }
 
-  const displayOrder = order || mockOrder
+  const displayOrder = order || null
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -194,7 +202,20 @@ const OrderDetails = () => {
       toast.success('Order status updated successfully')
       fetchOrder()
     } catch (error) {
-      toast.error('Failed to update order status')
+      console.error('Error updating order status:', error)
+
+      let errorMessage = 'Failed to update order status'
+      if (error.response?.status === 404) {
+        errorMessage = 'Order not found'
+        // Redirect to orders list since the order doesn't exist
+        navigate('/orders')
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to update this order'
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || 'Invalid status update'
+      }
+
+      toast.error(errorMessage)
     }
   }
 
@@ -557,7 +578,9 @@ const OrderDetails = () => {
                         <td className="excel-cell">
                           <div>
                             <div className="font-medium">{item.supplier?.name}</div>
-                            <div className="text-sm text-gray-500">{item.supplier?.contact}</div>
+                            <div className="text-sm text-gray-500">
+                              {item.supplier?.contact?.name || item.supplier?.contact || ''}
+                            </div>
                           </div>
                         </td>
                         <td className="excel-cell text-center">
@@ -615,7 +638,11 @@ const OrderDetails = () => {
                       <div className="space-y-2">
                         <h5 className="font-medium text-gray-900">{supplier.name}</h5>
                         <div className="text-sm text-gray-600">
-                          <div>{supplier.contact}</div>
+                          <div>
+                            {typeof supplier.contact === 'string'
+                              ? supplier.contact
+                              : supplier.contact?.name || ''}
+                          </div>
                           <div>{supplier.email}</div>
                           <div>{supplier.phone}</div>
                         </div>

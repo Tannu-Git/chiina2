@@ -135,6 +135,7 @@ const DashboardLayout = ({ children }) => {
                 variant="ghost"
                 size="icon"
                 onClick={() => setSidebarOpen(false)}
+                aria-label="Close mobile menu"
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -238,6 +239,7 @@ const DashboardLayout = ({ children }) => {
                 size="icon"
                 className="lg:hidden"
                 onClick={() => setSidebarOpen(true)}
+                aria-label="Open mobile menu"
               >
                 <Menu className="h-5 w-5" />
               </Button>
@@ -257,7 +259,7 @@ const DashboardLayout = ({ children }) => {
 
             <div className="flex items-center space-x-4">
               {/* Notifications */}
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
               </Button>
@@ -267,6 +269,7 @@ const DashboardLayout = ({ children }) => {
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  aria-label="User menu"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">

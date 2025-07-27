@@ -14,11 +14,16 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  MoreHorizontal
+  MoreHorizontal,
+  DollarSign,
+  TrendingUp,
+  Users
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { SearchInput } from '@/components/ui/input'
+import UniversalDataDisplay from '@/components/ui/UniversalDataDisplay'
+import DataLoopManager from '@/components/ui/DataLoopManager'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, getStatusColor, formatDate, getPriorityColor } from '@/lib/utils'
 import axios from 'axios'
@@ -32,11 +37,159 @@ const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
+  const [currentDisplayData, setCurrentDisplayData] = useState([])
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
     total: 0
   })
+
+  // Data sources for looping
+  const dataSources = [
+    {
+      name: 'All Orders',
+      icon: Package,
+      description: 'Complete order list',
+      getData: () => displayOrders,
+      color: 'blue'
+    },
+    {
+      name: 'High Value Orders',
+      icon: DollarSign,
+      description: 'Orders above average value',
+      getData: () => {
+        const avgValue = displayOrders.reduce((sum, order) => sum + order.totalAmount, 0) / displayOrders.length
+        return displayOrders.filter(order => order.totalAmount > avgValue)
+      },
+      color: 'yellow'
+    },
+    {
+      name: 'Recent Orders',
+      icon: TrendingUp,
+      description: 'Latest 10 orders',
+      getData: () => displayOrders.slice(0, 10),
+      color: 'green'
+    },
+    {
+      name: 'Priority Orders',
+      icon: AlertTriangle,
+      description: 'High priority orders',
+      getData: () => displayOrders.filter(order => order.priority === 'high' || order.priority === 'urgent'),
+      color: 'red'
+    },
+    {
+      name: 'In Progress',
+      icon: Clock,
+      description: 'Active orders',
+      getData: () => displayOrders.filter(order => order.status === 'in_progress' || order.status === 'confirmed'),
+      color: 'purple'
+    }
+  ]
+
+  // Column configuration for the universal display
+  const orderColumns = [
+    {
+      key: 'orderNumber',
+      label: 'Order #',
+      render: (value, item) => (
+        <div className="flex items-center space-x-2">
+          {getStatusIcon(item.status)}
+          <Link
+            to={`/orders/${item._id}`}
+            className="font-medium text-blue-600 hover:text-blue-800"
+          >
+            {value}
+          </Link>
+        </div>
+      )
+    },
+    {
+      key: 'clientName',
+      label: 'Client',
+      render: (value, item) => (
+        <div>
+          <div className="font-medium text-gray-900">{value}</div>
+          <div className="text-sm text-gray-500">
+            {item.items?.length || 0} items
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (value) => (
+        <span className={`status-badge ${getStatusColor(value)}`}>
+          {value.replace('_', ' ')}
+        </span>
+      )
+    },
+    {
+      key: 'priority',
+      label: 'Priority',
+      render: (value) => (
+        <span className={`status-badge ${getPriorityColor(value)}`}>
+          {value}
+        </span>
+      )
+    },
+    {
+      key: 'totalAmount',
+      label: 'Amount',
+      render: (value) => (
+        <span className="font-medium">{formatCurrency(value)}</span>
+      )
+    },
+    {
+      key: 'totalCarryingCharges',
+      label: 'Charges',
+      render: (value) => formatCurrency(value)
+    },
+    {
+      key: 'deadline',
+      label: 'Deadline',
+      render: (value) => (
+        <div className="text-sm">
+          {formatDate(value)}
+          <div className="text-xs text-gray-500">
+            {new Date(value) < new Date() ? (
+              <span className="text-red-500">Overdue</span>
+            ) : (
+              `${Math.ceil((new Date(value) - new Date()) / (1000 * 60 * 60 * 24))} days`
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, item) => (
+        <div className="flex items-center justify-center space-x-1">
+          <Link to={`/orders/${item._id}`}>
+            <Button variant="ghost" size="sm">
+              <Eye className="h-4 w-4" />
+            </Button>
+          </Link>
+          <Link to={`/orders/${item._id}/edit`}>
+            <Button variant="ghost" size="sm">
+              <Edit className="h-4 w-4" />
+            </Button>
+          </Link>
+          {(user?.role === 'admin' || user?.role === 'staff') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteOrder(item._id)}
+              className="text-red-600 hover:text-red-800"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )
+    }
+  ]
 
   // Fetch orders
   const fetchOrders = async (page = 1) => {
@@ -69,64 +222,9 @@ const Orders = () => {
     fetchOrders()
   }, [searchTerm, statusFilter])
 
-  // Mock data for demonstration
-  const mockOrders = [
-    {
-      _id: '1',
-      orderNumber: 'ORD-001234',
-      clientName: 'ABC Trading Co.',
-      status: 'confirmed',
-      priority: 'high',
-      totalAmount: 125000,
-      totalCarryingCharges: 8500,
-      totalCartons: 45,
-      totalCbm: 23.5,
-      totalWeight: 1250,
-      deadline: '2024-01-25',
-      createdAt: '2024-01-15',
-      items: [
-        { itemCode: 'ITEM-001', description: 'Electronics Components', quantity: 100 },
-        { itemCode: 'ITEM-002', description: 'Textile Products', quantity: 50 }
-      ]
-    },
-    {
-      _id: '2',
-      orderNumber: 'ORD-001235',
-      clientName: 'XYZ Imports Ltd.',
-      status: 'in_progress',
-      priority: 'medium',
-      totalAmount: 89000,
-      totalCarryingCharges: 6200,
-      totalCartons: 32,
-      totalCbm: 18.2,
-      totalWeight: 890,
-      deadline: '2024-01-28',
-      createdAt: '2024-01-14',
-      items: [
-        { itemCode: 'ITEM-003', description: 'Fashion Accessories', quantity: 75 }
-      ]
-    },
-    {
-      _id: '3',
-      orderNumber: 'ORD-001236',
-      clientName: 'Global Logistics Pvt Ltd',
-      status: 'draft',
-      priority: 'low',
-      totalAmount: 156000,
-      totalCarryingCharges: 11200,
-      totalCartons: 67,
-      totalCbm: 34.8,
-      totalWeight: 1890,
-      deadline: '2024-02-05',
-      createdAt: '2024-01-13',
-      items: [
-        { itemCode: 'ITEM-004', description: 'Industrial Equipment', quantity: 25 },
-        { itemCode: 'ITEM-005', description: 'Raw Materials', quantity: 150 }
-      ]
-    }
-  ]
 
-  const displayOrders = orders.length > 0 ? orders : mockOrders
+
+  const displayOrders = orders // Remove mock data fallback
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -149,7 +247,18 @@ const Orders = () => {
         toast.success('Order deleted successfully')
         fetchOrders()
       } catch (error) {
-        toast.error('Failed to delete order')
+        console.error('Error deleting order:', error)
+
+        let errorMessage = 'Failed to delete order'
+        if (error.response?.status === 404) {
+          errorMessage = 'Order not found. It may have already been deleted.'
+          // Refresh the orders list to reflect current state
+          fetchOrders()
+        } else if (error.response?.status === 403) {
+          errorMessage = 'You do not have permission to delete this order'
+        }
+
+        toast.error(errorMessage)
       }
     }
   }
@@ -245,131 +354,29 @@ const Orders = () => {
           </CardContent>
         </Card>
 
-        {/* Orders Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>All Orders ({pagination.total || displayOrders.length})</CardTitle>
-            <CardDescription>Excel-like grid for order management</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="excel-header text-left">Order #</th>
-                    <th className="excel-header text-left">Client</th>
-                    <th className="excel-header text-center">Status</th>
-                    <th className="excel-header text-center">Priority</th>
-                    <th className="excel-header text-right">Amount</th>
-                    <th className="excel-header text-right">Charges</th>
-                    <th className="excel-header text-center">Cartons</th>
-                    <th className="excel-header text-center">CBM</th>
-                    <th className="excel-header text-center">Weight</th>
-                    <th className="excel-header text-center">Deadline</th>
-                    <th className="excel-header text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayOrders.map((order, index) => (
-                    <motion.tr
-                      key={order._id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="excel-cell">
-                        <div className="flex items-center space-x-2">
-                          {getStatusIcon(order.status)}
-                          <Link
-                            to={`/orders/${order._id}`}
-                            className="font-medium text-blue-600 hover:text-blue-800"
-                          >
-                            {order.orderNumber}
-                          </Link>
-                        </div>
-                      </td>
-                      <td className="excel-cell">
-                        <div>
-                          <div className="font-medium text-gray-900">{order.clientName}</div>
-                          <div className="text-sm text-gray-500">
-                            {order.items?.length || 0} items
-                          </div>
-                        </div>
-                      </td>
-                      <td className="excel-cell text-center">
-                        <span className={`status-badge ${getStatusColor(order.status)}`}>
-                          {order.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="excel-cell text-center">
-                        <span className={`status-badge ${getPriorityColor(order.priority)}`}>
-                          {order.priority}
-                        </span>
-                      </td>
-                      <td className="excel-cell text-right font-medium">
-                        {formatCurrency(order.totalAmount)}
-                      </td>
-                      <td className="excel-cell text-right">
-                        {formatCurrency(order.totalCarryingCharges)}
-                      </td>
-                      <td className="excel-cell text-center">
-                        {order.totalCartons}
-                      </td>
-                      <td className="excel-cell text-center">
-                        {order.totalCbm} m³
-                      </td>
-                      <td className="excel-cell text-center">
-                        {order.totalWeight} kg
-                      </td>
-                      <td className="excel-cell text-center">
-                        <div className="text-sm">
-                          {formatDate(order.deadline)}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(order.deadline) < new Date() ? (
-                            <span className="text-red-500">Overdue</span>
-                          ) : (
-                            `${Math.ceil((new Date(order.deadline) - new Date()) / (1000 * 60 * 60 * 24))} days`
-                          )}
-                        </div>
-                      </td>
-                      <td className="excel-cell text-center">
-                        <div className="flex items-center justify-center space-x-1">
-                          <Link to={`/orders/${order._id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          <Link to={`/orders/${order._id}/edit`}>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          {(user?.role === 'admin' || user?.role === 'staff') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteOrder(order._id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {/* Data Loop Manager */}
+        <DataLoopManager
+          dataSources={dataSources}
+          onDataChange={(data, source) => setCurrentDisplayData(data)}
+          className="mb-6"
+        />
 
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+        {/* Universal Data Display */}
+        <UniversalDataDisplay
+          data={currentDisplayData.length > 0 ? currentDisplayData : displayOrders}
+          title="Orders Management"
+          columns={orderColumns}
+          onItemClick={(order) => navigate(`/orders/${order._id}`)}
+          enableLoop={true}
+          enableAutoSwitch={true}
+          className="mb-8"
+        />
+
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <Card className="mb-6">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-500">
                   Showing {((pagination.currentPage - 1) * 10) + 1} to {Math.min(pagination.currentPage * 10, pagination.total)} of {pagination.total} orders
                 </div>
@@ -412,11 +419,15 @@ const Orders = () => {
                   </Button>
                 </div>
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Empty State */}
-            {displayOrders.length === 0 && !loading && (
-              <div className="text-center py-12">
+        {/* Empty State */}
+        {displayOrders.length === 0 && !loading && (
+          <Card>
+            <CardContent className="p-12">
+              <div className="text-center">
                 <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
                 <p className="text-gray-500 mb-6">
@@ -429,9 +440,9 @@ const Orders = () => {
                   </Button>
                 </Link>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-8">

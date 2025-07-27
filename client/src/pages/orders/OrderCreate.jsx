@@ -46,11 +46,7 @@ const OrderCreate = () => {
         unitWeight: 0,
         unitCbm: 0,
         cartons: 1,
-        supplier: {
-          name: '',
-          contact: '',
-          email: ''
-        },
+        supplier: '',
         paymentType: 'CLIENT_DIRECT',
         carryingCharge: {
           basis: 'carton',
@@ -101,20 +97,42 @@ const OrderCreate = () => {
       const response = await axios.get(`/api/orders/${id}`)
       const order = response.data.order
 
+      if (!order) {
+        throw new Error('Order not found')
+      }
+
       setOrderData({
         clientName: order.clientName || '',
         deadline: order.deadline ? order.deadline.split('T')[0] : '',
         priority: order.priority || 'medium',
         paymentType: order.paymentType || 'advance',
         supplierName: order.supplierName || '',
-        items: order.items || [{
+        notes: order.notes || '',
+        items: order.items?.map(item => ({
+          itemCode: item.itemCode || '',
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || 0,
+          unitWeight: item.unitWeight || 0,
+          unitCbm: item.unitCbm || 0,
+          cartons: item.cartons || 1,
+          supplier: item.supplier?.name || '',
+          paymentType: item.paymentType || 'CLIENT_DIRECT',
+          carryingCharge: {
+            basis: item.carryingCharge?.basis || 'carton',
+            rate: item.carryingCharge?.rate || 0,
+            amount: item.carryingCharge?.amount || 0
+          }
+        })) || [{
           itemCode: '',
           description: '',
           quantity: 1,
           unitPrice: 0,
           unitWeight: 0,
+          unitCbm: 0,
           cartons: 1,
-          cbmPerCarton: 0,
+          supplier: '',
+          paymentType: 'CLIENT_DIRECT',
           carryingCharge: {
             basis: 'carton',
             rate: 0,
@@ -124,8 +142,25 @@ const OrderCreate = () => {
       })
     } catch (error) {
       console.error('Error fetching order:', error)
-      toast.error('Failed to load order data')
-      navigate('/orders')
+
+      let errorMessage = 'Failed to load order data'
+      let shouldRedirect = true
+
+      if (error.response?.status === 404 || error.message === 'Order not found') {
+        errorMessage = 'Order not found. You can create a new order instead.'
+        setIsEditMode(false)
+        shouldRedirect = false
+        // Update URL to remove the invalid order ID
+        window.history.replaceState({}, '', '/orders/create')
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to view this order'
+      }
+
+      toast.error(errorMessage)
+
+      if (shouldRedirect) {
+        navigate('/orders')
+      }
     } finally {
       setLoading(false)
     }
@@ -169,11 +204,7 @@ const OrderCreate = () => {
           unitWeight: 0,
           unitCbm: 0,
           cartons: 1,
-          supplier: {
-            name: '',
-            contact: '',
-            email: ''
-          },
+          supplier: '',
           paymentType: 'CLIENT_DIRECT',
           carryingCharge: {
             basis: 'carton',
@@ -234,7 +265,19 @@ const OrderCreate = () => {
       navigate(`/orders/${response.data.order._id}`)
     } catch (error) {
       console.error('Error saving order:', error)
-      toast.error('Failed to save order')
+
+      let errorMessage = 'Failed to save order'
+      if (error.response?.status === 404 && isEditMode) {
+        errorMessage = 'Order not found. It may have been deleted.'
+        setIsEditMode(false)
+        window.history.replaceState({}, '', '/orders/create')
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to save this order'
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || 'Invalid order data'
+      }
+
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -302,10 +345,11 @@ const OrderCreate = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="clientName" className="block text-sm font-medium text-gray-700 mb-2">
                       Client Name *
                     </label>
                     <Input
+                      id="clientName"
                       value={orderData.clientName}
                       onChange={(e) => setOrderData({ ...orderData, clientName: e.target.value })}
                       placeholder="Enter client name"
@@ -313,20 +357,23 @@ const OrderCreate = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-2">
                       Deadline
                     </label>
                     <Input
+                      id="deadline"
                       type="date"
+                      role="textbox"
                       value={orderData.deadline}
                       onChange={(e) => setOrderData({ ...orderData, deadline: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
                       Priority
                     </label>
                     <select
+                      id="priority"
                       value={orderData.priority}
                       onChange={(e) => setOrderData({ ...orderData, priority: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -339,10 +386,11 @@ const OrderCreate = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
                     Notes
                   </label>
                   <textarea
+                    id="notes"
                     value={orderData.notes}
                     onChange={(e) => setOrderData({ ...orderData, notes: e.target.value })}
                     placeholder="Additional notes or instructions"

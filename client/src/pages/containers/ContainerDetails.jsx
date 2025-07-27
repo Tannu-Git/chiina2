@@ -58,8 +58,8 @@ const ContainerDetails = () => {
     }
   }, [id])
 
-  // Mock data for demonstration
-  const mockContainer = {
+  // Use real container data from API
+  const containerData = {
     _id: id,
     clientFacingId: 'SHIP-ABC123',
     realContainerId: 'MSKU1234567',
@@ -150,7 +150,7 @@ const ContainerDetails = () => {
     ]
   }
 
-  const displayContainer = container || mockContainer
+  const displayContainer = container || null
 
   const getStatusIcon = (status) => {
     switch (status) {

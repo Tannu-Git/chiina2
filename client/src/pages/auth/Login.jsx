@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore'
 const Login = () => {
   const navigate = useNavigate()
   const { login, isLoading } = useAuthStore()
-  
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -35,13 +35,13 @@ const Login = () => {
 
   const validateForm = () => {
     const newErrors = {}
-    
+
     if (!formData.email) {
       newErrors.email = 'Email is required'
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid'
     }
-    
+
     if (!formData.password) {
       newErrors.password = 'Password is required'
     } else if (formData.password.length < 6) {
@@ -54,7 +54,7 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!validateForm()) return
 
     const result = await login(formData)
@@ -80,19 +80,19 @@ const Login = () => {
               </div>
               <h1 className="text-3xl font-bold">Logistics OMS</h1>
             </div>
-            
+
             <h2 className="text-4xl font-bold mb-6">
               Streamline Your
               <br />
               <span className="text-blue-200">Supply Chain</span>
             </h2>
-            
+
             <p className="text-xl text-blue-100 mb-12 max-w-md">
               Manage orders, track containers, and optimize your logistics operations with our modern platform.
             </p>
 
             <div className="space-y-6">
-              <motion.div 
+              <motion.div
                 className="flex items-center"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -103,8 +103,8 @@ const Login = () => {
                 </div>
                 <span>Excel-like Order Management</span>
               </motion.div>
-              
-              <motion.div 
+
+              <motion.div
                 className="flex items-center"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -115,8 +115,8 @@ const Login = () => {
                 </div>
                 <span>Real-time Container Tracking</span>
               </motion.div>
-              
-              <motion.div 
+
+              <motion.div
                 className="flex items-center"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -130,7 +130,7 @@ const Login = () => {
             </div>
           </motion.div>
         </div>
-        
+
         {/* Floating elements */}
         <div className="absolute top-20 right-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
         <div className="absolute bottom-20 left-20 w-24 h-24 bg-blue-300/20 rounded-full blur-lg" />
@@ -153,14 +153,15 @@ const Login = () => {
                 Sign in to your account to continue
               </CardDescription>
             </CardHeader>
-            
+
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     Email Address
                   </label>
                   <Input
+                    id="email"
                     type="email"
                     name="email"
                     value={formData.email}
@@ -174,11 +175,12 @@ const Login = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                     Password
                   </label>
                   <div className="relative">
                     <Input
+                      id="password"
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       value={formData.password}
@@ -220,8 +222,8 @@ const Login = () => {
               <div className="mt-6 text-center">
                 <p className="text-gray-600">
                   Don't have an account?{' '}
-                  <Link 
-                    to="/register" 
+                  <Link
+                    to="/register"
                     className="text-blue-600 hover:text-blue-800 font-medium"
                   >
                     Sign up

@@ -37,25 +37,25 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
     try {
       setLoading(true)
       const response = await axios.get('/api/suppliers', {
-        params: { 
-          itemCode, 
+        params: {
+          itemCode,
           category,
           includeRatings: true,
           includeHistory: true
         }
       })
-      
+
       const suppliersData = response.data.suppliers || []
-      
+
       // Add AI-powered supplier matching
       if (itemCode) {
         const aiMatches = await getAISupplierMatches(itemCode)
         suppliersData.push(...aiMatches)
       }
-      
+
       setSuppliers(suppliersData)
       setFilteredSuppliers(suppliersData)
-      
+
       // Find selected supplier
       const selected = suppliersData.find(s => s.id === value || s.name === value)
       setSelectedSupplier(selected)
@@ -75,7 +75,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
         category,
         context: 'order_creation'
       })
-      
+
       return response.data.matches?.map(supplier => ({
         ...supplier,
         isAI: true,
@@ -120,7 +120,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
   // Select supplier
   const selectSupplier = (supplier) => {
     setSelectedSupplier(supplier)
-    onChange(supplier.name, supplier)
+    onChange(supplier.name)
     setIsOpen(false)
     setSearchTerm('')
   }
@@ -130,7 +130,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
     try {
       const response = await axios.post('/api/suppliers', supplierData)
       const newSupplier = response.data.supplier
-      
+
       setSuppliers(prev => [newSupplier, ...prev])
       selectSupplier(newSupplier)
       setShowAddForm(false)
@@ -154,20 +154,20 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
           <div className="flex items-center space-x-2 mb-1">
             <Building className="h-4 w-4 text-gray-400" />
             <span className="font-medium text-gray-900">{supplier.name}</span>
-            
+
             {supplier.isAI && (
               <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
                 AI Match {Math.round(supplier.matchScore * 100)}%
               </Badge>
             )}
-            
+
             {supplier.isPreferred && (
               <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700">
                 <Star className="h-3 w-3 mr-1" />
                 Preferred
               </Badge>
             )}
-            
+
             {supplier.verified && (
               <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
                 <Check className="h-3 w-3 mr-1" />
@@ -175,7 +175,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
               </Badge>
             )}
           </div>
-          
+
           <div className="space-y-1 text-sm text-gray-600">
             {supplier.location && (
               <div className="flex items-center">
@@ -183,7 +183,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
                 {supplier.location}
               </div>
             )}
-            
+
             {supplier.contact && (
               <div className="flex items-center space-x-3">
                 {supplier.contact.phone && (
@@ -200,7 +200,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
                 )}
               </div>
             )}
-            
+
             {supplier.specialties && supplier.specialties.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {supplier.specialties.slice(0, 3).map((specialty, i) => (
@@ -217,7 +217,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
             )}
           </div>
         </div>
-        
+
         <div className="flex flex-col items-end space-y-1 ml-4">
           {supplier.rating && (
             <div className="flex items-center">
@@ -225,27 +225,27 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
               <span className="text-sm font-medium">{supplier.rating.toFixed(1)}</span>
             </div>
           )}
-          
+
           {supplier.lastOrderDate && (
             <div className="flex items-center text-xs text-gray-500">
               <Clock className="h-3 w-3 mr-1" />
               {new Date(supplier.lastOrderDate).toLocaleDateString()}
             </div>
           )}
-          
+
           {supplier.averagePrice && (
             <div className="flex items-center text-xs text-gray-600">
               <TrendingUp className="h-3 w-3 mr-1" />
               Avg: {formatCurrency(supplier.averagePrice)}
             </div>
           )}
-          
+
           {supplier.leadTime && (
             <div className="text-xs text-gray-500">
               Lead: {supplier.leadTime} days
             </div>
           )}
-          
+
           {supplier.paymentTerms && (
             <div className="text-xs text-gray-500">
               Terms: {supplier.paymentTerms}
@@ -253,7 +253,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
           )}
         </div>
       </div>
-      
+
       {supplier.riskLevel && supplier.riskLevel !== 'low' && (
         <div className="mt-2 flex items-center text-xs">
           <AlertTriangle className={`h-3 w-3 mr-1 ${
@@ -308,13 +308,13 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
               onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3">
             <Input
               placeholder="Phone"
               value={formData.contact.phone}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
                 contact: { ...prev.contact, phone: e.target.value }
               }))}
             />
@@ -322,13 +322,13 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
               placeholder="Email"
               type="email"
               value={formData.contact.email}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
                 contact: { ...prev.contact, email: e.target.value }
               }))}
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3">
             <Input
               placeholder="Payment Terms"
@@ -342,7 +342,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
               onChange={(e) => setFormData(prev => ({ ...prev, leadTime: e.target.value }))}
             />
           </div>
-          
+
           <div className="flex justify-end space-x-2">
             <Button
               type="button"
@@ -395,7 +395,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
                   className="pl-10"
                 />
               </div>
-              
+
               <Button
                 type="button"
                 variant="outline"

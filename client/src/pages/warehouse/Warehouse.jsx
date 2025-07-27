@@ -68,68 +68,11 @@ const Warehouse = () => {
     totalCbmUtilization: 245.8
   }
 
-  const mockOrders = [
-    {
-      _id: '1',
-      orderNumber: 'ORD-001234',
-      clientName: 'ABC Trading Co.',
-      status: 'ready',
-      totalCartons: 45,
-      totalCbm: 23.5,
-      totalWeight: 1250,
-      deadline: '2024-01-25',
-      items: [
-        { itemCode: 'ITEM-001', description: 'Electronics Components', quantity: 100, cartons: 20 },
-        { itemCode: 'ITEM-002', description: 'Textile Products', quantity: 50, cartons: 25 }
-      ]
-    },
-    {
-      _id: '2',
-      orderNumber: 'ORD-001235',
-      clientName: 'XYZ Imports Ltd.',
-      status: 'in_production',
-      totalCartons: 32,
-      totalCbm: 18.2,
-      totalWeight: 890,
-      deadline: '2024-01-28',
-      items: [
-        { itemCode: 'ITEM-003', description: 'Fashion Accessories', quantity: 75, cartons: 32 }
-      ]
-    }
-  ]
 
-  const mockContainers = [
-    {
-      _id: '1',
-      clientFacingId: 'SHIP-ABC123',
-      type: '40ft',
-      status: 'loading',
-      currentCbm: 45.2,
-      maxCbm: 67,
-      currentWeight: 15000,
-      maxWeight: 30000,
-      location: { current: 'Warehouse A' },
-      orders: [
-        { orderId: { orderNumber: 'ORD-001234', clientName: 'ABC Trading' } }
-      ]
-    },
-    {
-      _id: '2',
-      clientFacingId: 'SHIP-DEF456',
-      type: '20ft',
-      status: 'planning',
-      currentCbm: 0,
-      maxCbm: 33,
-      currentWeight: 0,
-      maxWeight: 28000,
-      location: { current: 'Planning Stage' },
-      orders: []
-    }
-  ]
 
-  const metrics = dashboardData?.metrics || mockMetrics
-  const readyOrders = dashboardData?.readyOrders || mockOrders
-  const activeContainers = dashboardData?.activeContainers || mockContainers
+  const metrics = dashboardData?.metrics || { totalOrders: 0, readyOrders: 0, activeContainers: 0, totalCbmUtilization: 0 }
+  const readyOrders = dashboardData?.readyOrders || [] // Remove mock data fallback
+  const activeContainers = dashboardData?.activeContainers || [] // Remove mock data fallback
 
   const getStatusIcon = (status) => {
     switch (status) {

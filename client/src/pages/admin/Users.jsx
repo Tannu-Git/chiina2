@@ -53,76 +53,7 @@ const Users = () => {
     fetchUsers()
   }, [])
 
-  // Mock data for demonstration
-  const mockUsers = [
-    {
-      _id: '1',
-      name: 'John Smith',
-      email: 'john@abctrading.com',
-      phone: '+1-555-0123',
-      role: 'client',
-      status: 'active',
-      company: 'ABC Trading Co.',
-      lastLogin: '2024-01-20T10:30:00Z',
-      createdAt: '2024-01-01T00:00:00Z',
-      ordersCount: 23,
-      totalSpent: 485000
-    },
-    {
-      _id: '2',
-      name: 'Admin User',
-      email: 'admin@demo.com',
-      phone: '+1-555-0456',
-      role: 'admin',
-      status: 'active',
-      company: 'Logistics OMS',
-      lastLogin: '2024-01-21T09:15:00Z',
-      createdAt: '2023-12-01T00:00:00Z',
-      ordersCount: 0,
-      totalSpent: 0
-    },
-    {
-      _id: '3',
-      name: 'Sarah Wilson',
-      email: 'sarah@fabricworld.com',
-      phone: '+1-555-0789',
-      role: 'client',
-      status: 'active',
-      company: 'Fabric World Ltd.',
-      lastLogin: '2024-01-19T14:20:00Z',
-      createdAt: '2024-01-05T00:00:00Z',
-      ordersCount: 18,
-      totalSpent: 392000
-    },
-    {
-      _id: '4',
-      name: 'Mike Johnson',
-      email: 'mike@warehouse.com',
-      phone: '+1-555-0321',
-      role: 'staff',
-      status: 'active',
-      company: 'Logistics OMS',
-      lastLogin: '2024-01-20T16:45:00Z',
-      createdAt: '2023-12-15T00:00:00Z',
-      ordersCount: 0,
-      totalSpent: 0
-    },
-    {
-      _id: '5',
-      name: 'David Chen',
-      email: 'david@globallogistics.com',
-      phone: '+1-555-0654',
-      role: 'client',
-      status: 'inactive',
-      company: 'Global Logistics Pvt Ltd',
-      lastLogin: '2024-01-10T11:30:00Z',
-      createdAt: '2023-11-20T00:00:00Z',
-      ordersCount: 15,
-      totalSpent: 298000
-    }
-  ]
-
-  const displayUsers = users.length > 0 ? users : mockUsers
+  const displayUsers = users // Remove mock data fallback
 
   // Filter users
   const filteredUsers = displayUsers.filter(user => {

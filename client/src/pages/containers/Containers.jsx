@@ -17,11 +17,15 @@ import {
   Download,
   AlertTriangle,
   CheckCircle,
-  Clock
+  Clock,
+  Ship,
+  Anchor
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, MetricCard } from '@/components/ui/card'
 import { SearchInput } from '@/components/ui/input'
+import UniversalDataDisplay from '@/components/ui/UniversalDataDisplay'
+import DataLoopManager from '@/components/ui/DataLoopManager'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, getStatusColor, formatDate } from '@/lib/utils'
 import axios from 'axios'
@@ -34,6 +38,146 @@ const Containers = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedView, setSelectedView] = useState('grid')
+  const [currentDisplayData, setCurrentDisplayData] = useState([])
+
+  // Data sources for looping
+  const dataSources = [
+    {
+      name: 'All Containers',
+      icon: ContainerIcon,
+      description: 'Complete container list',
+      getData: () => filteredContainers,
+      color: 'blue'
+    },
+    {
+      name: 'Active Containers',
+      icon: Ship,
+      description: 'In transit or loading',
+      getData: () => filteredContainers.filter(c => ['loading', 'shipped', 'in_transit'].includes(c.status)),
+      color: 'green'
+    },
+    {
+      name: 'High Utilization',
+      icon: BarChart3,
+      description: 'Above 80% capacity',
+      getData: () => filteredContainers.filter(c => (c.currentCbm / c.maxCbm) > 0.8),
+      color: 'yellow'
+    },
+    {
+      name: 'Planning Stage',
+      icon: Clock,
+      description: 'Awaiting allocation',
+      getData: () => filteredContainers.filter(c => c.status === 'planning'),
+      color: 'purple'
+    },
+    {
+      name: 'Delivered',
+      icon: Anchor,
+      description: 'Completed shipments',
+      getData: () => filteredContainers.filter(c => c.status === 'delivered'),
+      color: 'gray'
+    }
+  ]
+
+  // Column configuration for containers
+  const containerColumns = [
+    {
+      key: 'clientFacingId',
+      label: 'Container ID',
+      render: (value, item) => (
+        <div className="flex items-center space-x-2">
+          {getStatusIcon(item.status)}
+          <Link
+            to={`/containers/${item._id}`}
+            className="font-medium text-blue-600 hover:text-blue-800"
+          >
+            {value}
+          </Link>
+        </div>
+      )
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      render: (value) => (
+        <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-sm">
+          {value}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (value) => (
+        <span className={`status-badge ${getStatusColor(value)}`}>
+          {value}
+        </span>
+      )
+    },
+    {
+      key: 'utilization',
+      label: 'CBM Utilization',
+      render: (_, item) => {
+        const percentage = ((item.currentCbm / item.maxCbm) * 100).toFixed(1)
+        return (
+          <div className="w-full">
+            <div className="flex justify-between text-sm mb-1">
+              <span>{percentage}%</span>
+              <span>{item.currentCbm}/{item.maxCbm} m³</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full ${getUtilizationColor(percentage)}`}
+                style={{ width: `${Math.min(percentage, 100)}%` }}
+              />
+            </div>
+          </div>
+        )
+      }
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      render: (value) => (
+        <div className="flex items-center text-sm">
+          <MapPin className="h-4 w-4 mr-1 text-gray-500" />
+          {value?.current || 'Unknown'}
+        </div>
+      )
+    },
+    {
+      key: 'estimatedDeparture',
+      label: 'Departure',
+      render: (value) => value ? formatDate(value) : 'TBD'
+    },
+    {
+      key: 'orders',
+      label: 'Orders',
+      render: (value) => (
+        <span className="text-sm text-gray-600">
+          {value?.length || 0} orders
+        </span>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, item) => (
+        <div className="flex space-x-1">
+          <Link to={`/containers/${item._id}`}>
+            <Button variant="ghost" size="sm">
+              <Eye className="h-4 w-4" />
+            </Button>
+          </Link>
+          <Link to={`/containers/${item._id}/edit`}>
+            <Button variant="ghost" size="sm">
+              <Edit className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      )
+    }
+  ]
 
   // Fetch containers
   const fetchContainers = async () => {
@@ -53,76 +197,9 @@ const Containers = () => {
     fetchContainers()
   }, [])
 
-  // Mock data for demonstration
-  const mockContainers = [
-    {
-      _id: '1',
-      clientFacingId: 'SHIP-ABC123',
-      realContainerId: 'MSKU1234567',
-      type: '40ft',
-      status: 'loading',
-      currentCbm: 45.2,
-      maxCbm: 67,
-      currentWeight: 15000,
-      maxWeight: 30000,
-      location: { current: 'Warehouse A', port: 'Mumbai Port' },
-      billNo: 'BILL-001234',
-      sealNo: 'SEAL-567890',
-      estimatedDeparture: '2024-01-25',
-      estimatedArrival: '2024-02-15',
-      orders: [
-        { orderId: { orderNumber: 'ORD-001234', clientName: 'ABC Trading' } },
-        { orderId: { orderNumber: 'ORD-001235', clientName: 'XYZ Imports' } }
-      ],
-      charges: [
-        { name: 'Freight', value: 2500, currency: 'USD' },
-        { name: 'Documentation', value: 150, currency: 'USD' }
-      ]
-    },
-    {
-      _id: '2',
-      clientFacingId: 'SHIP-DEF456',
-      realContainerId: 'TCLU9876543',
-      type: '20ft',
-      status: 'planning',
-      currentCbm: 0,
-      maxCbm: 33,
-      currentWeight: 0,
-      maxWeight: 28000,
-      location: { current: 'Planning Stage', port: 'Chennai Port' },
-      billNo: '',
-      sealNo: '',
-      estimatedDeparture: '2024-02-05',
-      estimatedArrival: '2024-02-25',
-      orders: [],
-      charges: []
-    },
-    {
-      _id: '3',
-      clientFacingId: 'SHIP-GHI789',
-      realContainerId: 'HLBU5555555',
-      type: '40ft',
-      status: 'shipped',
-      currentCbm: 65.8,
-      maxCbm: 67,
-      currentWeight: 28500,
-      maxWeight: 30000,
-      location: { current: 'In Transit', port: 'Singapore Port' },
-      billNo: 'BILL-001236',
-      sealNo: 'SEAL-111222',
-      estimatedDeparture: '2024-01-15',
-      estimatedArrival: '2024-02-05',
-      orders: [
-        { orderId: { orderNumber: 'ORD-001236', clientName: 'Global Logistics' } }
-      ],
-      charges: [
-        { name: 'Freight', value: 2800, currency: 'USD' },
-        { name: 'Insurance', value: 200, currency: 'USD' }
-      ]
-    }
-  ]
 
-  const displayContainers = containers.length > 0 ? containers : mockContainers
+
+  const displayContainers = containers // Remove mock data fallback
 
   // Filter containers
   const filteredContainers = displayContainers.filter(container => {
@@ -294,132 +371,23 @@ const Containers = () => {
           </CardContent>
         </Card>
 
-        {/* Container Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredContainers.map((container, index) => (
-            <motion.div
-              key={container._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-            >
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(container.status)}
-                      <CardTitle className="text-lg">{container.clientFacingId}</CardTitle>
-                    </div>
-                    <span className={`status-badge ${getStatusColor(container.status)}`}>
-                      {container.status}
-                    </span>
-                  </div>
-                  <CardDescription>
-                    {container.type} • {container.realContainerId}
-                  </CardDescription>
-                </CardHeader>
+        {/* Data Loop Manager */}
+        <DataLoopManager
+          dataSources={dataSources}
+          onDataChange={(data, source) => setCurrentDisplayData(data)}
+          className="mb-6"
+        />
 
-                <CardContent className="space-y-4">
-                  {/* Utilization Bars */}
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>CBM Utilization</span>
-                        <span>{((container.currentCbm / container.maxCbm) * 100).toFixed(1)}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${getUtilizationColor((container.currentCbm / container.maxCbm) * 100)}`}
-                          style={{ width: `${Math.min((container.currentCbm / container.maxCbm) * 100, 100)}%` }}
-                        />
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {container.currentCbm} / {container.maxCbm} m³
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>Weight Utilization</span>
-                        <span>{((container.currentWeight / container.maxWeight) * 100).toFixed(1)}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${getUtilizationColor((container.currentWeight / container.maxWeight) * 100)}`}
-                          style={{ width: `${Math.min((container.currentWeight / container.maxWeight) * 100, 100)}%` }}
-                        />
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {container.currentWeight.toLocaleString()} / {container.maxWeight.toLocaleString()} kg
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Location & Dates */}
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center text-gray-600">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      <span>{container.location?.current}</span>
-                    </div>
-                    {container.estimatedDeparture && (
-                      <div className="flex items-center text-gray-600">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        <span>Departs: {formatDate(container.estimatedDeparture)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Orders */}
-                  {container.orders && container.orders.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-2">
-                        Allocated Orders ({container.orders.length}):
-                      </p>
-                      <div className="space-y-1">
-                        {container.orders.slice(0, 2).map((order, idx) => (
-                          <div key={idx} className="text-sm text-gray-600">
-                            {order.orderId?.orderNumber} - {order.orderId?.clientName}
-                          </div>
-                        ))}
-                        {container.orders.length > 2 && (
-                          <div className="text-sm text-gray-500">
-                            +{container.orders.length - 2} more orders
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Financial Summary */}
-                  {container.charges && container.charges.length > 0 && (
-                    <div className="pt-3 border-t">
-                      <p className="text-sm font-medium text-gray-700 mb-1">Total Charges:</p>
-                      <p className="text-lg font-bold text-green-600">
-                        {formatCurrency(container.charges.reduce((sum, charge) => sum + charge.value, 0))}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex space-x-2 pt-3 border-t">
-                    <Link to={`/containers/${container._id}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                    </Link>
-                    <Link to={`/containers/${container._id}/edit`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+        {/* Universal Data Display */}
+        <UniversalDataDisplay
+          data={currentDisplayData.length > 0 ? currentDisplayData : filteredContainers}
+          title="Container Management"
+          columns={containerColumns}
+          onItemClick={(container) => window.location.href = `/containers/${container._id}`}
+          enableLoop={true}
+          enableAutoSwitch={true}
+          className="mb-8"
+        />
 
         {/* Empty State */}
         {filteredContainers.length === 0 && !loading && (
