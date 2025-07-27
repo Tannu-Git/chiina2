@@ -17,11 +17,14 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input, ExcelInput } from '@/components/ui/input'
+import { Input } from '@/components/ui/input'
+import { ExcelInput } from '@/components/ui/ExcelInput'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import OrderCreationGrid from '@/components/orders/OrderCreationGrid'
+import SimpleOrderGrid from '@/components/orders/SimpleOrderGrid'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, calculateCarryingCharge } from '@/lib/utils'
+import { validateOrder, displayValidationErrors } from '@/lib/validation'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
@@ -31,7 +34,7 @@ const OrderCreate = () => {
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
-  const [viewMode, setViewMode] = useState('grid') // 'grid' or 'form'
+  const [viewMode, setViewMode] = useState('grid') // 'grid', 'form', or 'cards'
   const [orderData, setOrderData] = useState({
     clientName: '',
     deadline: '',
@@ -172,19 +175,31 @@ const OrderCreate = () => {
 
     if (field.includes('.')) {
       const [parent, child] = field.split('.')
+      if (!newItems[index][parent]) {
+        newItems[index][parent] = {}
+      }
       newItems[index][parent][child] = value
     } else {
       newItems[index][field] = value
     }
 
-    // Recalculate carrying charge amount when basis or rate changes
-    if (field === 'carryingCharge.basis' || field === 'carryingCharge.rate') {
+    // Recalculate carrying charge amount when basis, rate, or related fields change
+    if (field === 'carryingCharge.basis' || field === 'carryingCharge.rate' ||
+        field === 'cartons' || field === 'unitWeight' || field === 'unitCbm' || field === 'quantity') {
       const item = newItems[index]
-      item.carryingCharge.amount = calculateCarryingCharge(
-        item.carryingCharge.basis,
-        item.carryingCharge.rate,
-        item
-      )
+      if (item.carryingCharge) {
+        item.carryingCharge.amount = calculateCarryingCharge(
+          item.carryingCharge.basis || 'carton',
+          parseFloat(item.carryingCharge.rate) || 0,
+          item
+        )
+      }
+    }
+
+    // Recalculate total price when quantity or unit price changes
+    if (field === 'quantity' || field === 'unitPrice') {
+      const item = newItems[index]
+      item.totalPrice = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
     }
 
     setOrderData({ ...orderData, items: newItems })
@@ -205,7 +220,7 @@ const OrderCreate = () => {
           unitCbm: 0,
           cartons: 1,
           supplier: '',
-          paymentType: 'CLIENT_DIRECT',
+          paymentType: 'TO_AGENT',
           carryingCharge: {
             basis: 'carton',
             rate: 0,
@@ -229,14 +244,9 @@ const OrderCreate = () => {
     try {
       setLoading(true)
 
-      // Validation
-      if (!orderData.clientName.trim()) {
-        toast.error('Client name is required')
-        return
-      }
-
-      if (orderData.items.some(item => !item.itemCode.trim() || !item.description.trim())) {
-        toast.error('All items must have item code and description')
+      // Comprehensive validation using utility
+      const validationErrors = validateOrder(orderData)
+      if (!displayValidationErrors(validationErrors, toast)) {
         return
       }
 
@@ -253,12 +263,24 @@ const OrderCreate = () => {
         }))
       }
 
+      // Create axios instance with proper configuration
+      const axiosInstance = axios.create({
+        timeout: 10000, // 10 second timeout
+        baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5001'
+      })
+
+      // Add auth token if available
+      const token = localStorage.getItem('token')
+      if (token) {
+        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      }
+
       let response
       if (isEditMode) {
-        response = await axios.patch(`/api/orders/${id}`, orderPayload)
+        response = await axiosInstance.patch(`/api/orders/${id}`, orderPayload)
         toast.success(`Order updated successfully!`)
       } else {
-        response = await axios.post('/api/orders', orderPayload)
+        response = await axiosInstance.post('/api/orders', orderPayload)
         toast.success(`Order ${status === 'draft' ? 'saved as draft' : 'submitted'} successfully!`)
       }
 
@@ -266,15 +288,38 @@ const OrderCreate = () => {
     } catch (error) {
       console.error('Error saving order:', error)
 
+      // Enhanced error handling
       let errorMessage = 'Failed to save order'
-      if (error.response?.status === 404 && isEditMode) {
-        errorMessage = 'Order not found. It may have been deleted.'
-        setIsEditMode(false)
-        window.history.replaceState({}, '', '/orders/create')
-      } else if (error.response?.status === 403) {
-        errorMessage = 'You do not have permission to save this order'
-      } else if (error.response?.status === 400) {
-        errorMessage = error.response.data?.message || 'Invalid order data'
+
+      if (error.response) {
+        // Server responded with error status
+        const status = error.response.status
+        const data = error.response.data
+
+        if (status === 400) {
+          errorMessage = data.message || 'Invalid order data'
+          if (data.errors && Array.isArray(data.errors)) {
+            errorMessage = data.errors.map(err => err.msg).join(', ')
+          }
+        } else if (status === 401) {
+          errorMessage = 'Authentication required. Please login again.'
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to perform this action'
+        } else if (status === 404 && isEditMode) {
+          errorMessage = 'Order not found. It may have been deleted.'
+          setIsEditMode(false)
+          window.history.replaceState({}, '', '/orders/create')
+        } else if (status === 500) {
+          errorMessage = 'Server error. Please try again later.'
+        } else {
+          errorMessage = data.message || `Server error (${status})`
+        }
+      } else if (error.request) {
+        // Network error
+        errorMessage = 'Network error. Please check your connection and try again.'
+      } else {
+        // Other error
+        errorMessage = error.message || 'An unexpected error occurred'
       }
 
       toast.error(errorMessage)
@@ -284,11 +329,12 @@ const OrderCreate = () => {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 px-4 sm:px-6 lg:px-8 py-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
+        className="max-w-7xl mx-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -467,6 +513,14 @@ const OrderCreate = () => {
                 Excel Grid
               </Button>
               <Button
+                variant={viewMode === 'cards' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('cards')}
+              >
+                <Package className="h-4 w-4 mr-2" />
+                Card View
+              </Button>
+              <Button
                 variant={viewMode === 'form' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode('form')}
@@ -484,20 +538,247 @@ const OrderCreate = () => {
           </CardHeader>
           <CardContent>
             {viewMode === 'grid' ? (
-              <OrderCreationGrid
+              <SimpleOrderGrid
                 initialData={orderData.items}
                 onSave={(items) => {
                   setOrderData(prev => ({ ...prev, items }))
                   toast.success('Items updated successfully!')
                 }}
               />
+            ) : viewMode === 'cards' ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 max-h-[70vh] overflow-y-auto pr-2">
+                  {orderData.items.map((item, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2, delay: index * 0.05 }}
+                    >
+                      <Card className="hover:shadow-lg transition-all duration-200">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg">Item Details</CardTitle>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeItem(index)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Item Code *
+                              </label>
+                              <Input
+                                value={item.itemCode}
+                                onChange={(e) => updateItem(index, 'itemCode', e.target.value)}
+                                placeholder="Enter item code"
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Quantity *
+                              </label>
+                              <Input
+                                type="number"
+                                value={item.quantity || ''}
+                                onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                                placeholder="1"
+                                min="1"
+                                className="w-full"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Description *
+                            </label>
+                            <Input
+                              value={item.description}
+                              onChange={(e) => updateItem(index, 'description', e.target.value)}
+                              placeholder="Product description"
+                              className="w-full"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Unit Price {item.paymentType === 'TO_FACTORY' ? '(Optional)' : '*'}
+                              </label>
+                              <Input
+                                type="number"
+                                value={item.unitPrice || ''}
+                                onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
+                                placeholder={item.paymentType === 'TO_FACTORY' ? 'Price unknown' : '0.00'}
+                                min="0"
+                                step="0.01"
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Total Price
+                              </label>
+                              <div className="h-10 px-3 py-2 bg-gray-50 border rounded-md flex items-center text-sm font-medium">
+                                {item.paymentType === 'TO_FACTORY' && !item.unitPrice
+                                  ? 'Price TBD'
+                                  : formatCurrency((item.quantity || 0) * (item.unitPrice || 0))
+                                }
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Weight (kg)
+                              </label>
+                              <Input
+                                type="number"
+                                value={item.unitWeight || ''}
+                                onChange={(e) => updateItem(index, 'unitWeight', e.target.value)}
+                                placeholder="0.0"
+                                min="0"
+                                step="0.1"
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                CBM
+                              </label>
+                              <Input
+                                type="number"
+                                value={item.unitCbm || ''}
+                                onChange={(e) => updateItem(index, 'unitCbm', e.target.value)}
+                                placeholder="0.00"
+                                min="0"
+                                step="0.01"
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Cartons
+                              </label>
+                              <Input
+                                type="number"
+                                value={item.cartons || ''}
+                                onChange={(e) => updateItem(index, 'cartons', e.target.value)}
+                                placeholder="1"
+                                min="1"
+                                className="w-full"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Supplier
+                            </label>
+                            <Input
+                              value={item.supplier || ''}
+                              onChange={(e) => updateItem(index, 'supplier', e.target.value)}
+                              placeholder="Supplier name"
+                              className="w-full"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Payment Type
+                              </label>
+                              <Select
+                                value={item.paymentType}
+                                onValueChange={(value) => updateItem(index, 'paymentType', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="TO_AGENT">To Me (Agent)</SelectItem>
+                                  <SelectItem value="TO_FACTORY">To Factory (Direct)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Carrying Basis
+                              </label>
+                              <Select
+                                value={item.carryingCharge?.basis || 'carton'}
+                                onValueChange={(value) => updateItem(index, 'carryingCharge.basis', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="carton">Per Carton</SelectItem>
+                                  <SelectItem value="weight">Per KG</SelectItem>
+                                  <SelectItem value="cbm">Per CBM</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Carrying Rate
+                              </label>
+                              <Input
+                                type="number"
+                                value={item.carryingCharge?.rate || ''}
+                                onChange={(e) => updateItem(index, 'carryingCharge.rate', e.target.value)}
+                                placeholder="0.00"
+                                min="0"
+                                step="0.01"
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Charge Amount
+                              </label>
+                              <div className="h-10 px-3 py-2 bg-gray-50 border rounded-md flex items-center text-sm font-medium">
+                                {formatCurrency(calculateCarryingCharge(
+                                  item.carryingCharge?.basis || 'carton',
+                                  item.carryingCharge?.rate || 0,
+                                  item
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="flex justify-center">
+                  <Button onClick={addItem} variant="outline" size="lg">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add New Item
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div>
               <div className="overflow-x-auto">
                 <table className="excel-grid w-full">
                   <thead>
                     <tr>
-                      <th className="excel-header w-4">#</th>
+
                       <th className="excel-header min-w-32">Item Code *</th>
                       <th className="excel-header min-w-48">Description *</th>
                       <th className="excel-header w-20">Qty</th>
@@ -516,10 +797,8 @@ const OrderCreate = () => {
                   </thead>
                 <tbody>
                   {orderData.items.map((item, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="excel-cell text-center font-medium text-gray-500">
-                        {index + 1}
-                      </td>
+                    <tr key={index} className="excel-row">
+
                       <td className="excel-cell p-0">
                         <ExcelInput
                           value={item.itemCode}

@@ -54,6 +54,157 @@ router.get('/', auth, clientDataFilter, async (req, res) => {
   }
 });
 
+// @route   GET /api/orders/item-suggestions
+// @desc    Get item code suggestions
+// @access  Private
+router.get('/item-suggestions', auth, async (req, res) => {
+  try {
+    const { q, limit = 10 } = req.query
+
+    // Validate query parameter
+    if (!q || q.trim().length < 1) {
+      return res.json({ items: [] })
+    }
+
+    const searchQuery = q.trim()
+    const searchLimit = Math.min(parseInt(limit) || 10, 50) // Cap at 50
+
+    // First check if we have any orders at all
+    const orderCount = await Order.countDocuments()
+
+    if (orderCount === 0) {
+      // Return mock suggestions if no orders exist
+      const mockSuggestions = [
+        {
+          itemCode: 'ITEM-001',
+          description: 'Sample Product 1',
+          price: 100,
+          lastUsed: new Date(),
+          weight: 1.5,
+          cbm: 0.1,
+          isPopular: false,
+          inStock: true
+        },
+        {
+          itemCode: 'ITEM-002',
+          description: 'Sample Product 2',
+          price: 200,
+          lastUsed: new Date(),
+          weight: 2.0,
+          cbm: 0.15,
+          isPopular: false,
+          inStock: true
+        }
+      ].filter(item =>
+        item.itemCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+
+      return res.json({ items: mockSuggestions })
+    }
+
+    const suggestions = await Order.aggregate([
+      { $unwind: '$items' },
+      {
+        $match: {
+          $or: [
+            { 'items.itemCode': { $regex: searchQuery, $options: 'i' } },
+            { 'items.description': { $regex: searchQuery, $options: 'i' } }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: '$items.itemCode',
+          description: { $first: '$items.description' },
+          avgPrice: { $avg: '$items.unitPrice' },
+          lastUsed: { $max: '$createdAt' },
+          usage: { $sum: 1 },
+          avgWeight: { $avg: '$items.unitWeight' },
+          avgCbm: { $avg: '$items.unitCbm' }
+        }
+      },
+      { $sort: { usage: -1, lastUsed: -1 } },
+      { $limit: searchLimit }
+    ])
+
+    const items = suggestions.map(item => ({
+      itemCode: item._id,
+      description: item.description || 'No description',
+      price: item.avgPrice || 0,
+      lastUsed: item.lastUsed,
+      weight: item.avgWeight || 0,
+      cbm: item.avgCbm || 0,
+      isPopular: item.usage > 5,
+      inStock: Math.random() > 0.3 // Simulate stock status
+    }))
+
+    res.json({ items })
+  } catch (error) {
+    console.error('Item suggestions error:', error)
+    res.status(500).json({
+      message: 'Failed to fetch item suggestions',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    })
+  }
+})
+
+// Helper function for AI suggestions
+const generateAISuggestions = async (query, context) => {
+  // Simulate AI-powered suggestions based on query
+  const aiSuggestions = [
+    {
+      itemCode: `AI-${query.toUpperCase().slice(0, 3)}-001`,
+      description: `AI suggested: ${query} related product`,
+      price: Math.floor(Math.random() * 500) + 50,
+      lastUsed: new Date(),
+      weight: Math.random() * 5 + 0.5,
+      cbm: Math.random() * 0.5 + 0.05,
+      isPopular: Math.random() > 0.7,
+      inStock: Math.random() > 0.2,
+      confidence: 0.8 + Math.random() * 0.2
+    },
+    {
+      itemCode: `AI-${query.toUpperCase().slice(0, 3)}-002`,
+      description: `Smart match: ${query} alternative`,
+      price: Math.floor(Math.random() * 300) + 30,
+      lastUsed: new Date(),
+      weight: Math.random() * 3 + 0.3,
+      cbm: Math.random() * 0.3 + 0.03,
+      isPopular: Math.random() > 0.8,
+      inStock: Math.random() > 0.1,
+      confidence: 0.7 + Math.random() * 0.2
+    }
+  ]
+
+  return aiSuggestions
+}
+
+// @route   POST /api/orders/ai-suggestions
+// @desc    AI-powered item suggestions
+// @access  Private
+router.post('/ai-suggestions', auth, async (req, res) => {
+  try {
+    const { query, context } = req.body
+
+    // Validate input
+    if (!query || typeof query !== 'string' || query.trim().length < 1) {
+      return res.json({ suggestions: [] })
+    }
+
+    // Simulate AI-powered suggestions (in real app, integrate with ML service)
+    const aiSuggestions = await generateAISuggestions(query.trim(), context)
+
+    res.json({ suggestions: aiSuggestions })
+  } catch (error) {
+    console.error('AI suggestions error:', error)
+    res.status(500).json({
+      message: 'Failed to generate AI suggestions',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    })
+  }
+})
+
 // @route   GET /api/orders/:id
 // @desc    Get order by ID
 // @access  Private
@@ -91,7 +242,13 @@ router.post('/', auth, [
   body('items.*.itemCode').trim().notEmpty().withMessage('Item code is required'),
   body('items.*.description').trim().notEmpty().withMessage('Item description is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('items.*.unitPrice').isFloat({ min: 0 }).withMessage('Unit price must be non-negative')
+  body('items.*.unitPrice').optional().isFloat({ min: 0 }).withMessage('Unit price must be non-negative'),
+  body('items.*.unitWeight').isFloat({ min: 0 }).withMessage('Unit weight must be non-negative'),
+  body('items.*.unitCbm').isFloat({ min: 0 }).withMessage('Unit CBM must be non-negative'),
+  body('items.*.cartons').isInt({ min: 1 }).withMessage('Cartons must be at least 1'),
+  body('items.*.paymentType').isIn(['TO_AGENT', 'TO_FACTORY']).withMessage('Invalid payment type'),
+  body('items.*.carryingCharge.basis').isIn(['carton', 'weight', 'cbm']).withMessage('Invalid carrying charge basis'),
+  body('items.*.carryingCharge.rate').isFloat({ min: 0 }).withMessage('Carrying charge rate must be non-negative')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -281,72 +438,7 @@ router.post('/estimate-price', auth, async (req, res) => {
   }
 })
 
-// @route   GET /api/orders/item-suggestions
-// @desc    Get item code suggestions
-// @access  Private
-router.get('/item-suggestions', auth, async (req, res) => {
-  try {
-    const { q, limit = 10 } = req.query
 
-    const suggestions = await Order.aggregate([
-      { $unwind: '$items' },
-      {
-        $match: {
-          $or: [
-            { 'items.itemCode': { $regex: q, $options: 'i' } },
-            { 'items.description': { $regex: q, $options: 'i' } }
-          ]
-        }
-      },
-      {
-        $group: {
-          _id: '$items.itemCode',
-          description: { $first: '$items.description' },
-          avgPrice: { $avg: '$items.unitPrice' },
-          lastUsed: { $max: '$createdAt' },
-          usage: { $sum: 1 },
-          avgWeight: { $avg: '$items.unitWeight' },
-          avgCbm: { $avg: '$items.unitCbm' }
-        }
-      },
-      { $sort: { usage: -1, lastUsed: -1 } },
-      { $limit: parseInt(limit) }
-    ])
-
-    const items = suggestions.map(item => ({
-      itemCode: item._id,
-      description: item.description,
-      price: item.avgPrice,
-      lastUsed: item.lastUsed,
-      weight: item.avgWeight,
-      cbm: item.avgCbm,
-      isPopular: item.usage > 5,
-      inStock: Math.random() > 0.3 // Simulate stock status
-    }))
-
-    res.json({ items })
-  } catch (error) {
-    console.error('Item suggestions error:', error)
-    res.status(500).json({ message: 'Server error' })
-  }
-})
-
-// @route   POST /api/orders/ai-suggestions
-// @desc    AI-powered item suggestions
-// @access  Private
-router.post('/ai-suggestions', auth, async (req, res) => {
-  try {
-    const { query, context } = req.body
-
-    // Simulate AI-powered suggestions (in real app, integrate with ML service)
-    const aiSuggestions = await generateAISuggestions(query, context)
-
-    res.json({ suggestions: aiSuggestions })
-  } catch (error) {
-    console.error('AI suggestions error:', error)
-    res.status(500).json({ message: 'Server error' })
-  }
-})
 
 // Helper functions
 async function estimatePriceWithAI(itemCode, description, quantity, supplier) {
@@ -401,22 +493,6 @@ async function getSupplierPriceHistory(supplier, itemCode) {
   }
 }
 
-async function generateAISuggestions(query, context) {
-  // Simulate AI-powered suggestions
-  // In real implementation, integrate with OpenAI, Claude, or custom ML model
 
-  const suggestions = [
-    {
-      itemCode: `AI-${query.substring(0, 3).toUpperCase()}-001`,
-      description: `AI suggested item based on "${query}"`,
-      price: Math.random() * 100 + 10,
-      confidence: 0.75,
-      supplier: 'AI Recommended Supplier',
-      leadTime: Math.floor(Math.random() * 30) + 5
-    }
-  ]
-
-  return suggestions
-}
 
 module.exports = router;

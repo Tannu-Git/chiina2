@@ -27,7 +27,7 @@ const createRateLimiter = (windowMs, max, message, skipSuccessfulRequests = fals
           }
         );
       }
-      
+
       res.status(429).json({
         error: message,
         retryAfter: Math.round(windowMs / 1000)
@@ -95,7 +95,7 @@ const ipWhitelist = (allowedIPs = []) => {
           { clientIP, allowedIPs }
         );
       }
-      
+
       return res.status(403).json({
         error: 'Access denied from this IP address'
       });
@@ -242,7 +242,7 @@ const fileUploadSecurity = (req, res, next) => {
     ];
 
     const files = req.files ? Object.values(req.files).flat() : [req.file];
-    
+
     for (const file of files) {
       if (file && !allowedTypes.includes(file.mimetype)) {
         return res.status(400).json({
@@ -269,6 +269,8 @@ const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
       'http://localhost:5173',
       // Add your production domains here
     ];

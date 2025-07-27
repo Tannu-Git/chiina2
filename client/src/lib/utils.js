@@ -48,16 +48,44 @@ export function formatDateTime(date) {
 }
 
 export function calculateCarryingCharge(basis, rate, item) {
+  const numRate = parseFloat(rate) || 0
+  const numCartons = parseFloat(item.cartons) || 0
+  const numQuantity = parseFloat(item.quantity) || 0
+  const numUnitCbm = parseFloat(item.unitCbm) || 0
+  const numUnitWeight = parseFloat(item.unitWeight) || 0
+
+  let result = 0
+  let totalWeight = numUnitWeight * numQuantity
+  let totalCbm = numUnitCbm * numQuantity
+
   switch(basis) {
     case 'carton':
-      return rate * item.cartons
+      result = numRate * numCartons
+      break
     case 'cbm':
-      return rate * (item.unitCbm * item.cartons)
+      result = numRate * totalCbm
+      break
     case 'weight':
-      return rate * (item.unitWeight * item.cartons)
+      result = numRate * totalWeight
+      break
     default:
-      return 0
+      result = 0
   }
+
+  // Debug logging (uncomment for debugging)
+  // console.log('Carrying Charge Calculation:', {
+  //   basis,
+  //   rate: numRate,
+  //   cartons: numCartons,
+  //   quantity: numQuantity,
+  //   unitCbm: numUnitCbm,
+  //   unitWeight: numUnitWeight,
+  //   totalCbm,
+  //   totalWeight,
+  //   result
+  // })
+
+  return result
 }
 
 export function getStatusColor(status) {

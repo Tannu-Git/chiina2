@@ -1,44 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import {
-  Plus,
-  Trash2,
-  Save,
-  Upload,
-  Download,
-  Search,
-  Calculator,
-  Zap,
-  Copy,
-  Clipboard,
-  Undo,
-  Redo,
-  Filter,
-  SortAsc,
-  SortDesc
-} from 'lucide-react'
+import { Plus, Trash2, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import CodeAutoComplete from './CodeAutoComplete'
-import ImageUploadField from './ImageUploadField'
-import SupplierDropdown from './SupplierDropdown'
-import PaymentTypeSelector from './PaymentTypeSelector'
-import CarryingBasisSelector from './CarryingBasisSelector'
 import { formatCurrency } from '@/lib/utils'
-import axios from 'axios'
 import toast from 'react-hot-toast'
+
+// Create empty row helper
+function createEmptyRow() {
+  return {
+    id: Date.now() + Math.random(),
+    itemCode: '',
+    description: '',
+    quantity: 1,
+    unitPrice: 0,
+    totalPrice: 0,
+    unitWeight: 0,
+    unitCbm: 0,
+    cartons: 1,
+    supplier: '',
+    paymentType: 'CLIENT_DIRECT',
+    carryingBasis: 'carton'
+  }
+}
 
 const OrderCreationGrid = ({ onSave, initialData = [] }) => {
   const [rows, setRows] = useState(initialData.length > 0 ? initialData : [createEmptyRow()])
-  const [selectedCells, setSelectedCells] = useState(new Set())
-  const [clipboard, setClipboard] = useState(null)
-  const [history, setHistory] = useState([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
-  const [filters, setFilters] = useState({})
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
-  const [loading, setLoading] = useState(false)
-  const gridRef = useRef(null)
 
   const columns = [
     { key: 'itemCode', label: 'Item Code', width: 150, type: 'autocomplete' },

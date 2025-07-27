@@ -63,83 +63,176 @@
   .glass-card {
     @apply bg-white/10 backdrop-blur-md border border-white/20 shadow-xl;
   }
-  
+
   .glass-card-dark {
     @apply bg-black/10 backdrop-blur-md border border-white/10 shadow-xl;
   }
-  
+
   .gradient-bg {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   }
-  
+
   .logistics-gradient {
     background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
   }
-  
+
   .container-gradient {
     background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
   }
-  
+
   .financial-gradient {
     background: linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #f87171 100%);
   }
-  
+
   .excel-grid {
-    @apply border-collapse border border-gray-300;
+    @apply border-collapse border-0 bg-white shadow-sm;
   }
-  
+
   .excel-cell {
-    @apply border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply border border-gray-200 px-2 py-2 text-sm bg-white hover:bg-blue-50 transition-colors min-h-[40px];
   }
-  
+
   .excel-header {
-    @apply bg-gray-100 font-semibold text-gray-700 border border-gray-300 px-2 py-2 text-sm;
+    @apply bg-gradient-to-b from-gray-50 to-gray-100 font-semibold text-gray-700 border border-gray-200 px-3 py-3 text-sm sticky top-0 z-10 text-center;
   }
-  
+
+  .excel-input {
+    @apply w-full h-full bg-transparent border-none outline-none px-2 py-2 text-sm focus:bg-white focus:ring-0 focus:border-transparent min-h-[36px];
+  }
+
+  .excel-row {
+    @apply hover:bg-blue-50 transition-colors;
+  }
+
+  .excel-row:nth-child(even) {
+    @apply bg-gray-50;
+  }
+
+  .excel-row:nth-child(even):hover {
+    @apply bg-blue-50;
+  }
+
+  .excel-autocomplete {
+    @apply absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto;
+  }
+
+  .excel-suggestion {
+    @apply px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm;
+  }
+
+  .excel-suggestion.selected {
+    @apply bg-blue-100 text-blue-900;
+  }
+
+  .excel-suggestion-ai {
+    @apply bg-gradient-to-r from-purple-50 to-blue-50 border-l-4 border-purple-400;
+  }
+
+  .excel-suggestion-popular {
+    @apply bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-400;
+  }
+
+  /* Better table styling */
+  .excel-grid th:first-child,
+  .excel-grid td:first-child {
+    @apply bg-gray-50 font-medium text-gray-600;
+  }
+
+  .excel-grid input:focus,
+  .excel-grid select:focus {
+    @apply ring-2 ring-blue-500 ring-opacity-50;
+  }
+
+  /* Horizontal scroll improvements */
+  .horizontal-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+  }
+
+  .horizontal-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .horizontal-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+
+  .horizontal-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .horizontal-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Enable horizontal scroll with mouse wheel */
+  .horizontal-scroll {
+    scroll-behavior: smooth;
+  }
+
+  /* Responsive improvements */
+  @media (max-width: 768px) {
+    .excel-cell {
+      @apply px-1 py-1 text-xs;
+    }
+
+    .excel-header {
+      @apply px-2 py-2 text-xs;
+    }
+
+    .excel-input {
+      @apply px-1 py-1 text-xs;
+    }
+  }
+
   .status-badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
-  
+
   .status-pending {
     @apply bg-yellow-100 text-yellow-800;
   }
-  
+
   .status-confirmed {
     @apply bg-blue-100 text-blue-800;
   }
-  
+
   .status-in-progress {
     @apply bg-purple-100 text-purple-800;
   }
-  
+
   .status-completed {
     @apply bg-green-100 text-green-800;
   }
-  
+
   .status-cancelled {
     @apply bg-red-100 text-red-800;
   }
-  
+
   .metric-card {
     @apply bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow;
   }
-  
+
   .metric-value {
     @apply text-2xl font-bold text-gray-900;
   }
-  
+
   .metric-label {
     @apply text-sm font-medium text-gray-500;
   }
-  
+
   .metric-change {
     @apply text-sm font-medium;
   }
-  
+
   .metric-change-positive {
     @apply text-green-600;
   }
-  
+
   .metric-change-negative {
     @apply text-red-600;
   }
