@@ -180,7 +180,7 @@ describe('DashboardLayout Component - All Elements and Role-Based Features', () 
       fireEvent.click(mobileMenuButton)
 
       // Click backdrop
-      const backdrop = document.querySelector('.bg-gray-600.bg-opacity-75')
+      const backdrop = document.querySelector('.bg-stone-600.bg-opacity-75')
       if (backdrop) {
         fireEvent.click(backdrop)
       }
@@ -346,7 +346,7 @@ describe('DashboardLayout Component - All Elements and Role-Based Features', () 
       render(<DashboardLayout><div>Test Content</div></DashboardLayout>)
 
       const ordersLink = screen.getByRole('link', { name: /Orders/i })
-      expect(ordersLink).toHaveClass('bg-blue-50', 'text-blue-700')
+      expect(ordersLink).toHaveClass('bg-amber-50', 'text-amber-700')
     })
   })
 

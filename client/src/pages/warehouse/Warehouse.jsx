@@ -79,9 +79,9 @@ const Warehouse = () => {
       case 'ready':
         return <CheckCircle className="h-4 w-4 text-green-500" />
       case 'in_production':
-        return <Clock className="h-4 w-4 text-blue-500" />
+        return <Clock className="h-4 w-4 text-amber-500" />
       case 'confirmed':
-        return <Package className="h-4 w-4 text-purple-500" />
+        return <Package className="h-4 w-4 text-amber-500" />
       default:
         return <AlertTriangle className="h-4 w-4 text-yellow-500" />
     }
@@ -174,8 +174,8 @@ const Warehouse = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-3xl font-bold text-gray-900">Warehouse Management</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-3xl font-bold text-stone-900">Warehouse Management</h1>
+          <p className="text-stone-600 mt-2">
             Manage inventory, quality control, and container allocation
           </p>
         </motion.div>
@@ -252,7 +252,7 @@ const Warehouse = () => {
 
       {/* Tab Navigation */}
       <div className="mb-6">
-        <div className="border-b border-gray-200">
+        <div className="border-b border-stone-200">
           <nav className="-mb-px flex space-x-8">
             {[
               { id: 'overview', name: 'Overview', icon: BarChart3 },
@@ -267,8 +267,8 @@ const Warehouse = () => {
                 onClick={() => setSelectedTab(tab.id)}
                 className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
                   selectedTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-amber-500 text-amber-600'
+                    : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
                 }`}
               >
                 <tab.icon className="h-4 w-4 mr-2" />
@@ -304,14 +304,14 @@ const Warehouse = () => {
                     <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center space-x-3">
                         {activity.status === 'success' && <CheckCircle className="h-4 w-4 text-green-500" />}
-                        {activity.status === 'progress' && <Clock className="h-4 w-4 text-blue-500" />}
+                        {activity.status === 'progress' && <Clock className="h-4 w-4 text-amber-500" />}
                         {activity.status === 'warning' && <AlertTriangle className="h-4 w-4 text-yellow-500" />}
                         <div>
-                          <p className="font-medium text-gray-900">{activity.action}</p>
-                          <p className="text-sm text-gray-500">{activity.order}</p>
+                          <p className="font-medium text-stone-900">{activity.action}</p>
+                          <p className="text-sm text-stone-500">{activity.order}</p>
                         </div>
                       </div>
-                      <span className="text-sm text-gray-500">{activity.time}</span>
+                      <span className="text-sm text-stone-500">{activity.time}</span>
                     </div>
                   ))}
                 </div>
@@ -346,9 +346,9 @@ const Warehouse = () => {
                             <span>CBM Utilization</span>
                             <span>{((container.currentCbm / container.maxCbm) * 100).toFixed(1)}%</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="w-full bg-stone-200 rounded-full h-2">
                             <div
-                              className="bg-blue-600 h-2 rounded-full"
+                              className="bg-amber-600 h-2 rounded-full"
                               style={{ width: `${(container.currentCbm / container.maxCbm) * 100}%` }}
                             />
                           </div>
@@ -358,7 +358,7 @@ const Warehouse = () => {
                             <span>Weight Utilization</span>
                             <span>{((container.currentWeight / container.maxWeight) * 100).toFixed(1)}%</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="w-full bg-stone-200 rounded-full h-2">
                             <div
                               className="bg-green-600 h-2 rounded-full"
                               style={{ width: `${(container.currentWeight / container.maxWeight) * 100}%` }}
@@ -409,8 +409,8 @@ const Warehouse = () => {
                       <div className="flex items-center space-x-3">
                         {getStatusIcon(order.status)}
                         <div>
-                          <h3 className="font-semibold text-gray-900">{order.orderNumber}</h3>
-                          <p className="text-sm text-gray-500">{order.clientName}</p>
+                          <h3 className="font-semibold text-stone-900">{order.orderNumber}</h3>
+                          <p className="text-sm text-stone-500">{order.clientName}</p>
                         </div>
                       </div>
                       <div className="flex space-x-2">
@@ -431,34 +431,34 @@ const Warehouse = () => {
 
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Cartons:</span>
+                        <span className="text-stone-500">Cartons:</span>
                         <span className="ml-1 font-medium">{order.totalCartons}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">CBM:</span>
+                        <span className="text-stone-500">CBM:</span>
                         <span className="ml-1 font-medium">{order.totalCbm} m³</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Weight:</span>
+                        <span className="text-stone-500">Weight:</span>
                         <span className="ml-1 font-medium">{order.totalWeight} kg</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Deadline:</span>
+                        <span className="text-stone-500">Deadline:</span>
                         <span className="ml-1 font-medium">{formatDate(order.deadline)}</span>
                       </div>
                     </div>
 
                     {order.items && (
                       <div className="mt-3 pt-3 border-t">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Items:</p>
+                        <p className="text-sm font-medium text-stone-700 mb-2">Items:</p>
                         <div className="space-y-1">
                           {order.items.slice(0, 2).map((item, index) => (
-                            <div key={index} className="text-sm text-gray-600">
+                            <div key={index} className="text-sm text-stone-600">
                               {item.itemCode} - {item.description} (Qty: {item.quantity})
                             </div>
                           ))}
                           {order.items.length > 2 && (
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-stone-500">
                               +{order.items.length - 2} more items
                             </div>
                           )}
@@ -491,8 +491,8 @@ const Warehouse = () => {
                   <div key={container._id} className="border rounded-lg p-6 hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <h3 className="font-semibold text-gray-900">{container.clientFacingId}</h3>
-                        <p className="text-sm text-gray-500">{container.type} Container</p>
+                        <h3 className="font-semibold text-stone-900">{container.clientFacingId}</h3>
+                        <p className="text-sm text-stone-500">{container.type} Container</p>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(container.status)}`}>
                         {container.status}
@@ -505,9 +505,9 @@ const Warehouse = () => {
                           <span>CBM Capacity</span>
                           <span>{container.currentCbm}/{container.maxCbm} m³</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-stone-200 rounded-full h-2">
                           <div
-                            className="bg-blue-600 h-2 rounded-full"
+                            className="bg-amber-600 h-2 rounded-full"
                             style={{ width: `${Math.min((container.currentCbm / container.maxCbm) * 100, 100)}%` }}
                           />
                         </div>
@@ -518,7 +518,7 @@ const Warehouse = () => {
                           <span>Weight Capacity</span>
                           <span>{container.currentWeight}/{container.maxWeight} kg</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-stone-200 rounded-full h-2">
                           <div
                             className="bg-green-600 h-2 rounded-full"
                             style={{ width: `${Math.min((container.currentWeight / container.maxWeight) * 100, 100)}%` }}
@@ -527,16 +527,16 @@ const Warehouse = () => {
                       </div>
                     </div>
 
-                    <div className="text-sm text-gray-600 mb-3">
+                    <div className="text-sm text-stone-600 mb-3">
                       <span className="font-medium">Location:</span> {container.location?.current}
                     </div>
 
                     {container.orders && container.orders.length > 0 && (
                       <div>
-                        <p className="text-sm font-medium text-gray-700 mb-2">Allocated Orders:</p>
+                        <p className="text-sm font-medium text-stone-700 mb-2">Allocated Orders:</p>
                         <div className="space-y-1">
                           {container.orders.map((order, index) => (
-                            <div key={index} className="text-sm text-gray-600">
+                            <div key={index} className="text-sm text-stone-600">
                               {order.orderId?.orderNumber} - {order.orderId?.clientName}
                             </div>
                           ))}
@@ -589,15 +589,15 @@ const Warehouse = () => {
                           {getStatusIcon(order.status)}
                           <div>
                             <h3 className="font-semibold text-sm">{order.orderNumber}</h3>
-                            <p className="text-xs text-gray-500">{order.clientName}</p>
+                            <p className="text-xs text-stone-500">{order.clientName}</p>
                           </div>
                         </div>
                       </div>
                       <div className="space-y-2 mb-4">
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs text-stone-600">
                           Items: {order.items?.length || 0}
                         </div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs text-stone-600">
                           Total: {formatCurrency(order.totalAmount || 0)}
                         </div>
                       </div>

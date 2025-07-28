@@ -101,11 +101,11 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'loading': return 'bg-blue-100 text-blue-800'
+      case 'loading': return 'bg-amber-100 text-amber-800'
       case 'in_transit': return 'bg-yellow-100 text-yellow-800'
       case 'delivered': return 'bg-green-100 text-green-800'
       case 'delayed': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -119,7 +119,7 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
   }
 
   const MapVisualization = () => (
-    <div className="relative bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg overflow-hidden h-96">
+    <div className="relative bg-gradient-to-br from-stone-50 to-stone-100 rounded-lg overflow-hidden h-96">
       {/* World Map Background (simplified) */}
       <svg
         viewBox="0 0 1000 500"
@@ -176,10 +176,10 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
       
       {/* Legend */}
       <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3">
-        <div className="text-xs font-medium text-gray-700 mb-2">Legend</div>
+        <div className="text-xs font-medium text-stone-700 mb-2">Legend</div>
         <div className="space-y-1 text-xs">
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
             <span>In Transit</span>
           </div>
           <div className="flex items-center space-x-2">
@@ -187,7 +187,7 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
             <span>Delivered</span>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-stone-500 rounded-full"></div>
             <span>Origin</span>
           </div>
           <div className="flex items-center space-x-2">
@@ -205,7 +205,7 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
             animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="text-xs text-gray-700">Live Tracking</span>
+          <span className="text-xs text-stone-700">Live Tracking</span>
         </div>
       )}
     </div>
@@ -222,7 +222,7 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
       >
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
-            <TransportIcon className="h-5 w-5 text-blue-600" />
+            <TransportIcon className="h-5 w-5 text-amber-600" />
             <span className="font-medium">{container.clientFacingId}</span>
           </div>
           <Badge className={getStatusColor(container.status)}>
@@ -232,28 +232,28 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
         
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-600">Current Location:</span>
+            <span className="text-stone-600">Current Location:</span>
             <span className="font-medium">{container.currentLocation.name}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Destination:</span>
+            <span className="text-stone-600">Destination:</span>
             <span className="font-medium">{container.destination.name}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Vessel:</span>
+            <span className="text-stone-600">Vessel:</span>
             <span className="font-medium">{container.vessel}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">ETA:</span>
+            <span className="text-stone-600">ETA:</span>
             <span className="font-medium">{formatDate(container.eta)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Progress:</span>
+            <span className="text-stone-600">Progress:</span>
             <span className="font-medium">{container.progress}%</span>
           </div>
           {showFinancials && (
             <div className="flex justify-between">
-              <span className="text-gray-600">Total Value:</span>
+              <span className="text-stone-600">Total Value:</span>
               <span className="font-medium">{formatCurrency(container.totalValue)}</span>
             </div>
           )}
@@ -261,13 +261,13 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
         
         {/* Progress bar */}
         <div className="mt-3">
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
+          <div className="flex justify-between text-xs text-stone-500 mb-1">
             <span>Progress</span>
             <span>{container.progress}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-stone-200 rounded-full h-2">
             <motion.div
-              className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full"
+              className="bg-gradient-to-r from-amber-500 to-amber-600 h-2 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${container.progress}%` }}
               transition={{ duration: 1 }}
@@ -332,7 +332,7 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
           {/* Container List */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-medium text-gray-900">Active Containers</h3>
+              <h3 className="font-medium text-stone-900">Active Containers</h3>
               <Badge variant="outline">{filteredContainers.length} containers</Badge>
             </div>
             
@@ -346,16 +346,16 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
             <div className="pt-4 border-t">
               <div className="grid grid-cols-2 gap-4 text-center">
                 <div>
-                  <div className="text-lg font-bold text-blue-600">
+                  <div className="text-lg font-bold text-amber-600">
                     {filteredContainers.filter(c => c.status === 'in_transit').length}
                   </div>
-                  <div className="text-xs text-gray-600">In Transit</div>
+                  <div className="text-xs text-stone-600">In Transit</div>
                 </div>
                 <div>
                   <div className="text-lg font-bold text-green-600">
                     {filteredContainers.filter(c => c.status === 'delivered').length}
                   </div>
-                  <div className="text-xs text-gray-600">Delivered</div>
+                  <div className="text-xs text-stone-600">Delivered</div>
                 </div>
               </div>
             </div>
@@ -363,7 +363,7 @@ const ContainerMap = ({ containers = [], realTimeUpdates = true, showFinancials 
         </div>
         
         {/* Last Update */}
-        <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-gray-500">
+        <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-stone-500">
           <div className="flex items-center space-x-2">
             <Clock className="h-4 w-4" />
             <span>Last updated: {formatDate(lastUpdate)}</span>

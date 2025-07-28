@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
-import SimpleSidebar from './SimpleSidebar'
+import ModernSidebar from './SimpleSidebar'
 import { cn } from '@/lib/utils'
 
 const DashboardLayout = ({ children }) => {
@@ -125,7 +125,7 @@ const DashboardLayout = ({ children }) => {
     <div className="min-h-screen bg-background transition-colors duration-300">
       {/* Desktop Sidebar */}
       {!isMobile && (
-        <SimpleSidebar
+        <ModernSidebar
           navigation={filteredNavigation}
           onLogout={handleLogout}
         />
@@ -211,7 +211,7 @@ const DashboardLayout = ({ children }) => {
               {/* Mobile User Section */}
               <div className="sidebar-user-section">
                 <div className="flex items-center mb-4">
-                  <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-full mr-3">
+                  <div className="amber-gradient p-2 rounded-full mr-3">
                     <User className="h-5 w-5 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -249,7 +249,7 @@ const DashboardLayout = ({ children }) => {
       {/* Main content */}
       <div className={cn(
         "transition-all duration-300",
-        isMobile ? "pl-0" : sidebarCollapsed ? "pl-16" : "pl-64"
+        isMobile ? "pl-0" : sidebarCollapsed ? "pl-20" : "pl-64"
       )}>
         {/* Top bar */}
         <div className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border shadow-sm">
@@ -315,7 +315,7 @@ const DashboardLayout = ({ children }) => {
                   className="flex items-center space-x-2 p-2 rounded-lg hover:bg-accent transition-colors"
                   aria-label="User menu"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 amber-gradient rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
                       {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}
                     </span>

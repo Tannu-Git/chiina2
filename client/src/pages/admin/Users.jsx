@@ -70,11 +70,11 @@ const Users = () => {
       case 'admin':
         return <ShieldCheck className="h-4 w-4 text-red-500" />
       case 'staff':
-        return <Shield className="h-4 w-4 text-blue-500" />
+        return <Shield className="h-4 w-4 text-amber-500" />
       case 'client':
         return <UserCheck className="h-4 w-4 text-green-500" />
       default:
-        return <UsersIcon className="h-4 w-4 text-gray-500" />
+        return <UsersIcon className="h-4 w-4 text-stone-500" />
     }
   }
 
@@ -83,11 +83,11 @@ const Users = () => {
       case 'admin':
         return 'bg-red-100 text-red-800'
       case 'staff':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-amber-100 text-amber-800'
       case 'client':
         return 'bg-green-100 text-green-800'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -96,11 +96,11 @@ const Users = () => {
       case 'active':
         return 'bg-green-100 text-green-800'
       case 'inactive':
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-stone-100 text-stone-800'
       case 'suspended':
         return 'bg-red-100 text-red-800'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -176,8 +176,8 @@ const Users = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-            <p className="text-gray-600 mt-2">Manage system users and permissions</p>
+            <h1 className="text-3xl font-bold text-stone-900">User Management</h1>
+            <p className="text-stone-600 mt-2">Manage system users and permissions</p>
           </div>
           <div className="flex space-x-3">
             <Button variant="outline" onClick={fetchUsers}>
@@ -271,7 +271,7 @@ const Users = () => {
                 <select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="all">All Roles</option>
                   <option value="admin">Admin</option>
@@ -281,7 +281,7 @@ const Users = () => {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="all">All Status</option>
                   <option value="active">Active</option>
@@ -307,7 +307,7 @@ const Users = () => {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b border-gray-200">
+                  <tr className="border-b border-stone-200">
                     <th className="excel-header text-left">User</th>
                     <th className="excel-header text-left">Contact</th>
                     <th className="excel-header text-center">Role</th>
@@ -326,33 +326,33 @@ const Users = () => {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      className="border-b border-stone-100 hover:bg-stone-50 transition-colors"
                     >
                       <td className="excel-cell">
                         <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                          <div className="w-10 h-10 bg-gradient-to-br amber-gradient rounded-full flex items-center justify-center">
                             <span className="text-white font-semibold text-sm">
                               {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <div className="font-medium text-gray-900">{user.name}</div>
-                            <div className="text-sm text-gray-500">ID: {user._id}</div>
+                            <div className="font-medium text-stone-900">{user.name}</div>
+                            <div className="text-sm text-stone-500">ID: {user._id}</div>
                           </div>
                         </div>
                       </td>
                       <td className="excel-cell">
                         <div className="space-y-1">
                           <div className="flex items-center text-sm">
-                            <Mail className="h-3 w-3 mr-2 text-gray-400" />
-                            <a href={`mailto:${user.email}`} className="text-blue-600 hover:underline">
+                            <Mail className="h-3 w-3 mr-2 text-stone-400" />
+                            <a href={`mailto:${user.email}`} className="text-amber-600 hover:underline">
                               {user.email}
                             </a>
                           </div>
                           {user.phone && (
                             <div className="flex items-center text-sm">
-                              <Phone className="h-3 w-3 mr-2 text-gray-400" />
-                              <a href={`tel:${user.phone}`} className="text-blue-600 hover:underline">
+                              <Phone className="h-3 w-3 mr-2 text-stone-400" />
+                              <a href={`tel:${user.phone}`} className="text-amber-600 hover:underline">
                                 {user.phone}
                               </a>
                             </div>
@@ -373,23 +373,23 @@ const Users = () => {
                         </span>
                       </td>
                       <td className="excel-cell">
-                        <div className="font-medium text-gray-900">{user.company}</div>
-                        <div className="text-sm text-gray-500">
+                        <div className="font-medium text-stone-900">{user.company}</div>
+                        <div className="text-sm text-stone-500">
                           Joined {formatDate(user.createdAt)}
                         </div>
                       </td>
                       <td className="excel-cell text-center">
                         <div className="font-medium">{user.ordersCount}</div>
-                        <div className="text-sm text-gray-500">orders</div>
+                        <div className="text-sm text-stone-500">orders</div>
                       </td>
                       <td className="excel-cell text-right">
                         {user.totalSpent > 0 ? (
                           <div>
                             <div className="font-medium">{formatCurrency(user.totalSpent)}</div>
-                            <div className="text-sm text-gray-500">lifetime</div>
+                            <div className="text-sm text-stone-500">lifetime</div>
                           </div>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-stone-400">-</span>
                         )}
                       </td>
                       <td className="excel-cell text-center">
@@ -439,9 +439,9 @@ const Users = () => {
             {/* Empty State */}
             {filteredUsers.length === 0 && !loading && (
               <div className="text-center py-12">
-                <UsersIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
-                <p className="text-gray-500 mb-6">
+                <UsersIcon className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-stone-900 mb-2">No users found</h3>
+                <p className="text-stone-500 mb-6">
                   {searchTerm ? 'Try adjusting your search criteria' : 'Get started by adding your first user'}
                 </p>
                 {currentUser?.role === 'admin' && (
@@ -476,13 +476,13 @@ const Users = () => {
                           <span className="text-sm font-semibold text-green-600">{index + 1}</span>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">{client.name}</p>
-                          <p className="text-sm text-gray-500">{client.company}</p>
+                          <p className="font-medium text-stone-900">{client.name}</p>
+                          <p className="text-sm text-stone-500">{client.company}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold text-gray-900">{formatCurrency(client.totalSpent)}</p>
-                        <p className="text-sm text-gray-500">{client.ordersCount} orders</p>
+                        <p className="font-semibold text-stone-900">{formatCurrency(client.totalSpent)}</p>
+                        <p className="text-sm text-stone-500">{client.ordersCount} orders</p>
                       </div>
                     </div>
                   ))}
@@ -504,17 +504,17 @@ const Users = () => {
                   .map((user, index) => (
                     <div key={user._id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
                           {getRoleIcon(user.role)}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">{user.name}</p>
-                          <p className="text-sm text-gray-500">{user.role} • {user.company}</p>
+                          <p className="font-medium text-stone-900">{user.name}</p>
+                          <p className="text-sm text-stone-500">{user.role} • {user.company}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">Last login</p>
-                        <p className="text-sm text-gray-500">{formatDateTime(user.lastLogin)}</p>
+                        <p className="text-sm font-medium text-stone-900">Last login</p>
+                        <p className="text-sm text-stone-500">{formatDateTime(user.lastLogin)}</p>
                       </div>
                     </div>
                   ))}

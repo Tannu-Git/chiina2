@@ -108,11 +108,11 @@ const Financials = () => {
   // Safety check to ensure displayData has required structure
   if (!displayData || !displayData.summary || !displayData.revenueBreakdown || !displayData.expenseBreakdown || !displayData.paymentStatus) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="min-h-screen bg-stone-50 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading Financial Data...</h2>
-            <p className="text-gray-600">Please wait while we load your financial information.</p>
+            <h2 className="text-2xl font-bold text-stone-900 mb-4">Loading Financial Data...</h2>
+            <p className="text-stone-600">Please wait while we load your financial information.</p>
           </div>
         </div>
       </div>
@@ -122,7 +122,7 @@ const Financials = () => {
   const getGrowthIcon = (growth) => {
     if (growth > 0) return <TrendingUp className="h-4 w-4 text-green-500" />
     if (growth < 0) return <TrendingDown className="h-4 w-4 text-red-500" />
-    return <BarChart3 className="h-4 w-4 text-gray-500" />
+    return <BarChart3 className="h-4 w-4 text-stone-500" />
   }
 
   const handleExportReport = () => {
@@ -133,7 +133,7 @@ const Financials = () => {
   const getGrowthColor = (growth) => {
     if (growth > 0) return 'text-green-600'
     if (growth < 0) return 'text-red-600'
-    return 'text-gray-600'
+    return 'text-stone-600'
   }
 
   // Remove the loading check here since we have mock data fallback
@@ -149,14 +149,14 @@ const Financials = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Financial Dashboard</h1>
-            <p className="text-gray-600 mt-2">Track revenue, profits, and financial performance</p>
+            <h1 className="text-3xl font-bold text-stone-900">Financial Dashboard</h1>
+            <p className="text-stone-600 mt-2">Track revenue, profits, and financial performance</p>
           </div>
           <div className="flex space-x-3">
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
               <option value="week">This Week</option>
               <option value="month">This Month</option>
@@ -247,15 +247,15 @@ const Financials = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Order Values</span>
+                    <div className="w-3 h-3 bg-amber-500 rounded-full mr-3"></div>
+                    <span className="text-sm text-stone-600">Order Values</span>
                   </div>
                   <span className="font-semibold">{formatCurrency(displayData.revenueBreakdown.orderValues)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Carrying Charges</span>
+                    <span className="text-sm text-stone-600">Carrying Charges</span>
                   </div>
                   <span className="font-semibold">{formatCurrency(displayData.revenueBreakdown.carryingCharges)}</span>
                 </div>
@@ -282,21 +282,21 @@ const Financials = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Container Costs</span>
+                    <span className="text-sm text-stone-600">Container Costs</span>
                   </div>
                   <span className="font-semibold">{formatCurrency(displayData.expenseBreakdown.containerCosts)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Operational Costs</span>
+                    <span className="text-sm text-stone-600">Operational Costs</span>
                   </div>
                   <span className="font-semibold">{formatCurrency(displayData.expenseBreakdown.operationalCosts)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Staff Costs</span>
+                    <div className="w-3 h-3 bg-stone-500 rounded-full mr-3"></div>
+                    <span className="text-sm text-stone-600">Staff Costs</span>
                   </div>
                   <span className="font-semibold">{formatCurrency(displayData.expenseBreakdown.staffCosts)}</span>
                 </div>
@@ -327,21 +327,21 @@ const Financials = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Received</span>
+                    <span className="text-sm text-stone-600">Received</span>
                   </div>
                   <span className="font-semibold text-green-600">{formatCurrency(displayData.paymentStatus.received)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Pending</span>
+                    <span className="text-sm text-stone-600">Pending</span>
                   </div>
                   <span className="font-semibold text-yellow-600">{formatCurrency(displayData.paymentStatus.pending)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
-                    <span className="text-sm text-gray-600">Overdue</span>
+                    <span className="text-sm text-stone-600">Overdue</span>
                   </div>
                   <span className="font-semibold text-red-600">{formatCurrency(displayData.paymentStatus.overdue)}</span>
                 </div>
@@ -370,18 +370,18 @@ const Financials = () => {
             <CardContent>
               <div className="space-y-4">
                 {(displayData.topClients || []).map((client, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-stone-50">
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-semibold text-blue-600">{index + 1}</span>
+                      <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-semibold text-amber-600">{index + 1}</span>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{client.name}</p>
-                        <p className="text-sm text-gray-500">{client.orders} orders</p>
+                        <p className="font-medium text-stone-900">{client.name}</p>
+                        <p className="text-sm text-stone-500">{client.orders} orders</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">{formatCurrency(client.revenue)}</p>
+                      <p className="font-semibold text-stone-900">{formatCurrency(client.revenue)}</p>
                       <div className="flex items-center">
                         {getGrowthIcon(client.growth)}
                         <span className={`text-sm ml-1 ${getGrowthColor(client.growth)}`}>
@@ -413,13 +413,13 @@ const Financials = () => {
                         <span className="text-sm font-semibold text-green-600">{month.month}</span>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{formatCurrency(month.revenue)}</p>
-                        <p className="text-sm text-gray-500">{month.orders} orders</p>
+                        <p className="font-medium text-stone-900">{formatCurrency(month.revenue)}</p>
+                        <p className="text-sm text-stone-500">{month.orders} orders</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-green-600">{formatCurrency(month.profit)}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-stone-500">
                         {((month.profit / month.revenue) * 100).toFixed(1)}% margin
                       </p>
                     </div>

@@ -146,17 +146,17 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: index * 0.05 }}
-      className="p-3 cursor-pointer border-b border-gray-100 hover:bg-blue-50"
+      className="p-3 cursor-pointer border-b border-stone-100 hover:bg-amber-50"
       onClick={() => selectSupplier(supplier)}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-1">
-            <Building className="h-4 w-4 text-gray-400" />
-            <span className="font-medium text-gray-900">{supplier.name}</span>
+            <Building className="h-4 w-4 text-stone-400" />
+            <span className="font-medium text-stone-900">{supplier.name}</span>
 
             {supplier.isAI && (
-              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
+              <Badge variant="outline" className="text-xs bg-stone-50 text-stone-700">
                 AI Match {Math.round(supplier.matchScore * 100)}%
               </Badge>
             )}
@@ -176,7 +176,7 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
             )}
           </div>
 
-          <div className="space-y-1 text-sm text-gray-600">
+          <div className="space-y-1 text-sm text-stone-600">
             {supplier.location && (
               <div className="flex items-center">
                 <MapPin className="h-3 w-3 mr-1" />
@@ -227,27 +227,27 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
           )}
 
           {supplier.lastOrderDate && (
-            <div className="flex items-center text-xs text-gray-500">
+            <div className="flex items-center text-xs text-stone-500">
               <Clock className="h-3 w-3 mr-1" />
               {new Date(supplier.lastOrderDate).toLocaleDateString()}
             </div>
           )}
 
           {supplier.averagePrice && (
-            <div className="flex items-center text-xs text-gray-600">
+            <div className="flex items-center text-xs text-stone-600">
               <TrendingUp className="h-3 w-3 mr-1" />
               Avg: {formatCurrency(supplier.averagePrice)}
             </div>
           )}
 
           {supplier.leadTime && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-stone-500">
               Lead: {supplier.leadTime} days
             </div>
           )}
 
           {supplier.paymentTerms && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-stone-500">
               Terms: {supplier.paymentTerms}
             </div>
           )}
@@ -291,9 +291,9 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
         initial={{ opacity: 0, height: 0 }}
         animate={{ opacity: 1, height: 'auto' }}
         exit={{ opacity: 0, height: 0 }}
-        className="border-b border-gray-200 p-4 bg-gray-50"
+        className="border-b border-stone-200 p-4 bg-stone-50"
       >
-        <h4 className="font-medium text-gray-900 mb-3">Add New Supplier</h4>
+        <h4 className="font-medium text-stone-900 mb-3">Add New Supplier</h4>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Input
@@ -382,12 +382,12 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-hidden"
+            className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-80 overflow-hidden"
           >
             {/* Search */}
-            <div className="p-3 border-b border-gray-200">
+            <div className="p-3 border-b border-stone-200">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <Input
                   placeholder="Search suppliers..."
                   value={searchTerm}
@@ -417,12 +417,12 @@ const SupplierDropdown = ({ value, onChange, itemCode, category }) => {
             <div className="max-h-60 overflow-y-auto">
               {loading ? (
                 <div className="p-4 text-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-sm text-gray-500 mt-2">Loading suppliers...</p>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-600 mx-auto"></div>
+                  <p className="text-sm text-stone-500 mt-2">Loading suppliers...</p>
                 </div>
               ) : filteredSuppliers.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">
-                  <Building className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                <div className="p-4 text-center text-stone-500">
+                  <Building className="h-8 w-8 mx-auto mb-2 text-stone-300" />
                   <p className="text-sm">No suppliers found</p>
                   {searchTerm && (
                     <Button

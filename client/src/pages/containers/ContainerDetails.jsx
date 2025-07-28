@@ -155,7 +155,7 @@ const ContainerDetails = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'planning':
-        return <Clock className="h-5 w-5 text-blue-500" />
+        return <Clock className="h-5 w-5 text-amber-500" />
       case 'loading':
         return <Package className="h-5 w-5 text-yellow-500" />
       case 'shipped':
@@ -163,7 +163,7 @@ const ContainerDetails = () => {
       case 'delivered':
         return <CheckCircle className="h-5 w-5 text-green-600" />
       default:
-        return <AlertTriangle className="h-5 w-5 text-gray-500" />
+        return <AlertTriangle className="h-5 w-5 text-stone-500" />
     }
   }
 
@@ -202,9 +202,9 @@ const ContainerDetails = () => {
     return (
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="text-center py-12">
-          <ContainerIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Container not found</h3>
-          <p className="text-gray-500 mb-6">The container you're looking for doesn't exist.</p>
+          <ContainerIcon className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-stone-900 mb-2">Container not found</h3>
+          <p className="text-stone-500 mb-6">The container you're looking for doesn't exist.</p>
           <Link to="/containers">
             <Button variant="gradient">
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -236,12 +236,12 @@ const ContainerDetails = () => {
             <div>
               <div className="flex items-center space-x-3">
                 {getStatusIcon(displayContainer.status)}
-                <h1 className="text-3xl font-bold text-gray-900">{displayContainer.clientFacingId}</h1>
+                <h1 className="text-3xl font-bold text-stone-900">{displayContainer.clientFacingId}</h1>
                 <span className={`status-badge ${getStatusColor(displayContainer.status)}`}>
                   {displayContainer.status}
                 </span>
               </div>
-              <p className="text-gray-600 mt-2">
+              <p className="text-stone-600 mt-2">
                 {displayContainer.type} Container • {displayContainer.realContainerId}
               </p>
             </div>
@@ -272,7 +272,7 @@ const ContainerDetails = () => {
 
         {/* Tab Navigation */}
         <div className="mb-6">
-          <div className="border-b border-gray-200">
+          <div className="border-b border-stone-200">
             <nav className="-mb-px flex space-x-8">
               {[
                 { id: 'overview', name: 'Overview', icon: BarChart3 },
@@ -285,8 +285,8 @@ const ContainerDetails = () => {
                   onClick={() => setSelectedTab(tab.id)}
                   className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
                     selectedTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-amber-500 text-amber-600'
+                      : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
                   }`}
                 >
                   <tab.icon className="h-4 w-4 mr-2" />
@@ -313,50 +313,50 @@ const ContainerDetails = () => {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-3">Container Details</h3>
+                      <h3 className="font-semibold text-stone-900 mb-3">Container Details</h3>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Client Facing ID:</span>
+                          <span className="text-stone-500">Client Facing ID:</span>
                           <span className="font-medium">{displayContainer.clientFacingId}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Real Container ID:</span>
+                          <span className="text-stone-500">Real Container ID:</span>
                           <span className="font-medium">{displayContainer.realContainerId}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Container Type:</span>
+                          <span className="text-stone-500">Container Type:</span>
                           <span className="font-medium">{displayContainer.type}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Bill Number:</span>
+                          <span className="text-stone-500">Bill Number:</span>
                           <span className="font-medium">{displayContainer.billNo || 'Not assigned'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Seal Number:</span>
+                          <span className="text-stone-500">Seal Number:</span>
                           <span className="font-medium">{displayContainer.sealNo || 'Not sealed'}</span>
                         </div>
                       </div>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-3">Location & Schedule</h3>
+                      <h3 className="font-semibold text-stone-900 mb-3">Location & Schedule</h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <MapPin className="h-4 w-4 mr-2" />
                           <span>Current: {displayContainer.location?.current}</span>
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <MapPin className="h-4 w-4 mr-2" />
                           <span>Port: {displayContainer.location?.port}</span>
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <MapPin className="h-4 w-4 mr-2" />
                           <span>Destination: {displayContainer.location?.destination}</span>
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <Calendar className="h-4 w-4 mr-2" />
                           <span>Est. Departure: {formatDateTime(displayContainer.estimatedDeparture)}</span>
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <Calendar className="h-4 w-4 mr-2" />
                           <span>Est. Arrival: {formatDateTime(displayContainer.estimatedArrival)}</span>
                         </div>
@@ -378,16 +378,16 @@ const ContainerDetails = () => {
                   <div className="space-y-6">
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-700">CBM Utilization</span>
+                        <span className="text-sm font-medium text-stone-700">CBM Utilization</span>
                         <span className="text-sm font-semibold">{cbmUtilization.toFixed(1)}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="w-full bg-stone-200 rounded-full h-3">
                         <div
                           className={`h-3 rounded-full ${getUtilizationColor(cbmUtilization)}`}
                           style={{ width: `${Math.min(cbmUtilization, 100)}%` }}
                         />
                       </div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <div className="flex justify-between text-xs text-stone-500 mt-1">
                         <span>{displayContainer.currentCbm} m³ used</span>
                         <span>{displayContainer.maxCbm} m³ total</span>
                       </div>
@@ -395,16 +395,16 @@ const ContainerDetails = () => {
 
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-700">Weight Utilization</span>
+                        <span className="text-sm font-medium text-stone-700">Weight Utilization</span>
                         <span className="text-sm font-semibold">{weightUtilization.toFixed(1)}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="w-full bg-stone-200 rounded-full h-3">
                         <div
                           className={`h-3 rounded-full ${getUtilizationColor(weightUtilization)}`}
                           style={{ width: `${Math.min(weightUtilization, 100)}%` }}
                         />
                       </div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <div className="flex justify-between text-xs text-stone-500 mt-1">
                         <span>{displayContainer.currentWeight.toLocaleString()} kg used</span>
                         <span>{displayContainer.maxWeight.toLocaleString()} kg total</span>
                       </div>
@@ -412,20 +412,20 @@ const ContainerDetails = () => {
 
                     <div className="grid grid-cols-3 gap-4 pt-4 border-t">
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">{displayContainer.orders?.length || 0}</p>
-                        <p className="text-sm text-gray-500">Orders</p>
+                        <p className="text-2xl font-bold text-stone-900">{displayContainer.orders?.length || 0}</p>
+                        <p className="text-sm text-stone-500">Orders</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">
+                        <p className="text-2xl font-bold text-stone-900">
                           {displayContainer.orders?.reduce((sum, order) => sum + order.allocatedCartons, 0) || 0}
                         </p>
-                        <p className="text-sm text-gray-500">Cartons</p>
+                        <p className="text-sm text-stone-500">Cartons</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">
+                        <p className="text-2xl font-bold text-stone-900">
                           {Math.round((cbmUtilization + weightUtilization) / 2)}%
                         </p>
-                        <p className="text-sm text-gray-500">Avg Utilization</p>
+                        <p className="text-sm text-stone-500">Avg Utilization</p>
                       </div>
                     </div>
                   </div>
@@ -450,13 +450,13 @@ const ContainerDetails = () => {
                         {displayContainer.status.toUpperCase()}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500">Current Status</p>
+                    <p className="text-sm text-stone-500">Current Status</p>
                   </div>
 
                   {/* Status Actions */}
                   {(user?.role === 'admin' || user?.role === 'staff') && (
                     <div className="space-y-2">
-                      <h4 className="font-medium text-gray-900">Status Actions</h4>
+                      <h4 className="font-medium text-stone-900">Status Actions</h4>
                       {displayContainer.status === 'planning' && (
                         <Button
                           variant="outline"
@@ -495,18 +495,18 @@ const ContainerDetails = () => {
 
                   {/* Container Info */}
                   <div className="pt-4 border-t">
-                    <h4 className="font-medium text-gray-900 mb-3">Container Info</h4>
+                    <h4 className="font-medium text-stone-900 mb-3">Container Info</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Created:</span>
+                        <span className="text-stone-500">Created:</span>
                         <span>{formatDate(displayContainer.createdAt)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Last Updated:</span>
+                        <span className="text-stone-500">Last Updated:</span>
                         <span>{formatDate(displayContainer.updatedAt)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Total Value:</span>
+                        <span className="text-stone-500">Total Value:</span>
                         <span className="font-semibold">
                           {formatCurrency(displayContainer.orders?.reduce((sum, order) => sum + order.orderId.totalAmount, 0) || 0)}
                         </span>
@@ -536,12 +536,12 @@ const ContainerDetails = () => {
                     <Card key={orderAllocation.orderId._id} className="p-4">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-3">
-                          <Package className="h-6 w-6 text-blue-500" />
+                          <Package className="h-6 w-6 text-amber-500" />
                           <div>
-                            <h3 className="font-semibold text-gray-900">
+                            <h3 className="font-semibold text-stone-900">
                               {orderAllocation.orderId.orderNumber}
                             </h3>
-                            <p className="text-sm text-gray-500">{orderAllocation.orderId.clientName}</p>
+                            <p className="text-sm text-stone-500">{orderAllocation.orderId.clientName}</p>
                           </div>
                         </div>
                         <div className="flex items-center space-x-4">
@@ -549,7 +549,7 @@ const ContainerDetails = () => {
                             <p className="font-semibold text-green-600">
                               {formatCurrency(orderAllocation.orderId.totalAmount)}
                             </p>
-                            <p className="text-sm text-gray-500">Order Value</p>
+                            <p className="text-sm text-stone-500">Order Value</p>
                           </div>
                           <Link to={`/orders/${orderAllocation.orderId._id}`}>
                             <Button variant="outline" size="sm">
@@ -562,32 +562,32 @@ const ContainerDetails = () => {
 
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Allocated CBM</p>
-                          <p className="text-lg font-semibold text-gray-900">{orderAllocation.allocatedCbm} m³</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-medium text-stone-500">Allocated CBM</p>
+                          <p className="text-lg font-semibold text-stone-900">{orderAllocation.allocatedCbm} m³</p>
+                          <p className="text-xs text-stone-500">
                             {((orderAllocation.allocatedCbm / displayContainer.maxCbm) * 100).toFixed(1)}% of container
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Allocated Weight</p>
-                          <p className="text-lg font-semibold text-gray-900">{orderAllocation.allocatedWeight} kg</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-medium text-stone-500">Allocated Weight</p>
+                          <p className="text-lg font-semibold text-stone-900">{orderAllocation.allocatedWeight} kg</p>
+                          <p className="text-xs text-stone-500">
                             {((orderAllocation.allocatedWeight / displayContainer.maxWeight) * 100).toFixed(1)}% of container
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Allocated Cartons</p>
-                          <p className="text-lg font-semibold text-gray-900">{orderAllocation.allocatedCartons}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-medium text-stone-500">Allocated Cartons</p>
+                          <p className="text-lg font-semibold text-stone-900">{orderAllocation.allocatedCartons}</p>
+                          <p className="text-xs text-stone-500">
                             {((orderAllocation.allocatedCartons / orderAllocation.orderId.totalCartons) * 100).toFixed(1)}% of order
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Allocation %</p>
-                          <p className="text-lg font-semibold text-gray-900">
+                          <p className="text-sm font-medium text-stone-500">Allocation %</p>
+                          <p className="text-lg font-semibold text-stone-900">
                             {((orderAllocation.allocatedCbm / orderAllocation.orderId.totalCbm) * 100).toFixed(1)}%
                           </p>
-                          <p className="text-xs text-gray-500">of order CBM</p>
+                          <p className="text-xs text-stone-500">of order CBM</p>
                         </div>
                       </div>
                     </Card>
@@ -595,9 +595,9 @@ const ContainerDetails = () => {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No orders allocated</h3>
-                  <p className="text-gray-500 mb-6">This container doesn't have any orders allocated yet.</p>
+                  <Package className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-stone-900 mb-2">No orders allocated</h3>
+                  <p className="text-stone-500 mb-6">This container doesn't have any orders allocated yet.</p>
                   {(user?.role === 'admin' || user?.role === 'staff') && (
                     <Button variant="gradient">
                       <Plus className="h-4 w-4 mr-2" />
@@ -624,23 +624,23 @@ const ContainerDetails = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Charges Breakdown */}
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-4">Container Charges</h3>
+                  <h3 className="font-semibold text-stone-900 mb-4">Container Charges</h3>
                   <div className="space-y-3">
                     {displayContainer.charges?.map((charge, index) => (
                       <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
-                          <p className="font-medium text-gray-900">{charge.name}</p>
-                          <p className="text-sm text-gray-500 capitalize">{charge.type} charge</p>
+                          <p className="font-medium text-stone-900">{charge.name}</p>
+                          <p className="text-sm text-stone-500 capitalize">{charge.type} charge</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-gray-900">{formatCurrency(charge.value)}</p>
-                          <p className="text-sm text-gray-500">{charge.currency}</p>
+                          <p className="font-semibold text-stone-900">{formatCurrency(charge.value)}</p>
+                          <p className="text-sm text-stone-500">{charge.currency}</p>
                         </div>
                       </div>
                     ))}
                     <div className="pt-3 border-t">
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-gray-900">Total Container Charges</span>
+                        <span className="font-semibold text-stone-900">Total Container Charges</span>
                         <span className="text-lg font-bold text-green-600">
                           {formatCurrency(displayContainer.charges?.reduce((sum, charge) => sum + charge.value, 0) || 0)}
                         </span>
@@ -651,26 +651,26 @@ const ContainerDetails = () => {
 
                 {/* Order Values */}
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-4">Order Values</h3>
+                  <h3 className="font-semibold text-stone-900 mb-4">Order Values</h3>
                   <div className="space-y-3">
                     {displayContainer.orders?.map((orderAllocation, index) => (
                       <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
-                          <p className="font-medium text-gray-900">{orderAllocation.orderId.orderNumber}</p>
-                          <p className="text-sm text-gray-500">{orderAllocation.orderId.clientName}</p>
+                          <p className="font-medium text-stone-900">{orderAllocation.orderId.orderNumber}</p>
+                          <p className="text-sm text-stone-500">{orderAllocation.orderId.clientName}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-gray-900">
+                          <p className="font-semibold text-stone-900">
                             {formatCurrency(orderAllocation.orderId.totalAmount)}
                           </p>
-                          <p className="text-sm text-gray-500">Order value</p>
+                          <p className="text-sm text-stone-500">Order value</p>
                         </div>
                       </div>
                     ))}
                     <div className="pt-3 border-t">
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-gray-900">Total Order Value</span>
-                        <span className="text-lg font-bold text-blue-600">
+                        <span className="font-semibold text-stone-900">Total Order Value</span>
+                        <span className="text-lg font-bold text-amber-600">
                           {formatCurrency(displayContainer.orders?.reduce((sum, order) => sum + order.orderId.totalAmount, 0) || 0)}
                         </span>
                       </div>
@@ -681,13 +681,13 @@ const ContainerDetails = () => {
 
               {/* Financial Summary */}
               <div className="mt-8 pt-6 border-t">
-                <h3 className="font-semibold text-gray-900 mb-4">Financial Summary</h3>
+                <h3 className="font-semibold text-stone-900 mb-4">Financial Summary</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <p className="text-2xl font-bold text-blue-600">
+                  <div className="text-center p-4 bg-amber-50 rounded-lg">
+                    <p className="text-2xl font-bold text-amber-600">
                       {formatCurrency(displayContainer.orders?.reduce((sum, order) => sum + order.orderId.totalAmount, 0) || 0)}
                     </p>
-                    <p className="text-sm text-blue-700">Total Order Value</p>
+                    <p className="text-sm text-amber-700">Total Order Value</p>
                   </div>
                   <div className="text-center p-4 bg-green-50 rounded-lg">
                     <p className="text-2xl font-bold text-green-600">
@@ -695,14 +695,14 @@ const ContainerDetails = () => {
                     </p>
                     <p className="text-sm text-green-700">Container Charges</p>
                   </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <p className="text-2xl font-bold text-purple-600">
+                  <div className="text-center p-4 bg-stone-50 rounded-lg">
+                    <p className="text-2xl font-bold text-amber-600">
                       {formatCurrency(
                         (displayContainer.orders?.reduce((sum, order) => sum + order.orderId.totalAmount, 0) || 0) +
                         (displayContainer.charges?.reduce((sum, charge) => sum + charge.value, 0) || 0)
                       )}
                     </p>
-                    <p className="text-sm text-purple-700">Total Value</p>
+                    <p className="text-sm text-stone-700">Total Value</p>
                   </div>
                 </div>
               </div>
@@ -727,7 +727,7 @@ const ContainerDetails = () => {
                     <li key={index}>
                       <div className="relative pb-8">
                         {index !== displayContainer.timeline.length - 1 && (
-                          <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+                          <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-stone-200" aria-hidden="true" />
                         )}
                         <div className="relative flex space-x-3">
                           <div>
@@ -737,11 +737,11 @@ const ContainerDetails = () => {
                           </div>
                           <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
                             <div>
-                              <p className="text-sm font-medium text-gray-900">{event.action}</p>
-                              <p className="text-sm text-gray-500">{event.description}</p>
-                              <p className="text-xs text-gray-400 mt-1">by {event.user}</p>
+                              <p className="text-sm font-medium text-stone-900">{event.action}</p>
+                              <p className="text-sm text-stone-500">{event.description}</p>
+                              <p className="text-xs text-stone-400 mt-1">by {event.user}</p>
                             </div>
-                            <div className="whitespace-nowrap text-right text-sm text-gray-500">
+                            <div className="whitespace-nowrap text-right text-sm text-stone-500">
                               <time dateTime={event.date}>
                                 {formatDateTime(event.date)}
                               </time>
@@ -757,26 +757,26 @@ const ContainerDetails = () => {
               {/* Add Timeline Entry (Admin/Staff only) */}
               {(user?.role === 'admin' || user?.role === 'staff') && (
                 <div className="mt-6 pt-6 border-t">
-                  <h4 className="font-medium text-gray-900 mb-4">Add Timeline Entry</h4>
+                  <h4 className="font-medium text-stone-900 mb-4">Add Timeline Entry</h4>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-stone-700 mb-2">
                         Action
                       </label>
                       <input
                         type="text"
                         placeholder="e.g., Container Inspection Completed"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-stone-700 mb-2">
                         Description
                       </label>
                       <textarea
                         placeholder="Additional details about this action..."
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <Button variant="outline">

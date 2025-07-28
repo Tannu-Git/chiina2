@@ -121,17 +121,17 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
       case 'medium': return 'bg-yellow-100 text-yellow-800'
       case 'high': return 'bg-orange-100 text-orange-800'
       case 'very high': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
   const getReliabilityColor = (level) => {
     switch (level) {
       case 'very high': return 'bg-green-100 text-green-800'
-      case 'high': return 'bg-blue-100 text-blue-800'
+      case 'high': return 'bg-amber-100 text-amber-800'
       case 'medium': return 'bg-yellow-100 text-yellow-800'
       case 'low': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -140,7 +140,7 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
       case 'low': return 'bg-green-100 text-green-800'
       case 'medium': return 'bg-yellow-100 text-yellow-800'
       case 'high': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -193,13 +193,13 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute z-50 w-[500px] mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
+            className="absolute z-50 w-[500px] mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
           >
-            <div className="p-3 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900">Carrying Basis</h3>
-              <p className="text-sm text-gray-500">Select the most suitable transportation method</p>
+            <div className="p-3 border-b border-stone-200">
+              <h3 className="font-medium text-stone-900">Carrying Basis</h3>
+              <p className="text-sm text-stone-500">Select the most suitable transportation method</p>
               {weight && cbm && (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-stone-500 mt-1">
                   Shipment: {weight}kg, {cbm}CBM {destination && `to ${destination}`}
                 </p>
               )}
@@ -216,17 +216,17 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.2, delay: index * 0.05 }}
-                    className={`p-4 cursor-pointer border-b border-gray-100 hover:bg-blue-50 ${
-                      value === method.code ? 'bg-blue-50 border-blue-200' : ''
+                    className={`p-4 cursor-pointer border-b border-stone-100 hover:bg-amber-50 ${
+                      value === method.code ? 'bg-amber-50 border-amber-300' : ''
                     } ${!suitable ? 'opacity-50' : ''}`}
                     onClick={() => suitable && selectMethod(method)}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center space-x-2">
-                        <method.icon className="h-5 w-5 text-gray-600" />
+                        <method.icon className="h-5 w-5 text-stone-600" />
                         <div>
-                          <span className="font-medium text-gray-900">{method.name}</span>
-                          <span className="text-sm text-gray-600 ml-2">({method.code})</span>
+                          <span className="font-medium text-stone-900">{method.name}</span>
+                          <span className="text-sm text-stone-600 ml-2">({method.code})</span>
                         </div>
                       </div>
                       
@@ -235,7 +235,7 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
                       )}
                     </div>
 
-                    <p className="text-sm text-gray-600 mb-3">{method.description}</p>
+                    <p className="text-sm text-stone-600 mb-3">{method.description}</p>
 
                     <div className="flex items-center space-x-2 mb-3">
                       <Badge className={`text-xs ${getCostColor(method.costLevel)}`}>
@@ -259,9 +259,9 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
                     </div>
 
                     {estimatedCost && (
-                      <div className="mb-3 p-2 bg-gray-50 rounded text-sm">
+                      <div className="mb-3 p-2 bg-stone-50 rounded text-sm">
                         <span className="font-medium">Estimated Cost: {formatCurrency(estimatedCost)}</span>
-                        <span className="text-gray-500 ml-2">({formatCurrency(estimatedCost / weight)}/kg)</span>
+                        <span className="text-stone-500 ml-2">({formatCurrency(estimatedCost / weight)}/kg)</span>
                       </div>
                     )}
 
@@ -270,7 +270,7 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
                         <div className="font-medium text-green-700 mb-1">Advantages:</div>
                         <ul className="space-y-1">
                           {method.advantages.slice(0, 2).map((item, i) => (
-                            <li key={i} className="text-gray-600">• {item}</li>
+                            <li key={i} className="text-stone-600">• {item}</li>
                           ))}
                         </ul>
                       </div>
@@ -279,18 +279,18 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
                         <div className="font-medium text-red-700 mb-1">Considerations:</div>
                         <ul className="space-y-1">
                           {method.disadvantages.slice(0, 2).map((item, i) => (
-                            <li key={i} className="text-gray-600">• {item}</li>
+                            <li key={i} className="text-stone-600">• {item}</li>
                           ))}
                         </ul>
                       </div>
                     </div>
 
                     <div className="mt-2 text-xs">
-                      <span className="font-medium text-gray-700">Best for: </span>
-                      <span className="text-gray-600">{method.bestFor.join(', ')}</span>
+                      <span className="font-medium text-stone-700">Best for: </span>
+                      <span className="text-stone-600">{method.bestFor.join(', ')}</span>
                     </div>
 
-                    <div className="mt-2 text-xs text-gray-500">
+                    <div className="mt-2 text-xs text-stone-500">
                       Weight range: {method.minWeight}kg - {method.maxWeight.toLocaleString()}kg
                     </div>
                   </motion.div>
@@ -298,8 +298,8 @@ const CarryingBasisSelector = ({ value, onChange, weight, cbm, destination }) =>
               })}
             </div>
 
-            <div className="p-3 border-t border-gray-200 bg-gray-50">
-              <div className="text-xs text-gray-600">
+            <div className="p-3 border-t border-stone-200 bg-stone-50">
+              <div className="text-xs text-stone-600">
                 <p className="font-medium mb-1">Transportation Guide</p>
                 <p>Choose based on urgency, budget, and shipment characteristics. Consider environmental impact and total logistics cost.</p>
               </div>

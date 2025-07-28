@@ -93,12 +93,12 @@ export const validateOrderItem = (item, index) => {
   const quantityError = validateInteger(item.quantity, 'Quantity', { min: 1, required: true })
   if (quantityError) errors.push(`Item ${index + 1}: ${quantityError}`)
 
-  // Unit price is optional for TO_FACTORY payment type
-  if (item.paymentType !== 'TO_FACTORY') {
+  // Unit price is optional for THROUGH_ME payment type
+  if (item.paymentType !== 'THROUGH_ME') {
     const unitPriceError = validateNumber(item.unitPrice, 'Unit price', { min: 0, required: true })
     if (unitPriceError) errors.push(`Item ${index + 1}: ${unitPriceError}`)
   } else if (item.unitPrice) {
-    // If price is provided for TO_FACTORY, validate it
+    // If price is provided for THROUGH_ME, validate it
     const unitPriceError = validateNumber(item.unitPrice, 'Unit price', { min: 0 })
     if (unitPriceError) errors.push(`Item ${index + 1}: ${unitPriceError}`)
   }
@@ -113,7 +113,7 @@ export const validateOrderItem = (item, index) => {
   if (cartonsError) errors.push(`Item ${index + 1}: ${cartonsError}`)
 
   // Select field validations
-  const paymentTypeError = validateSelect(item.paymentType, 'Payment type', ['TO_AGENT', 'TO_FACTORY'])
+  const paymentTypeError = validateSelect(item.paymentType, 'Payment type', ['CLIENT_DIRECT', 'THROUGH_ME'])
   if (paymentTypeError) errors.push(`Item ${index + 1}: ${paymentTypeError}`)
 
   // Carrying charge validation

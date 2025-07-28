@@ -4,36 +4,37 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 84% 4.9%;
+    /* Amber & Stone Theme - matching design.html exactly */
+    --background: 28 25% 97%; /* stone-100 #f5f5f4 */
+    --foreground: 28 25% 23%; /* stone-800 */
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 28 25% 23%; /* stone-800 */
+    --popover: 0 0% 100%; /* white */
+    --popover-foreground: 28 25% 23%; /* stone-800 */
+    --primary: 45 93% 47%; /* amber-500 #f59e0b */
+    --primary-foreground: 0 0% 100%; /* white */
+    --secondary: 28 25% 97%; /* stone-100 */
+    --secondary-foreground: 28 25% 23%; /* stone-800 */
+    --muted: 28 25% 95%; /* stone-50 */
+    --muted-foreground: 28 10% 53%; /* stone-500 */
+    --accent: 45 93% 47%; /* amber-500 */
+    --accent-foreground: 0 0% 100%; /* white */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --border: 28 13% 80%; /* stone-300 */
+    --input: 28 13% 80%; /* stone-300 */
+    --ring: 45 93% 47%; /* amber-500 */
     --radius: 0.75rem;
 
-    /* Enhanced Sidebar Variables */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222.2 84% 4.9%;
-    --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-hover: 210 40% 96%;
-    --sidebar-active: 221.2 83.2% 53.3%;
-    --sidebar-active-foreground: 210 40% 98%;
-    --sidebar-muted: 215.4 16.3% 46.9%;
-    --sidebar-accent: 221.2 83.2% 53.3%;
+    /* Enhanced Sidebar Variables - Amber & Stone Theme */
+    --sidebar-background: 0 0% 100%; /* white */
+    --sidebar-foreground: 28 25% 23%; /* stone-800 */
+    --sidebar-border: 28 13% 80%; /* stone-300 */
+    --sidebar-hover: 28 25% 95%; /* stone-50 */
+    --sidebar-active: 45 93% 47%; /* amber-500 */
+    --sidebar-active-foreground: 0 0% 100%; /* white */
+    --sidebar-muted: 28 10% 53%; /* stone-500 */
+    --sidebar-accent: 45 93% 47%; /* amber-500 */
 
     /* Glassmorphism Variables */
     --glass-background: 255 255 255 / 0.1;
@@ -46,35 +47,36 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Dark Amber & Stone Theme */
+    --background: 28 25% 9%; /* stone-900 */
+    --foreground: 28 25% 95%; /* stone-50 */
+    --card: 28 25% 11%; /* stone-800 */
+    --card-foreground: 28 25% 95%; /* stone-50 */
+    --popover: 28 25% 11%; /* stone-800 */
+    --popover-foreground: 28 25% 95%; /* stone-50 */
+    --primary: 45 93% 47%; /* amber-500 */
+    --primary-foreground: 28 25% 9%; /* stone-900 */
+    --secondary: 28 25% 15%; /* stone-700 */
+    --secondary-foreground: 28 25% 95%; /* stone-50 */
+    --muted: 28 25% 15%; /* stone-700 */
+    --muted-foreground: 28 10% 53%; /* stone-500 */
+    --accent: 45 93% 47%; /* amber-500 */
+    --accent-foreground: 28 25% 9%; /* stone-900 */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
+    --border: 28 25% 15%; /* stone-700 */
+    --input: 28 25% 15%; /* stone-700 */
+    --ring: 45 93% 47%; /* amber-500 */
 
-    /* Enhanced Dark Sidebar Variables */
-    --sidebar-background: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-hover: 217.2 32.6% 17.5%;
-    --sidebar-active: 217.2 91.2% 59.8%;
-    --sidebar-active-foreground: 222.2 84% 4.9%;
-    --sidebar-muted: 215 20.2% 65.1%;
-    --sidebar-accent: 217.2 91.2% 59.8%;
+    /* Enhanced Dark Sidebar Variables - Amber & Stone Theme */
+    --sidebar-background: 28 25% 11%; /* stone-800 */
+    --sidebar-foreground: 28 25% 95%; /* stone-50 */
+    --sidebar-border: 28 25% 15%; /* stone-700 */
+    --sidebar-hover: 28 25% 15%; /* stone-700 */
+    --sidebar-active: 45 93% 47%; /* amber-500 */
+    --sidebar-active-foreground: 28 25% 9%; /* stone-900 */
+    --sidebar-muted: 28 10% 53%; /* stone-500 */
+    --sidebar-accent: 45 93% 47%; /* amber-500 */
 
     /* Dark Glassmorphism Variables */
     --glass-background: 0 0 0 / 0.1;
@@ -103,19 +105,39 @@
   }
 
   .gradient-bg {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   }
 
   .logistics-gradient {
-    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
   }
 
   .container-gradient {
-    background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
   }
 
   .financial-gradient {
-    background: linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #f87171 100%);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
+  }
+
+  /* Amber & Stone Theme Components */
+  .kpi-card {
+    @apply bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1;
+  }
+
+  .amber-gradient {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
+  }
+
+
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(245, 158, 11, 0.3);
+    border-radius: 50%;
+    border-top-color: #f59e0b; /* amber-500 */
+    animation: spin 1s ease-in-out infinite;
   }
 
   .excel-grid {
@@ -123,11 +145,11 @@
   }
 
   .excel-cell {
-    @apply border border-gray-200 px-2 py-2 text-sm bg-white hover:bg-blue-50 transition-colors min-h-[40px];
+    @apply border border-stone-200 px-2 py-2 text-sm bg-white hover:bg-amber-50 transition-colors min-h-[40px];
   }
 
   .excel-header {
-    @apply bg-gradient-to-b from-gray-50 to-gray-100 font-semibold text-gray-700 border border-gray-200 px-3 py-3 text-sm sticky top-0 z-10 text-center;
+    @apply bg-gradient-to-b from-stone-50 to-stone-100 font-semibold text-stone-700 border border-stone-200 px-3 py-3 text-sm sticky top-0 z-10 text-center;
   }
 
   .excel-input {
@@ -135,46 +157,46 @@
   }
 
   .excel-row {
-    @apply hover:bg-blue-50 transition-colors;
+    @apply hover:bg-amber-50 transition-colors;
   }
 
   .excel-row:nth-child(even) {
-    @apply bg-gray-50;
+    @apply bg-stone-50;
   }
 
   .excel-row:nth-child(even):hover {
-    @apply bg-blue-50;
+    @apply bg-amber-50;
   }
 
   .excel-autocomplete {
-    @apply absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto;
+    @apply absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-y-auto;
   }
 
   .excel-suggestion {
-    @apply px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm;
+    @apply px-3 py-2 hover:bg-amber-50 cursor-pointer border-b border-stone-100 last:border-b-0 text-sm;
   }
 
   .excel-suggestion.selected {
-    @apply bg-blue-100 text-blue-900;
+    @apply bg-amber-100 text-amber-900;
   }
 
   .excel-suggestion-ai {
-    @apply bg-gradient-to-r from-purple-50 to-blue-50 border-l-4 border-purple-400;
+    @apply bg-gradient-to-r from-amber-50 to-amber-100 border-l-4 border-amber-400;
   }
 
   .excel-suggestion-popular {
-    @apply bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-400;
+    @apply bg-gradient-to-r from-stone-50 to-stone-100 border-l-4 border-stone-400;
   }
 
   /* Better table styling */
   .excel-grid th:first-child,
   .excel-grid td:first-child {
-    @apply bg-gray-50 font-medium text-gray-600;
+    @apply bg-stone-50 font-medium text-stone-600;
   }
 
   .excel-grid input:focus,
   .excel-grid select:focus {
-    @apply ring-2 ring-blue-500 ring-opacity-50;
+    @apply ring-2 ring-amber-500 ring-opacity-50;
   }
 
   /* Horizontal scroll improvements */
@@ -182,7 +204,7 @@
     overflow-x: auto;
     overflow-y: visible;
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 #f1f5f9;
+    scrollbar-color: #a8a29e #f5f5f4; /* stone-400 stone-100 */
   }
 
   .horizontal-scroll::-webkit-scrollbar {
@@ -190,17 +212,17 @@
   }
 
   .horizontal-scroll::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: #f5f5f4; /* stone-100 */
     border-radius: 4px;
   }
 
   .horizontal-scroll::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #a8a29e; /* stone-400 */
     border-radius: 4px;
   }
 
   .horizontal-scroll::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: #78716c; /* stone-500 */
   }
 
   /* Enable horizontal scroll with mouse wheel */
@@ -291,6 +313,34 @@
 
   .group:hover .sidebar-tooltip {
     transform: translateX(0);
+  }
+
+  /* Collapsed sidebar scroll indicators */
+  .sidebar-collapsed {
+    position: relative;
+  }
+
+  .sidebar-collapsed nav {
+    mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 40px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 40px), transparent 100%);
+  }
+
+  .sidebar-collapsed::after {
+    content: '⋯';
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: hsl(var(--sidebar-muted));
+    font-size: 18px;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+
+  .sidebar-collapsed.has-overflow::after {
+    opacity: 1;
   }
 
   .sidebar-brand {
@@ -408,15 +458,15 @@
   }
 
   .status-pending {
-    @apply bg-yellow-100 text-yellow-800;
+    @apply bg-amber-100 text-amber-800;
   }
 
   .status-confirmed {
-    @apply bg-blue-100 text-blue-800;
+    @apply bg-amber-100 text-amber-800;
   }
 
   .status-in-progress {
-    @apply bg-purple-100 text-purple-800;
+    @apply bg-stone-100 text-stone-800;
   }
 
   .status-completed {
@@ -432,11 +482,11 @@
   }
 
   .metric-value {
-    @apply text-2xl font-bold text-gray-900;
+    @apply text-2xl font-bold text-stone-900;
   }
 
   .metric-label {
-    @apply text-sm font-medium text-gray-500;
+    @apply text-sm font-medium text-stone-500;
   }
 
   .metric-change {
@@ -452,30 +502,65 @@
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - Amber & Stone Theme */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
+  background: #e7e5e4; /* stone-200 */
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: #a8a29e; /* stone-400 */
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #78716c; /* stone-500 */
 }
 
-/* Loading animation */
+/* Scrollbar utilities for sidebar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #a8a29e #e7e5e4;
+}
+
+.scrollbar-thumb-stone-400::-webkit-scrollbar-thumb {
+  background: #a8a29e;
+}
+
+.scrollbar-track-stone-100::-webkit-scrollbar-track {
+  background: #f5f5f4;
+}
+
+.hover\:scrollbar-thumb-stone-500:hover::-webkit-scrollbar-thumb {
+  background: #78716c;
+}
+
+/* Dark mode scrollbar */
+.dark .scrollbar-thin {
+  scrollbar-color: #57534e #292524; /* stone-600 stone-800 */
+}
+
+.dark .scrollbar-thumb-stone-400::-webkit-scrollbar-thumb {
+  background: #57534e; /* stone-600 */
+}
+
+.dark .scrollbar-track-stone-100::-webkit-scrollbar-track {
+  background: #292524; /* stone-800 */
+}
+
+.dark .hover\:scrollbar-thumb-stone-500:hover::-webkit-scrollbar-thumb {
+  background: #44403c; /* stone-700 */
+}
+
+/* Loading animation - Amber & Stone Theme */
 .loading-spinner {
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #3498db;
+  border: 2px solid #f5f5f4; /* stone-100 */
+  border-top: 2px solid #f59e0b; /* amber-500 */
   border-radius: 50%;
   width: 20px;
   height: 20px;

@@ -6,22 +6,15 @@ import {
   Plus,
   Trash2,
   ArrowLeft,
-  Calculator,
   Package,
   User,
   Calendar,
-  AlertCircle,
-  CheckCircle,
-  Grid,
-  List
+  CheckCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { ExcelInput } from '@/components/ui/ExcelInput'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import SimpleOrderGrid from '@/components/orders/SimpleOrderGrid'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, calculateCarryingCharge } from '@/lib/utils'
 import { validateOrder, displayValidationErrors } from '@/lib/validation'
@@ -33,15 +26,117 @@ const OrderCreate = () => {
   const { id } = useParams()
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(false)
-  const [viewMode, setViewMode] = useState('grid') // 'grid', 'form', or 'cards'
+  const [saving, setSaving] = useState(false)
+  const [autoSaving, setAutoSaving] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(!!id)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
   const [orderData, setOrderData] = useState({
     clientName: '',
     deadline: '',
     priority: 'medium',
     notes: '',
-    items: [
-      {
+    items: [{
+      itemCode: '',
+      description: '',
+      quantity: 1,
+      unitPrice: 0,
+      unitWeight: 0,
+      unitCbm: 0,
+      cartons: 1,
+      supplier: '',
+      paymentType: 'CLIENT_DIRECT',
+      carryingCharge: {
+        basis: 'carton',
+        rate: 0,
+        amount: 0
+      }
+    }]
+  })
+
+  // Load existing order if editing
+  useEffect(() => {
+    if (id) {
+      fetchOrderData()
+    }
+  }, [id])
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (!hasUnsavedChanges || !isEditMode) return
+
+    const autoSaveTimer = setTimeout(async () => {
+      try {
+        setAutoSaving(true)
+        const validationErrors = validateOrder(orderData)
+        if (validationErrors.length === 0) {
+          await handleSave('draft', true) // Silent save
+        }
+      } catch (error) {
+        console.error('Auto-save failed:', error)
+      } finally {
+        setAutoSaving(false)
+      }
+    }, 30000) // Auto-save every 30 seconds
+
+    return () => clearTimeout(autoSaveTimer)
+  }, [orderData, hasUnsavedChanges, isEditMode])
+
+  // Warn user about unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  const fetchOrderData = async () => {
+    try {
+      setLoading(true)
+      const response = await axios.get(`/api/orders/${id}`)
+      const order = response.data.order
+
+      setOrderData({
+        clientName: order.clientName || '',
+        deadline: order.deadline ? order.deadline.split('T')[0] : '',
+        priority: order.priority || 'medium',
+        notes: order.notes || '',
+        items: order.items?.map(item => ({
+          itemCode: item.itemCode || '',
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || 0,
+          unitWeight: item.unitWeight || 0,
+          unitCbm: item.unitCbm || 0,
+          cartons: item.cartons || 1,
+          supplier: item.supplier || '',
+          paymentType: item.paymentType || 'CLIENT_DIRECT',
+          carryingCharge: {
+            basis: item.carryingCharge?.basis || 'carton',
+            rate: item.carryingCharge?.rate || 0,
+            amount: item.carryingCharge?.amount || 0
+          }
+        })) || [orderData.items[0]]
+      })
+    } catch (error) {
+      console.error('Error fetching order:', error)
+      toast.error('Failed to load order data')
+      navigate('/orders')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Add new item
+  const addItem = () => {
+    setOrderData(prev => ({
+      ...prev,
+      items: [...prev.items, {
         itemCode: '',
         description: '',
         quantity: 1,
@@ -56,197 +151,76 @@ const OrderCreate = () => {
           rate: 0,
           amount: 0
         }
-      }
-    ]
-  })
-
-  // Calculate totals
-  const calculateTotals = () => {
-    const totals = orderData.items.reduce((acc, item) => {
-      const totalPrice = item.quantity * item.unitPrice
-      const carryingChargeAmount = calculateCarryingCharge(item.carryingCharge.basis, item.carryingCharge.rate, item)
-
-      return {
-        totalAmount: acc.totalAmount + totalPrice,
-        totalCarryingCharges: acc.totalCarryingCharges + carryingChargeAmount,
-        totalWeight: acc.totalWeight + (item.unitWeight * item.quantity),
-        totalCbm: acc.totalCbm + (item.unitCbm * item.quantity),
-        totalCartons: acc.totalCartons + item.cartons
-      }
-    }, {
-      totalAmount: 0,
-      totalCarryingCharges: 0,
-      totalWeight: 0,
-      totalCbm: 0,
-      totalCartons: 0
-    })
-
-    return totals
-  }
-
-  const totals = calculateTotals()
-
-  // Load existing order data when in edit mode
-  useEffect(() => {
-    if (id) {
-      setIsEditMode(true)
-      fetchOrderData()
-    }
-  }, [id])
-
-  const fetchOrderData = async () => {
-    try {
-      setLoading(true)
-      const response = await axios.get(`/api/orders/${id}`)
-      const order = response.data.order
-
-      if (!order) {
-        throw new Error('Order not found')
-      }
-
-      setOrderData({
-        clientName: order.clientName || '',
-        deadline: order.deadline ? order.deadline.split('T')[0] : '',
-        priority: order.priority || 'medium',
-        paymentType: order.paymentType || 'advance',
-        supplierName: order.supplierName || '',
-        notes: order.notes || '',
-        items: order.items?.map(item => ({
-          itemCode: item.itemCode || '',
-          description: item.description || '',
-          quantity: item.quantity || 1,
-          unitPrice: item.unitPrice || 0,
-          unitWeight: item.unitWeight || 0,
-          unitCbm: item.unitCbm || 0,
-          cartons: item.cartons || 1,
-          supplier: item.supplier?.name || '',
-          paymentType: item.paymentType || 'CLIENT_DIRECT',
-          carryingCharge: {
-            basis: item.carryingCharge?.basis || 'carton',
-            rate: item.carryingCharge?.rate || 0,
-            amount: item.carryingCharge?.amount || 0
-          }
-        })) || [{
-          itemCode: '',
-          description: '',
-          quantity: 1,
-          unitPrice: 0,
-          unitWeight: 0,
-          unitCbm: 0,
-          cartons: 1,
-          supplier: '',
-          paymentType: 'CLIENT_DIRECT',
-          carryingCharge: {
-            basis: 'carton',
-            rate: 0,
-            amount: 0
-          }
-        }]
-      })
-    } catch (error) {
-      console.error('Error fetching order:', error)
-
-      let errorMessage = 'Failed to load order data'
-      let shouldRedirect = true
-
-      if (error.response?.status === 404 || error.message === 'Order not found') {
-        errorMessage = 'Order not found. You can create a new order instead.'
-        setIsEditMode(false)
-        shouldRedirect = false
-        // Update URL to remove the invalid order ID
-        window.history.replaceState({}, '', '/orders/create')
-      } else if (error.response?.status === 403) {
-        errorMessage = 'You do not have permission to view this order'
-      }
-
-      toast.error(errorMessage)
-
-      if (shouldRedirect) {
-        navigate('/orders')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Update item
-  const updateItem = (index, field, value) => {
-    const newItems = [...orderData.items]
-
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.')
-      if (!newItems[index][parent]) {
-        newItems[index][parent] = {}
-      }
-      newItems[index][parent][child] = value
-    } else {
-      newItems[index][field] = value
-    }
-
-    // Recalculate carrying charge amount when basis, rate, or related fields change
-    if (field === 'carryingCharge.basis' || field === 'carryingCharge.rate' ||
-        field === 'cartons' || field === 'unitWeight' || field === 'unitCbm' || field === 'quantity') {
-      const item = newItems[index]
-      if (item.carryingCharge) {
-        item.carryingCharge.amount = calculateCarryingCharge(
-          item.carryingCharge.basis || 'carton',
-          parseFloat(item.carryingCharge.rate) || 0,
-          item
-        )
-      }
-    }
-
-    // Recalculate total price when quantity or unit price changes
-    if (field === 'quantity' || field === 'unitPrice') {
-      const item = newItems[index]
-      item.totalPrice = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
-    }
-
-    setOrderData({ ...orderData, items: newItems })
-  }
-
-  // Add new item row
-  const addItem = () => {
-    setOrderData({
-      ...orderData,
-      items: [
-        ...orderData.items,
-        {
-          itemCode: '',
-          description: '',
-          quantity: 1,
-          unitPrice: 0,
-          unitWeight: 0,
-          unitCbm: 0,
-          cartons: 1,
-          supplier: '',
-          paymentType: 'TO_AGENT',
-          carryingCharge: {
-            basis: 'carton',
-            rate: 0,
-            amount: 0
-          }
-        }
-      ]
-    })
+      }]
+    }))
   }
 
   // Remove item
   const removeItem = (index) => {
     if (orderData.items.length > 1) {
-      const newItems = orderData.items.filter((_, i) => i !== index)
-      setOrderData({ ...orderData, items: newItems })
+      setOrderData(prev => ({
+        ...prev,
+        items: prev.items.filter((_, i) => i !== index)
+      }))
     }
   }
 
-  // Save order
-  const handleSave = async (status = 'draft') => {
-    try {
-      setLoading(true)
+  // Update item
+  const updateItem = (index, field, value) => {
+    setOrderData(prev => {
+      const newItems = [...prev.items]
+      const item = { ...newItems[index] }
 
-      // Comprehensive validation using utility
+      if (field.includes('.')) {
+        const [parent, child] = field.split('.')
+        item[parent] = { ...item[parent], [child]: value }
+      } else {
+        item[field] = value
+      }
+
+      // Recalculate carrying charge when relevant fields change
+      if (['carryingCharge.basis', 'carryingCharge.rate', 'cartons', 'unitWeight', 'unitCbm', 'quantity'].includes(field)) {
+        item.carryingCharge.amount = calculateCarryingCharge(
+          item.carryingCharge.basis,
+          item.carryingCharge.rate,
+          item
+        )
+      }
+
+      newItems[index] = item
+      return { ...prev, items: newItems }
+    })
+  }
+
+  // Calculate totals
+  const totals = orderData.items.reduce((acc, item) => {
+    const totalPrice = item.quantity * item.unitPrice
+    const carryingChargeAmount = calculateCarryingCharge(item.carryingCharge.basis, item.carryingCharge.rate, item)
+
+    return {
+      totalAmount: acc.totalAmount + totalPrice,
+      totalCarryingCharges: acc.totalCarryingCharges + carryingChargeAmount,
+      totalWeight: acc.totalWeight + (item.unitWeight * item.quantity),
+      totalCbm: acc.totalCbm + (item.unitCbm * item.quantity),
+      totalCartons: acc.totalCartons + item.cartons
+    }
+  }, {
+    totalAmount: 0,
+    totalCarryingCharges: 0,
+    totalWeight: 0,
+    totalCbm: 0,
+    totalCartons: 0
+  })
+
+  // Save order
+  const handleSave = async (status = 'draft', silent = false) => {
+    try {
+      setSaving(true)
+
+      // Comprehensive validation
       const validationErrors = validateOrder(orderData)
       if (!displayValidationErrors(validationErrors, toast)) {
+        setSaving(false)
         return
       }
 
@@ -263,78 +237,39 @@ const OrderCreate = () => {
         }))
       }
 
-      // Create axios instance with proper configuration
-      const axiosInstance = axios.create({
-        timeout: 10000, // 10 second timeout
-        baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5001'
-      })
-
-      // Add auth token if available
-      const token = localStorage.getItem('token')
-      if (token) {
-        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      }
-
       let response
       if (isEditMode) {
-        response = await axiosInstance.patch(`/api/orders/${id}`, orderPayload)
-        toast.success(`Order updated successfully!`)
+        response = await axios.patch(`/api/orders/${id}`, orderPayload)
+        if (!silent) {
+          toast.success('Order updated successfully!')
+          setHasUnsavedChanges(false)
+        }
       } else {
-        response = await axiosInstance.post('/api/orders', orderPayload)
-        toast.success(`Order ${status === 'draft' ? 'saved as draft' : 'submitted'} successfully!`)
+        response = await axios.post('/api/orders', orderPayload)
+        if (!silent) {
+          toast.success(`Order ${status === 'draft' ? 'saved as draft' : 'submitted'} successfully!`)
+          setHasUnsavedChanges(false)
+        }
       }
 
-      navigate(`/orders/${response.data.order._id}`)
+      if (!silent) {
+        navigate(`/orders/${response.data.order._id}`)
+      }
     } catch (error) {
       console.error('Error saving order:', error)
-
-      // Enhanced error handling
-      let errorMessage = 'Failed to save order'
-
-      if (error.response) {
-        // Server responded with error status
-        const status = error.response.status
-        const data = error.response.data
-
-        if (status === 400) {
-          errorMessage = data.message || 'Invalid order data'
-          if (data.errors && Array.isArray(data.errors)) {
-            errorMessage = data.errors.map(err => err.msg).join(', ')
-          }
-        } else if (status === 401) {
-          errorMessage = 'Authentication required. Please login again.'
-        } else if (status === 403) {
-          errorMessage = 'You do not have permission to perform this action'
-        } else if (status === 404 && isEditMode) {
-          errorMessage = 'Order not found. It may have been deleted.'
-          setIsEditMode(false)
-          window.history.replaceState({}, '', '/orders/create')
-        } else if (status === 500) {
-          errorMessage = 'Server error. Please try again later.'
-        } else {
-          errorMessage = data.message || `Server error (${status})`
-        }
-      } else if (error.request) {
-        // Network error
-        errorMessage = 'Network error. Please check your connection and try again.'
-      } else {
-        // Other error
-        errorMessage = error.message || 'An unexpected error occurred'
-      }
-
-      toast.error(errorMessage)
+      toast.error(error.response?.data?.message || 'Failed to save order')
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-h-screen bg-stone-50 px-4 sm:px-6 lg:px-8 py-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="max-w-7xl mx-auto"
+        className="max-w-6xl mx-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -344,20 +279,31 @@ const OrderCreate = () => {
               Back to Orders
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-bold text-stone-900">
                 {isEditMode ? 'Edit Order' : 'Create New Order'}
               </h1>
-              <p className="text-gray-600 mt-2">
-                {isEditMode ? 'Update order details and items' : 'Excel-like interface for order creation'}
+              <p className="text-stone-600 mt-2">
+                {isEditMode ? 'Update order details and items' : 'Create a new order with items'}
               </p>
             </div>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex items-center space-x-3">
+            {autoSaving && (
+              <div className="flex items-center text-sm text-stone-500">
+                <div className="loading-spinner mr-2" />
+                Auto-saving...
+              </div>
+            )}
+            {hasUnsavedChanges && !autoSaving && (
+              <div className="text-sm text-amber-600">
+                Unsaved changes
+              </div>
+            )}
             {!isEditMode && (
               <Button
                 variant="outline"
                 onClick={() => handleSave('draft')}
-                disabled={loading}
+                disabled={saving}
               >
                 <Save className="h-4 w-4 mr-2" />
                 Save Draft
@@ -366,9 +312,9 @@ const OrderCreate = () => {
             <Button
               variant="gradient"
               onClick={() => handleSave(isEditMode ? 'updated' : 'submitted')}
-              disabled={loading}
+              disabled={saving}
             >
-              {loading ? (
+              {saving ? (
                 <div className="loading-spinner mr-2" />
               ) : (
                 <CheckCircle className="h-4 w-4 mr-2" />
@@ -378,557 +324,300 @@ const OrderCreate = () => {
           </div>
         </div>
 
-        {/* Order Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <User className="h-5 w-5 mr-2" />
-                  Order Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="clientName" className="block text-sm font-medium text-gray-700 mb-2">
-                      Client Name *
-                    </label>
-                    <Input
-                      id="clientName"
-                      value={orderData.clientName}
-                      onChange={(e) => setOrderData({ ...orderData, clientName: e.target.value })}
-                      placeholder="Enter client name"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-2">
-                      Deadline
-                    </label>
-                    <Input
-                      id="deadline"
-                      type="date"
-                      role="textbox"
-                      value={orderData.deadline}
-                      onChange={(e) => setOrderData({ ...orderData, deadline: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
-                      Priority
-                    </label>
-                    <select
-                      id="priority"
-                      value={orderData.priority}
-                      onChange={(e) => setOrderData({ ...orderData, priority: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes
-                  </label>
-                  <textarea
-                    id="notes"
-                    value={orderData.notes}
-                    onChange={(e) => setOrderData({ ...orderData, notes: e.target.value })}
-                    placeholder="Additional notes or instructions"
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        {/* Order Information */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <User className="h-5 w-5 mr-2" />
+              Order Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  Client Name *
+                </label>
+                <Input
+                  value={orderData.clientName}
+                  onChange={(e) => {
+                    setOrderData({ ...orderData, clientName: e.target.value })
+                    setHasUnsavedChanges(true)
+                  }}
+                  placeholder="Enter client name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  Priority
+                </label>
+                <Select
+                  value={orderData.priority}
+                  onValueChange={(value) => setOrderData({ ...orderData, priority: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  Deadline
+                </label>
+                <Input
+                  type="date"
+                  value={orderData.deadline}
+                  onChange={(e) => setOrderData({ ...orderData, deadline: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  Notes
+                </label>
+                <Input
+                  value={orderData.notes}
+                  onChange={(e) => setOrderData({ ...orderData, notes: e.target.value })}
+                  placeholder="Optional notes"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Calculator className="h-5 w-5 mr-2" />
-                  Order Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Amount:</span>
-                    <span className="font-semibold">{formatCurrency(totals.totalAmount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Carrying Charges:</span>
-                    <span className="font-semibold">{formatCurrency(totals.totalCarryingCharges)}</span>
-                  </div>
-                  <div className="border-t pt-2">
-                    <div className="flex justify-between text-lg font-bold">
-                      <span>Grand Total:</span>
-                      <span>{formatCurrency(totals.totalAmount + totals.totalCarryingCharges)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t pt-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total Cartons:</span>
-                    <span>{totals.totalCartons}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total CBM:</span>
-                    <span>{totals.totalCbm.toFixed(2)} m³</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total Weight:</span>
-                    <span>{totals.totalWeight.toFixed(2)} kg</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Items Section with Tabs */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
+        {/* Order Items */}
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex items-center justify-between">
               <CardTitle className="flex items-center">
                 <Package className="h-5 w-5 mr-2" />
                 Order Items
               </CardTitle>
-              <CardDescription>Choose between Excel-like grid or traditional form view</CardDescription>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-              >
-                <Grid className="h-4 w-4 mr-2" />
-                Excel Grid
+              <Button onClick={addItem} variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
               </Button>
-              <Button
-                variant={viewMode === 'cards' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('cards')}
-              >
-                <Package className="h-4 w-4 mr-2" />
-                Card View
-              </Button>
-              <Button
-                variant={viewMode === 'form' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('form')}
-              >
-                <List className="h-4 w-4 mr-2" />
-                Form View
-              </Button>
-              {viewMode === 'form' && (
-                <Button onClick={addItem} variant="outline">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Item
-                </Button>
-              )}
             </div>
           </CardHeader>
           <CardContent>
-            {viewMode === 'grid' ? (
-              <SimpleOrderGrid
-                initialData={orderData.items}
-                onSave={(items) => {
-                  setOrderData(prev => ({ ...prev, items }))
-                  toast.success('Items updated successfully!')
-                }}
-              />
-            ) : viewMode === 'cards' ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 max-h-[70vh] overflow-y-auto pr-2">
-                  {orderData.items.map((item, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.2, delay: index * 0.05 }}
-                    >
-                      <Card className="hover:shadow-lg transition-all duration-200">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-lg">Item Details</CardTitle>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeItem(index)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Item Code *
-                              </label>
-                              <Input
-                                value={item.itemCode}
-                                onChange={(e) => updateItem(index, 'itemCode', e.target.value)}
-                                placeholder="Enter item code"
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Quantity *
-                              </label>
-                              <Input
-                                type="number"
-                                value={item.quantity || ''}
-                                onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                                placeholder="1"
-                                min="1"
-                                className="w-full"
-                              />
-                            </div>
-                          </div>
+            <div className="space-y-6">
+              {orderData.items.map((item, index) => (
+                <div key={index} className="border border-stone-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-medium text-stone-900">Item {index + 1}</h4>
+                    {orderData.items.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeItem(index)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
 
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Description *
-                            </label>
-                            <Input
-                              value={item.description}
-                              onChange={(e) => updateItem(index, 'description', e.target.value)}
-                              placeholder="Product description"
-                              className="w-full"
-                            />
-                          </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Item Code *
+                      </label>
+                      <Input
+                        value={item.itemCode}
+                        onChange={(e) => updateItem(index, 'itemCode', e.target.value)}
+                        placeholder="Enter item code"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Description *
+                      </label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(index, 'description', e.target.value)}
+                        placeholder="Enter description"
+                      />
+                    </div>
 
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Unit Price {item.paymentType === 'TO_FACTORY' ? '(Optional)' : '*'}
-                              </label>
-                              <Input
-                                type="number"
-                                value={item.unitPrice || ''}
-                                onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
-                                placeholder={item.paymentType === 'TO_FACTORY' ? 'Price unknown' : '0.00'}
-                                min="0"
-                                step="0.01"
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Total Price
-                              </label>
-                              <div className="h-10 px-3 py-2 bg-gray-50 border rounded-md flex items-center text-sm font-medium">
-                                {item.paymentType === 'TO_FACTORY' && !item.unitPrice
-                                  ? 'Price TBD'
-                                  : formatCurrency((item.quantity || 0) * (item.unitPrice || 0))
-                                }
-                              </div>
-                            </div>
-                          </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Quantity
+                      </label>
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 0)}
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Unit Price
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.unitPrice}
+                        onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Cartons
+                      </label>
+                      <Input
+                        type="number"
+                        value={item.cartons}
+                        onChange={(e) => updateItem(index, 'cartons', parseInt(e.target.value) || 0)}
+                        min="1"
+                      />
+                    </div>
 
-                          <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Weight (kg)
-                              </label>
-                              <Input
-                                type="number"
-                                value={item.unitWeight || ''}
-                                onChange={(e) => updateItem(index, 'unitWeight', e.target.value)}
-                                placeholder="0.0"
-                                min="0"
-                                step="0.1"
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                CBM
-                              </label>
-                              <Input
-                                type="number"
-                                value={item.unitCbm || ''}
-                                onChange={(e) => updateItem(index, 'unitCbm', e.target.value)}
-                                placeholder="0.00"
-                                min="0"
-                                step="0.01"
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Cartons
-                              </label>
-                              <Input
-                                type="number"
-                                value={item.cartons || ''}
-                                onChange={(e) => updateItem(index, 'cartons', e.target.value)}
-                                placeholder="1"
-                                min="1"
-                                className="w-full"
-                              />
-                            </div>
-                          </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Unit Weight (kg)
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.unitWeight}
+                        onChange={(e) => updateItem(index, 'unitWeight', parseFloat(e.target.value) || 0)}
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Unit CBM
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.001"
+                        value={item.unitCbm}
+                        onChange={(e) => updateItem(index, 'unitCbm', parseFloat(e.target.value) || 0)}
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Supplier
+                      </label>
+                      <Input
+                        value={item.supplier}
+                        onChange={(e) => updateItem(index, 'supplier', e.target.value)}
+                        placeholder="Supplier name"
+                      />
+                    </div>
 
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Supplier
-                            </label>
-                            <Input
-                              value={item.supplier || ''}
-                              onChange={(e) => updateItem(index, 'supplier', e.target.value)}
-                              placeholder="Supplier name"
-                              className="w-full"
-                            />
-                          </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Payment Type
+                      </label>
+                      <Select
+                        value={item.paymentType}
+                        onValueChange={(value) => updateItem(index, 'paymentType', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CLIENT_DIRECT">Client Direct</SelectItem>
+                          <SelectItem value="THROUGH_ME">Through Me</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Carrying Basis
+                      </label>
+                      <Select
+                        value={item.carryingCharge.basis}
+                        onValueChange={(value) => updateItem(index, 'carryingCharge.basis', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="carton">Per Carton</SelectItem>
+                          <SelectItem value="weight">Per KG</SelectItem>
+                          <SelectItem value="cbm">Per CBM</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Carrying Rate
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.carryingCharge.rate}
+                        onChange={(e) => updateItem(index, 'carryingCharge.rate', parseFloat(e.target.value) || 0)}
+                        min="0"
+                      />
+                    </div>
+                  </div>
 
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Payment Type
-                              </label>
-                              <Select
-                                value={item.paymentType}
-                                onValueChange={(value) => updateItem(index, 'paymentType', value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="TO_AGENT">To Me (Agent)</SelectItem>
-                                  <SelectItem value="TO_FACTORY">To Factory (Direct)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Carrying Basis
-                              </label>
-                              <Select
-                                value={item.carryingCharge?.basis || 'carton'}
-                                onValueChange={(value) => updateItem(index, 'carryingCharge.basis', value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="carton">Per Carton</SelectItem>
-                                  <SelectItem value="weight">Per KG</SelectItem>
-                                  <SelectItem value="cbm">Per CBM</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Carrying Rate
-                              </label>
-                              <Input
-                                type="number"
-                                value={item.carryingCharge?.rate || ''}
-                                onChange={(e) => updateItem(index, 'carryingCharge.rate', e.target.value)}
-                                placeholder="0.00"
-                                min="0"
-                                step="0.01"
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Charge Amount
-                              </label>
-                              <div className="h-10 px-3 py-2 bg-gray-50 border rounded-md flex items-center text-sm font-medium">
-                                {formatCurrency(calculateCarryingCharge(
-                                  item.carryingCharge?.basis || 'carton',
-                                  item.carryingCharge?.rate || 0,
-                                  item
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
+                  <div className="mt-4 pt-4 border-t border-stone-200">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-stone-500">Total Price:</span>
+                        <div className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</div>
+                      </div>
+                      <div>
+                        <span className="text-stone-500">Total Weight:</span>
+                        <div className="font-medium">{(item.unitWeight * item.quantity).toFixed(2)} kg</div>
+                      </div>
+                      <div>
+                        <span className="text-stone-500">Total CBM:</span>
+                        <div className="font-medium">{(item.unitCbm * item.quantity).toFixed(3)} m³</div>
+                      </div>
+                      <div>
+                        <span className="text-stone-500">Carrying Charge:</span>
+                        <div className="font-medium">{formatCurrency(item.carryingCharge.amount)}</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="flex justify-center">
-                  <Button onClick={addItem} variant="outline" size="lg">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add New Item
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div>
-              <div className="overflow-x-auto">
-                <table className="excel-grid w-full">
-                  <thead>
-                    <tr>
-
-                      <th className="excel-header min-w-32">Item Code *</th>
-                      <th className="excel-header min-w-48">Description *</th>
-                      <th className="excel-header w-20">Qty</th>
-                      <th className="excel-header w-24">Unit Price</th>
-                      <th className="excel-header w-24">Total Price</th>
-                      <th className="excel-header w-20">Weight (kg)</th>
-                      <th className="excel-header w-20">CBM</th>
-                      <th className="excel-header w-20">Cartons</th>
-                      <th className="excel-header min-w-32">Supplier</th>
-                      <th className="excel-header w-32">Payment</th>
-                      <th className="excel-header w-24">Charge Basis</th>
-                      <th className="excel-header w-20">Rate</th>
-                      <th className="excel-header w-24">Charge Amount</th>
-                      <th className="excel-header w-16">Actions</th>
-                    </tr>
-                  </thead>
-                <tbody>
-                  {orderData.items.map((item, index) => (
-                    <tr key={index} className="excel-row">
-
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          value={item.itemCode}
-                          onChange={(e) => updateItem(index, 'itemCode', e.target.value)}
-                          placeholder="ITEM-001"
-                        />
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          value={item.description}
-                          onChange={(e) => updateItem(index, 'description', e.target.value)}
-                          placeholder="Product description"
-                        />
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 0)}
-                          min="1"
-                        />
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          type="number"
-                          value={item.unitPrice}
-                          onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="excel-cell text-right font-medium">
-                        {formatCurrency(item.quantity * item.unitPrice)}
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          type="number"
-                          value={item.unitWeight}
-                          onChange={(e) => updateItem(index, 'unitWeight', parseFloat(e.target.value) || 0)}
-                          min="0"
-                          step="0.1"
-                        />
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          type="number"
-                          value={item.unitCbm}
-                          onChange={(e) => updateItem(index, 'unitCbm', parseFloat(e.target.value) || 0)}
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          type="number"
-                          value={item.cartons}
-                          onChange={(e) => updateItem(index, 'cartons', parseInt(e.target.value) || 0)}
-                          min="1"
-                        />
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          value={item.supplier.name}
-                          onChange={(e) => updateItem(index, 'supplier.name', e.target.value)}
-                          placeholder="Supplier name"
-                        />
-                      </td>
-                      <td className="excel-cell p-0">
-                        <select
-                          value={item.paymentType}
-                          onChange={(e) => updateItem(index, 'paymentType', e.target.value)}
-                          className="excel-cell w-full border-0 bg-transparent"
-                        >
-                          <option value="CLIENT_DIRECT">Client Direct</option>
-                          <option value="THROUGH_ME">Through Me</option>
-                        </select>
-                      </td>
-                      <td className="excel-cell p-0">
-                        <select
-                          value={item.carryingCharge.basis}
-                          onChange={(e) => updateItem(index, 'carryingCharge.basis', e.target.value)}
-                          className="excel-cell w-full border-0 bg-transparent"
-                        >
-                          <option value="carton">Per Carton</option>
-                          <option value="cbm">Per CBM</option>
-                          <option value="weight">Per KG</option>
-                        </select>
-                      </td>
-                      <td className="excel-cell p-0">
-                        <ExcelInput
-                          type="number"
-                          value={item.carryingCharge.rate}
-                          onChange={(e) => updateItem(index, 'carryingCharge.rate', parseFloat(e.target.value) || 0)}
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="excel-cell text-right font-medium">
-                        {formatCurrency(calculateCarryingCharge(item.carryingCharge.basis, item.carryingCharge.rate, item))}
-                      </td>
-                      <td className="excel-cell text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeItem(index)}
-                          disabled={orderData.items.length === 1}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-gray-50 font-semibold">
-                    <td className="excel-cell" colSpan="5">TOTALS</td>
-                    <td className="excel-cell text-right">{formatCurrency(totals.totalAmount)}</td>
-                    <td className="excel-cell text-center">{totals.totalWeight.toFixed(2)}</td>
-                    <td className="excel-cell text-center">{totals.totalCbm.toFixed(2)}</td>
-                    <td className="excel-cell text-center">{totals.totalCartons}</td>
-                    <td className="excel-cell" colSpan="4"></td>
-                    <td className="excel-cell text-right">{formatCurrency(totals.totalCarryingCharges)}</td>
-                    <td className="excel-cell"></td>
-                  </tr>
-                </tfoot>
-              </table>
+              ))}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Order Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Order Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="text-center p-4 bg-stone-50 rounded-lg">
+                <div className="text-2xl font-bold text-amber-600">{formatCurrency(totals.totalAmount)}</div>
+                <div className="text-sm text-stone-500">Total Amount</div>
               </div>
-            )}
+              <div className="text-center p-4 bg-stone-50 rounded-lg">
+                <div className="text-2xl font-bold text-amber-600">{formatCurrency(totals.totalCarryingCharges)}</div>
+                <div className="text-sm text-stone-500">Carrying Charges</div>
+              </div>
+              <div className="text-center p-4 bg-stone-50 rounded-lg">
+                <div className="text-2xl font-bold text-amber-600">{totals.totalCartons}</div>
+                <div className="text-sm text-stone-500">Total Cartons</div>
+              </div>
+              <div className="text-center p-4 bg-stone-50 rounded-lg">
+                <div className="text-2xl font-bold text-amber-600">{totals.totalWeight.toFixed(2)} kg</div>
+                <div className="text-sm text-stone-500">Total Weight</div>
+              </div>
+              <div className="text-center p-4 bg-stone-50 rounded-lg">
+                <div className="text-2xl font-bold text-amber-600">{totals.totalCbm.toFixed(3)} m³</div>
+                <div className="text-sm text-stone-500">Total CBM</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

@@ -1155,7 +1155,7 @@ class ContainerFinancials {
 
 ### Design Principles
 - **Glass Morphism** - Translucent cards with backdrop blur
-- **Gradient Accents** - Blue to purple gradients
+- **Gradient Accents** - Amber to stone gradients
 - **Responsive Design** - Mobile-first approach
 - **Accessibility** - ARIA labels and keyboard navigation
 - **Dark Mode Ready** - CSS variables for theming
@@ -1163,10 +1163,10 @@ class ContainerFinancials {
 ### Component Library (shadcn/ui)
 ```javascript
 // Button Variants
-- default: Primary blue button
+- default: Primary amber button
 - outline: Border with transparent background
 - ghost: Transparent with hover effects
-- gradient: Blue to purple gradient
+- gradient: Amber to stone gradient
 - success: Green confirmation button
 - warning: Yellow caution button
 - destructive: Red danger button

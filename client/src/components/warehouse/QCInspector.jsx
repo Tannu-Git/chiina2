@@ -51,7 +51,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
   const handleItemInspection = (itemIndex, field, value) => {
     setInspectionData(prev => ({
       ...prev,
-      items: prev.items.map((item, idx) => 
+      items: prev.items.map((item, idx) =>
         idx === itemIndex ? { ...item, [field]: value } : item
       )
     }))
@@ -60,8 +60,8 @@ const QCInspector = ({ order, onResult, onClose }) => {
   const addDefect = (itemIndex, defect) => {
     setInspectionData(prev => ({
       ...prev,
-      items: prev.items.map((item, idx) => 
-        idx === itemIndex 
+      items: prev.items.map((item, idx) =>
+        idx === itemIndex
           ? { ...item, defects: [...item.defects, defect] }
           : item
       )
@@ -71,8 +71,8 @@ const QCInspector = ({ order, onResult, onClose }) => {
   const removeDefect = (itemIndex, defectIndex) => {
     setInspectionData(prev => ({
       ...prev,
-      items: prev.items.map((item, idx) => 
-        idx === itemIndex 
+      items: prev.items.map((item, idx) =>
+        idx === itemIndex
           ? { ...item, defects: item.defects.filter((_, dIdx) => dIdx !== defectIndex) }
           : item
       )
@@ -90,7 +90,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
   const handleSubmitInspection = async () => {
     try {
       setLoading(true)
-      
+
       const finalInspectionData = {
         ...inspectionData,
         overallStatus: calculateOverallStatus(),
@@ -98,21 +98,21 @@ const QCInspector = ({ order, onResult, onClose }) => {
       }
 
       const response = await axios.post('/api/warehouse/qc-inspection', finalInspectionData)
-      
+
       toast.success('QC Inspection completed successfully!')
-      
+
       // Trigger callback with results
       if (onResult) {
         onResult({
           success: true,
           status: finalInspectionData.overallStatus,
           data: response.data,
-          needsLoopback: finalInspectionData.items.some(item => 
+          needsLoopback: finalInspectionData.items.some(item =>
             item.status === 'shortage' || item.status === 'damaged'
           )
         })
       }
-      
+
       if (onClose) onClose()
     } catch (error) {
       console.error('QC Inspection error:', error)
@@ -128,7 +128,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
       case 'shortage': return 'bg-yellow-100 text-yellow-800'
       case 'damaged': return 'bg-red-100 text-red-800'
       case 'rejected': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -138,7 +138,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
       case 'shortage': return <AlertTriangle className="h-4 w-4 text-yellow-600" />
       case 'damaged': return <XCircle className="h-4 w-4 text-red-600" />
       case 'rejected': return <XCircle className="h-4 w-4 text-red-600" />
-      default: return <Eye className="h-4 w-4 text-gray-600" />
+      default: return <Eye className="h-4 w-4 text-stone-600" />
     }
   }
 
@@ -151,11 +151,11 @@ const QCInspector = ({ order, onResult, onClose }) => {
         className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+        <div className="bg-gradient-to-r amber-gradient text-white p-6">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold">Quality Control Inspection</h2>
-              <p className="text-blue-100">Order: {order?.orderNumber} - {order?.clientName}</p>
+              <p className="text-amber-100">Order: {order?.orderNumber} - {order?.clientName}</p>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="secondary" className="bg-white/20 text-white">
@@ -170,9 +170,9 @@ const QCInspector = ({ order, onResult, onClose }) => {
 
         <div className="flex h-[calc(90vh-120px)]">
           {/* Item List Sidebar */}
-          <div className="w-80 border-r bg-gray-50 overflow-y-auto">
+          <div className="w-80 border-r bg-stone-50 overflow-y-auto">
             <div className="p-4">
-              <h3 className="font-semibold text-gray-900 mb-4">Items to Inspect</h3>
+              <h3 className="font-semibold text-stone-900 mb-4">Items to Inspect</h3>
               <div className="space-y-2">
                 {inspectionData.items.map((item, index) => (
                   <motion.div
@@ -180,8 +180,8 @@ const QCInspector = ({ order, onResult, onClose }) => {
                     whileHover={{ scale: 1.02 }}
                     className={`p-3 rounded-lg cursor-pointer transition-all ${
                       index === currentItemIndex
-                        ? 'bg-blue-100 border-2 border-blue-300'
-                        : 'bg-white border border-gray-200 hover:border-gray-300'
+                        ? 'bg-amber-100 border-2 border-amber-300'
+                        : 'bg-white border border-stone-200 hover:border-stone-300'
                     }`}
                     onClick={() => setCurrentItemIndex(index)}
                   >
@@ -189,9 +189,9 @@ const QCInspector = ({ order, onResult, onClose }) => {
                       <span className="font-medium text-sm">{item.itemCode}</span>
                       {getStatusIcon(item.status)}
                     </div>
-                    <p className="text-xs text-gray-600 truncate">{item.description}</p>
+                    <p className="text-xs text-stone-600 truncate">{item.description}</p>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-stone-500">
                         Qty: {item.receivedQuantity}/{item.expectedQuantity}
                       </span>
                       <Badge className={`text-xs ${getStatusColor(item.status)}`}>
@@ -227,26 +227,26 @@ const QCInspector = ({ order, onResult, onClose }) => {
                       {/* Quantity Check */}
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-stone-700 mb-2">
                             Expected Quantity
                           </label>
                           <Input
                             type="number"
                             value={currentItem?.expectedQuantity}
                             disabled
-                            className="bg-gray-50"
+                            className="bg-stone-50"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-stone-700 mb-2">
                             Received Quantity
                           </label>
                           <Input
                             type="number"
                             value={currentItem?.receivedQuantity}
                             onChange={(e) => handleItemInspection(
-                              currentItemIndex, 
-                              'receivedQuantity', 
+                              currentItemIndex,
+                              'receivedQuantity',
                               parseInt(e.target.value) || 0
                             )}
                           />
@@ -255,7 +255,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
 
                       {/* Status Selection */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                        <label className="block text-sm font-medium text-stone-700 mb-3">
                           Inspection Status
                         </label>
                         <div className="grid grid-cols-2 gap-3">
@@ -269,8 +269,8 @@ const QCInspector = ({ order, onResult, onClose }) => {
                               key={value}
                               variant={currentItem?.status === value ? 'default' : 'outline'}
                               className={`justify-start ${
-                                currentItem?.status === value 
-                                  ? `bg-${color}-600 hover:bg-${color}-700` 
+                                currentItem?.status === value
+                                  ? `bg-${color}-600 hover:bg-${color}-700`
                                   : ''
                               }`}
                               onClick={() => handleItemInspection(currentItemIndex, 'status', value)}
@@ -285,7 +285,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                       {/* Defects Section */}
                       {(currentItem?.status === 'damaged' || currentItem?.status === 'rejected') && (
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
+                          <label className="block text-sm font-medium text-stone-700 mb-3">
                             Defects Found
                           </label>
                           <div className="space-y-2 mb-3">
@@ -330,7 +330,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
 
                       {/* Notes */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-stone-700 mb-2">
                           Inspection Notes
                         </label>
                         <Textarea
@@ -349,7 +349,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="border-t bg-gray-50 p-4 flex items-center justify-between">
+        <div className="border-t bg-stone-50 p-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button
               variant="outline"
@@ -366,9 +366,9 @@ const QCInspector = ({ order, onResult, onClose }) => {
               Next
             </Button>
           </div>
-          
+
           <div className="flex items-center space-x-3">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-stone-600">
               Overall Status: <Badge className={getStatusColor(calculateOverallStatus())}>
                 {calculateOverallStatus()}
               </Badge>
@@ -376,10 +376,10 @@ const QCInspector = ({ order, onResult, onClose }) => {
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSubmitInspection}
               disabled={loading || inspectionData.items.some(item => item.status === 'pending')}
-              className="bg-gradient-to-r from-blue-600 to-purple-600"
+              className="bg-gradient-to-r amber-gradient"
             >
               {loading ? (
                 <>

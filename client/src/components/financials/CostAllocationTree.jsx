@@ -104,8 +104,8 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
         <div
           className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
             level === 0 
-              ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200' 
-              : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
+              ? 'bg-gradient-to-r from-amber-50 to-stone-50 border-amber-300' 
+              : 'bg-white border-stone-200 hover:border-stone-300 hover:shadow-sm'
           }`}
           style={{ marginLeft: `${level * 20}px` }}
         >
@@ -128,17 +128,17 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
             {!hasChildren && <div className="w-6" />}
             
             <div className={`p-2 rounded-lg ${
-              level === 0 ? 'bg-blue-100' : 'bg-gray-100'
+              level === 0 ? 'bg-amber-100' : 'bg-stone-100'
             }`}>
               <IconComponent className={`h-4 w-4 ${
-                level === 0 ? 'text-blue-600' : 'text-gray-600'
+                level === 0 ? 'text-amber-600' : 'text-stone-600'
               }`} />
             </div>
             
             <div className="flex-1">
               <div className="flex items-center space-x-2">
                 <span className={`font-medium ${
-                  level === 0 ? 'text-lg text-gray-900' : 'text-gray-800'
+                  level === 0 ? 'text-lg text-stone-900' : 'text-stone-800'
                 }`}>
                   {node.name}
                 </span>
@@ -151,7 +151,7 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
               </div>
               
               {level > 0 && (
-                <div className="text-sm text-gray-500 mt-1">
+                <div className="text-sm text-stone-500 mt-1">
                   Allocation: {((node.amount / parentAmount) * 100).toFixed(1)}% of parent
                 </div>
               )}
@@ -160,13 +160,13 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
           
           <div className="text-right">
             <div className={`font-bold ${
-              level === 0 ? 'text-xl text-gray-900' : 'text-lg text-gray-800'
+              level === 0 ? 'text-xl text-stone-900' : 'text-lg text-stone-800'
             }`}>
               {formatCurrency(node.amount)}
             </div>
             
             {level > 0 && (
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-stone-500">
                 ${(node.amount / (containerData?.totalUnits || 1)).toFixed(2)}/unit
               </div>
             )}
@@ -239,25 +239,25 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
       
       <CardContent className="space-y-6">
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-stone-50 rounded-lg">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{totalCategories}</div>
-            <div className="text-sm text-gray-600">Cost Categories</div>
+            <div className="text-2xl font-bold text-amber-600">{totalCategories}</div>
+            <div className="text-sm text-stone-600">Cost Categories</div>
           </div>
           
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">
               {largestCategory ? largestCategory.percentage.toFixed(1) : 0}%
             </div>
-            <div className="text-sm text-gray-600">Largest Category</div>
-            <div className="text-xs text-gray-500">{largestCategory?.name}</div>
+            <div className="text-sm text-stone-600">Largest Category</div>
+            <div className="text-xs text-stone-500">{largestCategory?.name}</div>
           </div>
           
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">
+            <div className="text-2xl font-bold text-amber-600">
               {formatCurrency(averageCategorySize)}
             </div>
-            <div className="text-sm text-gray-600">Average Category</div>
+            <div className="text-sm text-stone-600">Average Category</div>
           </div>
         </div>
 
@@ -267,8 +267,8 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
         </div>
 
         {/* Cost Distribution Chart */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+        <div className="mt-6 p-4 bg-stone-50 rounded-lg">
+          <h4 className="font-medium text-stone-900 mb-3 flex items-center">
             <BarChart3 className="h-4 w-4 mr-2" />
             Cost Distribution
           </h4>
@@ -277,14 +277,14 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
             {costStructure.children?.map((category) => (
               <div key={category.id} className="flex items-center space-x-3">
                 <div className="flex items-center space-x-2 flex-1">
-                  <category.icon className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">{category.name}</span>
+                  <category.icon className="h-4 w-4 text-stone-600" />
+                  <span className="text-sm font-medium text-stone-700">{category.name}</span>
                 </div>
                 
                 <div className="flex-1">
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-stone-200 rounded-full h-2">
                     <motion.div
-                      className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 h-2 rounded-full"
                       initial={{ width: 0 }}
                       animate={{ width: `${category.percentage}%` }}
                       transition={{ duration: 1, delay: 0.5 }}
@@ -293,10 +293,10 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
                 </div>
                 
                 <div className="text-right min-w-20">
-                  <div className="text-sm font-medium text-gray-900">
+                  <div className="text-sm font-medium text-stone-900">
                     {formatCurrency(category.amount)}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-stone-500">
                     {category.percentage.toFixed(1)}%
                   </div>
                 </div>
@@ -306,10 +306,10 @@ const CostAllocationTree = ({ containerData, showPercentages = true, expandAll =
         </div>
 
         {/* Insights */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+        <div className="mt-6 p-4 bg-amber-50 rounded-lg">
           <div className="flex items-start space-x-2">
-            <Info className="h-4 w-4 text-blue-500 mt-0.5" />
-            <div className="text-sm text-blue-700">
+            <Info className="h-4 w-4 text-amber-500 mt-0.5" />
+            <div className="text-sm text-amber-700">
               <p className="font-medium mb-1">Cost Allocation Insights:</p>
               <ul className="list-disc list-inside space-y-1">
                 <li>Goods represent the largest cost component at {costStructure.children?.[1]?.percentage.toFixed(1)}%</li>

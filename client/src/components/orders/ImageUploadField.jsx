@@ -149,7 +149,7 @@ const ImageUploadField = ({ value, onChange, maxFiles = 3, maxSize = 5 * 1024 * 
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ duration: 0.2 }}
-      className="relative group bg-gray-100 rounded-lg overflow-hidden aspect-square"
+      className="relative group bg-stone-100 rounded-lg overflow-hidden aspect-square"
     >
       <img
         src={image.url}
@@ -203,8 +203,8 @@ const ImageUploadField = ({ value, onChange, maxFiles = 3, maxSize = 5 * 1024 * 
       <div
         className={`relative border-2 border-dashed rounded-lg p-4 transition-all duration-200 ${
           dragOver
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-amber-500 bg-amber-50'
+            : 'border-stone-300 hover:border-stone-400'
         } ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -213,12 +213,12 @@ const ImageUploadField = ({ value, onChange, maxFiles = 3, maxSize = 5 * 1024 * 
         <div className="text-center">
           {uploading ? (
             <div className="flex flex-col items-center space-y-2">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="text-sm text-gray-600">Uploading...</p>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+              <p className="text-sm text-stone-600">Uploading...</p>
             </div>
           ) : (
             <div className="flex flex-col items-center space-y-2">
-              <ImageIcon className="h-8 w-8 text-gray-400" />
+              <ImageIcon className="h-8 w-8 text-stone-400" />
               <div className="flex space-x-2">
                 <Button
                   type="button"
@@ -242,7 +242,7 @@ const ImageUploadField = ({ value, onChange, maxFiles = 3, maxSize = 5 * 1024 * 
                   Camera
                 </Button>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-stone-500">
                 Drag & drop or click to upload ({images.length}/{maxFiles})
               </p>
             </div>
@@ -303,7 +303,7 @@ const ImageUploadField = ({ value, onChange, maxFiles = 3, maxSize = 5 * 1024 * 
               <div className="flex items-center justify-between p-4 border-b">
                 <div>
                   <h3 className="font-medium">{previewImage.filename}</h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-stone-500">
                     {Math.round(previewImage.size / 1024)}KB • 
                     Uploaded {new Date(previewImage.uploadedAt).toLocaleDateString()}
                   </p>
@@ -337,7 +337,7 @@ const ImageUploadField = ({ value, onChange, maxFiles = 3, maxSize = 5 * 1024 * 
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between p-4 border-t bg-gray-50">
+              <div className="flex items-center justify-between p-4 border-t bg-stone-50">
                 <div className="flex items-center space-x-2">
                   <Badge variant="outline">
                     <FileImage className="h-3 w-3 mr-1" />

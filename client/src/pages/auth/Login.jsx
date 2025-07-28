@@ -66,7 +66,7 @@ const Login = () => {
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 logistics-gradient relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 amber-gradient relative overflow-hidden">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col justify-center px-12 text-white">
           <motion.div
@@ -84,10 +84,10 @@ const Login = () => {
             <h2 className="text-4xl font-bold mb-6">
               Streamline Your
               <br />
-              <span className="text-blue-200">Supply Chain</span>
+              <span className="text-amber-200">Supply Chain</span>
             </h2>
 
-            <p className="text-xl text-blue-100 mb-12 max-w-md">
+            <p className="text-xl text-amber-100 mb-12 max-w-md">
               Manage orders, track containers, and optimize your logistics operations with our modern platform.
             </p>
 
@@ -133,7 +133,7 @@ const Login = () => {
 
         {/* Floating elements */}
         <div className="absolute top-20 right-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
-        <div className="absolute bottom-20 left-20 w-24 h-24 bg-blue-300/20 rounded-full blur-lg" />
+        <div className="absolute bottom-20 left-20 w-24 h-24 bg-amber-300/20 rounded-full blur-lg" />
       </div>
 
       {/* Right Side - Login Form */}
@@ -146,10 +146,10 @@ const Login = () => {
         >
           <Card className="shadow-2xl border-0">
             <CardHeader className="text-center pb-8">
-              <CardTitle className="text-2xl font-bold text-gray-900">
+              <CardTitle className="text-2xl font-bold text-stone-900">
                 Welcome Back
               </CardTitle>
-              <CardDescription className="text-gray-600">
+              <CardDescription className="text-stone-600">
                 Sign in to your account to continue
               </CardDescription>
             </CardHeader>
@@ -157,7 +157,7 @@ const Login = () => {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-2">
                     Email Address
                   </label>
                   <Input
@@ -175,7 +175,7 @@ const Login = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-2">
                     Password
                   </label>
                   <div className="relative">
@@ -191,7 +191,7 @@ const Login = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-stone-500 hover:text-stone-700"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -220,11 +220,11 @@ const Login = () => {
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-gray-600">
+                <p className="text-stone-600">
                   Don't have an account?{' '}
                   <Link
                     to="/register"
-                    className="text-blue-600 hover:text-blue-800 font-medium"
+                    className="text-amber-600 hover:text-amber-800 font-medium"
                   >
                     Sign up
                   </Link>
@@ -232,9 +232,9 @@ const Login = () => {
               </div>
 
               {/* Demo credentials */}
-              <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 mb-2">Demo Credentials:</p>
-                <div className="text-xs text-gray-600 space-y-1">
+              <div className="mt-8 p-4 bg-stone-50 rounded-lg">
+                <p className="text-sm font-medium text-stone-700 mb-2">Demo Credentials:</p>
+                <div className="text-xs text-stone-600 space-y-1">
                   <p><strong>Admin:</strong> admin@demo.com / password</p>
                   <p><strong>Staff:</strong> staff@demo.com / password</p>
                   <p><strong>Client:</strong> client@demo.com / password</p>

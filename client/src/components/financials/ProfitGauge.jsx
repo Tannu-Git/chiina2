@@ -51,7 +51,7 @@ const ProfitGauge = ({
     if (isOnTarget) return { text: 'On Target', color: 'bg-green-100 text-green-800' }
     if (isWarning) return { text: 'Below Target', color: 'bg-yellow-100 text-yellow-800' }
     if (isCritical) return { text: 'Critical', color: 'bg-red-100 text-red-800' }
-    return { text: 'Good', color: 'bg-blue-100 text-blue-800' }
+    return { text: 'Good', color: 'bg-amber-100 text-amber-800' }
   }
 
   // SVG Gauge Component
@@ -103,10 +103,10 @@ const ProfitGauge = ({
         
         {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-3xl font-bold text-gray-900">
+          <div className="text-3xl font-bold text-stone-900">
             {Math.round(animatedValue)}%
           </div>
-          <div className="text-sm text-gray-500 text-center">
+          <div className="text-sm text-stone-500 text-center">
             of target
           </div>
         </div>
@@ -144,29 +144,29 @@ const ProfitGauge = ({
           <div className="flex-1 space-y-4 w-full">
             {/* Current vs Target */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <div className="text-sm text-gray-600 mb-1">Current Profit</div>
-                <div className="text-xl font-bold text-gray-900">
+              <div className="text-center p-3 bg-stone-50 rounded-lg">
+                <div className="text-sm text-stone-600 mb-1">Current Profit</div>
+                <div className="text-xl font-bold text-stone-900">
                   {formatCurrency(currentProfit)}
                 </div>
               </div>
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <div className="text-sm text-gray-600 mb-1">Target Profit</div>
-                <div className="text-xl font-bold text-gray-900">
+              <div className="text-center p-3 bg-stone-50 rounded-lg">
+                <div className="text-sm text-stone-600 mb-1">Target Profit</div>
+                <div className="text-xl font-bold text-stone-900">
                   {formatCurrency(targetProfit)}
                 </div>
               </div>
             </div>
             
             {/* Change from Previous Period */}
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
               <div className="flex items-center">
                 {isPositiveChange ? (
                   <TrendingUp className="h-4 w-4 text-green-600 mr-2" />
                 ) : (
                   <TrendingDown className="h-4 w-4 text-red-600 mr-2" />
                 )}
-                <span className="text-sm text-gray-600">vs Previous Period</span>
+                <span className="text-sm text-stone-600">vs Previous Period</span>
               </div>
               <div className={`font-semibold ${isPositiveChange ? 'text-green-600' : 'text-red-600'}`}>
                 {isPositiveChange ? '+' : ''}{profitChange.toFixed(1)}%
@@ -174,12 +174,12 @@ const ProfitGauge = ({
             </div>
             
             {/* Gap to Target */}
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
               <div className="flex items-center">
-                <Target className="h-4 w-4 text-blue-600 mr-2" />
-                <span className="text-sm text-gray-600">Gap to Target</span>
+                <Target className="h-4 w-4 text-amber-600 mr-2" />
+                <span className="text-sm text-stone-600">Gap to Target</span>
               </div>
-              <div className="font-semibold text-gray-900">
+              <div className="font-semibold text-stone-900">
                 {formatCurrency(Math.max(0, targetProfit - currentProfit))}
               </div>
             </div>
@@ -189,31 +189,31 @@ const ProfitGauge = ({
         {/* Detailed Breakdown */}
         {showDetails && (
           <div className="mt-6 pt-6 border-t">
-            <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+            <h4 className="font-medium text-stone-900 mb-3 flex items-center">
               <BarChart3 className="h-4 w-4 mr-2" />
               Performance Breakdown
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-2xl font-bold text-amber-600">
                   {Math.round(profitMargin)}%
                 </div>
-                <div className="text-sm text-gray-600">Target Achievement</div>
+                <div className="text-sm text-stone-600">Target Achievement</div>
               </div>
               
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">
                   {formatCurrency(currentProfit)}
                 </div>
-                <div className="text-sm text-gray-600">Actual Profit</div>
+                <div className="text-sm text-stone-600">Actual Profit</div>
               </div>
               
               <div className="text-center">
                 <div className={`text-2xl font-bold ${isPositiveChange ? 'text-green-600' : 'text-red-600'}`}>
                   {isPositiveChange ? '+' : ''}{profitChange.toFixed(1)}%
                 </div>
-                <div className="text-sm text-gray-600">Growth Rate</div>
+                <div className="text-sm text-stone-600">Growth Rate</div>
               </div>
             </div>
           </div>

@@ -107,7 +107,7 @@ const PaymentTypeSelector = ({ value, onChange }) => {
       case 'low': return 'bg-green-100 text-green-800'
       case 'medium': return 'bg-yellow-100 text-yellow-800'
       case 'high': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -138,11 +138,11 @@ const PaymentTypeSelector = ({ value, onChange }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute z-50 w-96 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
+            className="absolute z-50 w-96 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
           >
-            <div className="p-3 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900">Payment Terms (Incoterms)</h3>
-              <p className="text-sm text-gray-500">Select the appropriate international commercial terms</p>
+            <div className="p-3 border-b border-stone-200">
+              <h3 className="font-medium text-stone-900">Payment Terms (Incoterms)</h3>
+              <p className="text-sm text-stone-500">Select the appropriate international commercial terms</p>
             </div>
 
             <div className="max-h-80 overflow-y-auto">
@@ -152,17 +152,17 @@ const PaymentTypeSelector = ({ value, onChange }) => {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2, delay: index * 0.05 }}
-                  className={`p-4 cursor-pointer border-b border-gray-100 hover:bg-blue-50 ${
-                    value === type.code ? 'bg-blue-50 border-blue-200' : ''
+                  className={`p-4 cursor-pointer border-b border-stone-100 hover:bg-amber-50 ${
+                    value === type.code ? 'bg-amber-50 border-amber-300' : ''
                   }`}
                   onClick={() => selectPaymentType(type)}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center space-x-2">
-                      <type.icon className="h-5 w-5 text-gray-600" />
+                      <type.icon className="h-5 w-5 text-stone-600" />
                       <div>
-                        <span className="font-medium text-gray-900">{type.code}</span>
-                        <span className="text-sm text-gray-600 ml-2">{type.name}</span>
+                        <span className="font-medium text-stone-900">{type.code}</span>
+                        <span className="text-sm text-stone-600 ml-2">{type.name}</span>
                       </div>
                     </div>
                     
@@ -176,23 +176,23 @@ const PaymentTypeSelector = ({ value, onChange }) => {
                     </div>
                   </div>
 
-                  <p className="text-sm text-gray-600 mb-3">{type.description}</p>
+                  <p className="text-sm text-stone-600 mb-3">{type.description}</p>
 
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
                       <div className="font-medium text-green-700 mb-1">Buyer Responsible:</div>
                       <ul className="space-y-1">
                         {type.buyerResponsible.map((item, i) => (
-                          <li key={i} className="text-gray-600">• {item}</li>
+                          <li key={i} className="text-stone-600">• {item}</li>
                         ))}
                       </ul>
                     </div>
                     
                     <div>
-                      <div className="font-medium text-blue-700 mb-1">Seller Responsible:</div>
+                      <div className="font-medium text-amber-700 mb-1">Seller Responsible:</div>
                       <ul className="space-y-1">
                         {type.sellerResponsible.map((item, i) => (
-                          <li key={i} className="text-gray-600">• {item}</li>
+                          <li key={i} className="text-stone-600">• {item}</li>
                         ))}
                       </ul>
                     </div>
@@ -201,10 +201,10 @@ const PaymentTypeSelector = ({ value, onChange }) => {
               ))}
             </div>
 
-            <div className="p-3 border-t border-gray-200 bg-gray-50">
+            <div className="p-3 border-t border-stone-200 bg-stone-50">
               <div className="flex items-start space-x-2">
-                <Info className="h-4 w-4 text-blue-500 mt-0.5" />
-                <div className="text-xs text-gray-600">
+                <Info className="h-4 w-4 text-amber-500 mt-0.5" />
+                <div className="text-xs text-stone-600">
                   <p className="font-medium mb-1">Incoterms 2020</p>
                   <p>These terms define the responsibilities of buyers and sellers in international trade. Choose based on your risk tolerance and logistics capabilities.</p>
                 </div>

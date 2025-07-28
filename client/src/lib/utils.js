@@ -47,76 +47,35 @@ export function formatDateTime(date) {
   }).format(parsedDate)
 }
 
-export function calculateCarryingCharge(basis, rate, item) {
-  const numRate = parseFloat(rate) || 0
-  const numCartons = parseFloat(item.cartons) || 0
-  const numQuantity = parseFloat(item.quantity) || 0
-  const numUnitCbm = parseFloat(item.unitCbm) || 0
-  const numUnitWeight = parseFloat(item.unitWeight) || 0
-
-  let result = 0
-  let totalWeight = numUnitWeight * numQuantity
-  let totalCbm = numUnitCbm * numQuantity
-
-  switch(basis) {
-    case 'carton':
-      result = numRate * numCartons
-      break
-    case 'cbm':
-      result = numRate * totalCbm
-      break
-    case 'weight':
-      result = numRate * totalWeight
-      break
-    default:
-      result = 0
-  }
-
-  // Debug logging (uncomment for debugging)
-  // console.log('Carrying Charge Calculation:', {
-  //   basis,
-  //   rate: numRate,
-  //   cartons: numCartons,
-  //   quantity: numQuantity,
-  //   unitCbm: numUnitCbm,
-  //   unitWeight: numUnitWeight,
-  //   totalCbm,
-  //   totalWeight,
-  //   result
-  // })
-
-  return result
-}
-
 export function getStatusColor(status) {
   const statusColors = {
-    draft: 'bg-gray-100 text-gray-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    submitted: 'bg-blue-100 text-blue-800',
+    draft: 'bg-stone-100 text-stone-800',
+    pending: 'bg-amber-100 text-amber-800',
+    submitted: 'bg-amber-200 text-amber-900',
     confirmed: 'bg-green-100 text-green-800',
-    in_progress: 'bg-purple-100 text-purple-800',
-    completed: 'bg-emerald-100 text-emerald-800',
+    in_progress: 'bg-amber-50 text-amber-700',
+    completed: 'bg-green-100 text-green-800',
     cancelled: 'bg-red-100 text-red-800',
-    planning: 'bg-slate-100 text-slate-800',
-    loading: 'bg-orange-100 text-orange-800',
-    sealed: 'bg-indigo-100 text-indigo-800',
-    shipped: 'bg-blue-100 text-blue-800',
-    in_transit: 'bg-cyan-100 text-cyan-800',
-    arrived: 'bg-teal-100 text-teal-800',
-    cleared: 'bg-lime-100 text-lime-800',
+    planning: 'bg-stone-100 text-stone-800',
+    loading: 'bg-amber-100 text-amber-800',
+    sealed: 'bg-amber-200 text-amber-900',
+    shipped: 'bg-amber-100 text-amber-800',
+    in_transit: 'bg-amber-50 text-amber-700',
+    arrived: 'bg-green-50 text-green-700',
+    cleared: 'bg-green-100 text-green-800',
     delivered: 'bg-green-100 text-green-800',
   }
-  return statusColors[status] || 'bg-gray-100 text-gray-800'
+  return statusColors[status] || 'bg-stone-100 text-stone-800'
 }
 
 export function getPriorityColor(priority) {
   const priorityColors = {
-    low: 'bg-green-100 text-green-800',
-    medium: 'bg-yellow-100 text-yellow-800',
-    high: 'bg-orange-100 text-orange-800',
+    low: 'bg-stone-100 text-stone-700',
+    medium: 'bg-amber-100 text-amber-800',
+    high: 'bg-amber-200 text-amber-900',
     urgent: 'bg-red-100 text-red-800',
   }
-  return priorityColors[priority] || 'bg-gray-100 text-gray-800'
+  return priorityColors[priority] || 'bg-stone-100 text-stone-800'
 }
 
 export function generateOrderNumber() {
@@ -139,6 +98,22 @@ export function debounce(func, wait) {
     }
     clearTimeout(timeout)
     timeout = setTimeout(later, wait)
+  }
+}
+
+// Unified carrying charge calculation function
+export function calculateCarryingCharge(basis, rate, item) {
+  if (!rate || rate <= 0) return 0
+
+  switch (basis) {
+    case 'carton':
+      return (item.cartons || 0) * rate
+    case 'weight':
+      return (item.unitWeight || 0) * (item.quantity || 0) * rate
+    case 'cbm':
+      return (item.unitCbm || 0) * (item.quantity || 0) * rate
+    default:
+      return 0
   }
 }
 

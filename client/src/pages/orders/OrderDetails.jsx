@@ -188,9 +188,9 @@ const OrderDetails = () => {
         return <CheckCircle className="h-5 w-5 text-green-500" />
       case 'confirmed':
       case 'in_progress':
-        return <Clock className="h-5 w-5 text-blue-500" />
+        return <Clock className="h-5 w-5 text-amber-500" />
       case 'draft':
-        return <Package className="h-5 w-5 text-gray-500" />
+        return <Package className="h-5 w-5 text-stone-500" />
       default:
         return <AlertTriangle className="h-5 w-5 text-yellow-500" />
     }
@@ -242,9 +242,9 @@ const OrderDetails = () => {
     return (
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="text-center py-12">
-          <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Order not found</h3>
-          <p className="text-gray-500 mb-6">The order you're looking for doesn't exist.</p>
+          <Package className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-stone-900 mb-2">Order not found</h3>
+          <p className="text-stone-500 mb-6">The order you're looking for doesn't exist.</p>
           <Link to="/orders">
             <Button variant="gradient">
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -273,7 +273,7 @@ const OrderDetails = () => {
             <div>
               <div className="flex items-center space-x-3">
                 {getStatusIcon(displayOrder.status)}
-                <h1 className="text-3xl font-bold text-gray-900">{displayOrder.orderNumber}</h1>
+                <h1 className="text-3xl font-bold text-stone-900">{displayOrder.orderNumber}</h1>
                 <span className={`status-badge ${getStatusColor(displayOrder.status)}`}>
                   {displayOrder.status.replace('_', ' ')}
                 </span>
@@ -281,7 +281,7 @@ const OrderDetails = () => {
                   {displayOrder.priority} priority
                 </span>
               </div>
-              <p className="text-gray-600 mt-2">
+              <p className="text-stone-600 mt-2">
                 Created {formatDateTime(displayOrder.createdAt)} • Last updated {formatDateTime(displayOrder.updatedAt)}
               </p>
             </div>
@@ -312,7 +312,7 @@ const OrderDetails = () => {
 
         {/* Tab Navigation */}
         <div className="mb-6">
-          <div className="border-b border-gray-200">
+          <div className="border-b border-stone-200">
             <nav className="-mb-px flex space-x-8">
               {[
                 { id: 'overview', name: 'Overview', icon: Package },
@@ -325,8 +325,8 @@ const OrderDetails = () => {
                   onClick={() => setSelectedTab(tab.id)}
                   className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
                     selectedTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-amber-500 text-amber-600'
+                      : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
                   }`}
                 >
                   <tab.icon className="h-4 w-4 mr-2" />
@@ -353,33 +353,33 @@ const OrderDetails = () => {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-3">{displayOrder.clientName}</h3>
+                      <h3 className="font-semibold text-stone-900 mb-3">{displayOrder.clientName}</h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <User className="h-4 w-4 mr-2" />
                           <span>{displayOrder.clientContact?.name}</span>
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <Mail className="h-4 w-4 mr-2" />
-                          <a href={`mailto:${displayOrder.clientContact?.email}`} className="text-blue-600 hover:underline">
+                          <a href={`mailto:${displayOrder.clientContact?.email}`} className="text-amber-600 hover:underline">
                             {displayOrder.clientContact?.email}
                           </a>
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <Phone className="h-4 w-4 mr-2" />
-                          <a href={`tel:${displayOrder.clientContact?.phone}`} className="text-blue-600 hover:underline">
+                          <a href={`tel:${displayOrder.clientContact?.phone}`} className="text-amber-600 hover:underline">
                             {displayOrder.clientContact?.phone}
                           </a>
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-stone-600">
                           <Building className="h-4 w-4 mr-2" />
                           <span>{displayOrder.clientContact?.company}</span>
                         </div>
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-2">Address</h4>
-                      <p className="text-sm text-gray-600">
+                      <h4 className="font-medium text-stone-900 mb-2">Address</h4>
+                      <p className="text-sm text-stone-600">
                         {displayOrder.clientContact?.address}
                       </p>
                     </div>
@@ -398,21 +398,21 @@ const OrderDetails = () => {
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Total Cartons</p>
-                      <p className="text-2xl font-bold text-gray-900">{displayOrder.totalCartons}</p>
+                      <p className="text-sm font-medium text-stone-500">Total Cartons</p>
+                      <p className="text-2xl font-bold text-stone-900">{displayOrder.totalCartons}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Total CBM</p>
-                      <p className="text-2xl font-bold text-gray-900">{displayOrder.totalCbm} m³</p>
+                      <p className="text-sm font-medium text-stone-500">Total CBM</p>
+                      <p className="text-2xl font-bold text-stone-900">{displayOrder.totalCbm} m³</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Total Weight</p>
-                      <p className="text-2xl font-bold text-gray-900">{displayOrder.totalWeight} kg</p>
+                      <p className="text-sm font-medium text-stone-500">Total Weight</p>
+                      <p className="text-2xl font-bold text-stone-900">{displayOrder.totalWeight} kg</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Deadline</p>
-                      <p className="text-lg font-semibold text-gray-900">{formatDate(displayOrder.deadline)}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm font-medium text-stone-500">Deadline</p>
+                      <p className="text-lg font-semibold text-stone-900">{formatDate(displayOrder.deadline)}</p>
+                      <p className="text-sm text-stone-500">
                         {new Date(displayOrder.deadline) < new Date() ? (
                           <span className="text-red-500">Overdue</span>
                         ) : (
@@ -424,8 +424,8 @@ const OrderDetails = () => {
 
                   {displayOrder.notes && (
                     <div className="mt-6 pt-6 border-t">
-                      <h4 className="font-medium text-gray-900 mb-2">Notes</h4>
-                      <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                      <h4 className="font-medium text-stone-900 mb-2">Notes</h4>
+                      <p className="text-sm text-stone-600 bg-stone-50 p-3 rounded-lg">
                         {displayOrder.notes}
                       </p>
                     </div>
@@ -446,11 +446,11 @@ const OrderDetails = () => {
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Order Amount:</span>
+                      <span className="text-stone-600">Order Amount:</span>
                       <span className="font-semibold">{formatCurrency(displayOrder.totalAmount)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Carrying Charges:</span>
+                      <span className="text-stone-600">Carrying Charges:</span>
                       <span className="font-semibold">{formatCurrency(displayOrder.totalCarryingCharges)}</span>
                     </div>
                     <div className="border-t pt-3">
@@ -465,7 +465,7 @@ const OrderDetails = () => {
 
                   {/* Payment Breakdown */}
                   <div className="pt-4 border-t">
-                    <h4 className="font-medium text-gray-900 mb-3">Payment Types</h4>
+                    <h4 className="font-medium text-stone-900 mb-3">Payment Types</h4>
                     <div className="space-y-2">
                       {displayOrder.items?.reduce((acc, item) => {
                         const existing = acc.find(p => p.type === item.paymentType)
@@ -480,7 +480,7 @@ const OrderDetails = () => {
                         return acc
                       }, []).map((payment, index) => (
                         <div key={index} className="flex justify-between text-sm">
-                          <span className="text-gray-600">
+                          <span className="text-stone-600">
                             {payment.type === 'CLIENT_DIRECT' ? 'Client Direct' : 'Through Me'}:
                           </span>
                           <span className="font-medium">{formatCurrency(payment.amount)}</span>
@@ -492,7 +492,7 @@ const OrderDetails = () => {
                   {/* Status Actions */}
                   {(user?.role === 'admin' || user?.role === 'staff') && (
                     <div className="pt-4 border-t">
-                      <h4 className="font-medium text-gray-900 mb-3">Status Actions</h4>
+                      <h4 className="font-medium text-stone-900 mb-3">Status Actions</h4>
                       <div className="space-y-2">
                         {displayOrder.status === 'submitted' && (
                           <Button
@@ -550,7 +550,7 @@ const OrderDetails = () => {
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="border-b border-gray-200">
+                    <tr className="border-b border-stone-200">
                       <th className="excel-header text-left">Item Code</th>
                       <th className="excel-header text-left">Description</th>
                       <th className="excel-header text-center">Qty</th>
@@ -566,7 +566,7 @@ const OrderDetails = () => {
                   </thead>
                   <tbody>
                     {displayOrder.items?.map((item, index) => (
-                      <tr key={item._id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr key={item._id || index} className="border-b border-stone-100 hover:bg-stone-50">
                         <td className="excel-cell font-medium">{item.itemCode}</td>
                         <td className="excel-cell">{item.description}</td>
                         <td className="excel-cell text-center">{item.quantity}</td>
@@ -578,20 +578,20 @@ const OrderDetails = () => {
                         <td className="excel-cell">
                           <div>
                             <div className="font-medium">{item.supplier?.name}</div>
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-stone-500">
                               {item.supplier?.contact?.name || item.supplier?.contact || ''}
                             </div>
                           </div>
                         </td>
                         <td className="excel-cell text-center">
-                          <span className={`status-badge ${item.paymentType === 'CLIENT_DIRECT' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                          <span className={`status-badge ${item.paymentType === 'CLIENT_DIRECT' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
                             {item.paymentType === 'CLIENT_DIRECT' ? 'Client Direct' : 'Through Me'}
                           </span>
                         </td>
                         <td className="excel-cell text-right">
                           <div>
                             <div className="font-medium">{formatCurrency(item.carryingCharge?.amount || 0)}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-stone-500">
                               {item.carryingCharge?.rate} per {item.carryingCharge?.basis}
                             </div>
                           </div>
@@ -600,7 +600,7 @@ const OrderDetails = () => {
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-gray-50 font-semibold">
+                    <tr className="bg-stone-50 font-semibold">
                       <td className="excel-cell" colSpan="4">TOTALS</td>
                       <td className="excel-cell text-right">{formatCurrency(displayOrder.totalAmount)}</td>
                       <td className="excel-cell text-center">{displayOrder.totalWeight} kg</td>
@@ -615,7 +615,7 @@ const OrderDetails = () => {
 
               {/* Supplier Summary */}
               <div className="mt-6 pt-6 border-t">
-                <h4 className="font-medium text-gray-900 mb-4">Supplier Summary</h4>
+                <h4 className="font-medium text-stone-900 mb-4">Supplier Summary</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {displayOrder.items?.reduce((acc, item) => {
                     const existing = acc.find(s => s.name === item.supplier?.name)
@@ -636,8 +636,8 @@ const OrderDetails = () => {
                   }, []).map((supplier, index) => (
                     <Card key={index} className="p-4">
                       <div className="space-y-2">
-                        <h5 className="font-medium text-gray-900">{supplier.name}</h5>
-                        <div className="text-sm text-gray-600">
+                        <h5 className="font-medium text-stone-900">{supplier.name}</h5>
+                        <div className="text-sm text-stone-600">
                           <div>
                             {typeof supplier.contact === 'string'
                               ? supplier.contact
@@ -648,7 +648,7 @@ const OrderDetails = () => {
                         </div>
                         <div className="pt-2 border-t">
                           <div className="text-sm">
-                            <span className="text-gray-500">{supplier.items} items • </span>
+                            <span className="text-stone-500">{supplier.items} items • </span>
                             <span className="font-semibold">{formatCurrency(supplier.totalValue)}</span>
                           </div>
                         </div>
@@ -678,10 +678,10 @@ const OrderDetails = () => {
                     <Card key={container._id || index} className="p-4">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-3">
-                          <ContainerIcon className="h-6 w-6 text-blue-500" />
+                          <ContainerIcon className="h-6 w-6 text-amber-500" />
                           <div>
-                            <h3 className="font-semibold text-gray-900">{container.clientFacingId}</h3>
-                            <p className="text-sm text-gray-500">Container ID</p>
+                            <h3 className="font-semibold text-stone-900">{container.clientFacingId}</h3>
+                            <p className="text-sm text-stone-500">Container ID</p>
                           </div>
                         </div>
                         <div className="flex items-center space-x-4">
@@ -699,22 +699,22 @@ const OrderDetails = () => {
 
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Allocated CBM</p>
-                          <p className="text-lg font-semibold text-gray-900">{container.allocatedCbm} m³</p>
+                          <p className="text-sm font-medium text-stone-500">Allocated CBM</p>
+                          <p className="text-lg font-semibold text-stone-900">{container.allocatedCbm} m³</p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Allocated Weight</p>
-                          <p className="text-lg font-semibold text-gray-900">{container.allocatedWeight} kg</p>
+                          <p className="text-sm font-medium text-stone-500">Allocated Weight</p>
+                          <p className="text-lg font-semibold text-stone-900">{container.allocatedWeight} kg</p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">CBM Utilization</p>
-                          <p className="text-lg font-semibold text-gray-900">
+                          <p className="text-sm font-medium text-stone-500">CBM Utilization</p>
+                          <p className="text-lg font-semibold text-stone-900">
                             {((container.allocatedCbm / displayOrder.totalCbm) * 100).toFixed(1)}%
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Weight Utilization</p>
-                          <p className="text-lg font-semibold text-gray-900">
+                          <p className="text-sm font-medium text-stone-500">Weight Utilization</p>
+                          <p className="text-lg font-semibold text-stone-900">
                             {((container.allocatedWeight / displayOrder.totalWeight) * 100).toFixed(1)}%
                           </p>
                         </div>
@@ -724,9 +724,9 @@ const OrderDetails = () => {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <ContainerIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No containers allocated</h3>
-                  <p className="text-gray-500 mb-6">This order hasn't been allocated to any containers yet.</p>
+                  <ContainerIcon className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-stone-900 mb-2">No containers allocated</h3>
+                  <p className="text-stone-500 mb-6">This order hasn't been allocated to any containers yet.</p>
                   {(user?.role === 'admin' || user?.role === 'staff') && (
                     <Button variant="gradient">
                       <Plus className="h-4 w-4 mr-2" />
@@ -756,7 +756,7 @@ const OrderDetails = () => {
                     <li key={index}>
                       <div className="relative pb-8">
                         {index !== displayOrder.timeline.length - 1 && (
-                          <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+                          <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-stone-200" aria-hidden="true" />
                         )}
                         <div className="relative flex space-x-3">
                           <div>
@@ -766,11 +766,11 @@ const OrderDetails = () => {
                           </div>
                           <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
                             <div>
-                              <p className="text-sm font-medium text-gray-900">{event.action}</p>
-                              <p className="text-sm text-gray-500">{event.description}</p>
-                              <p className="text-xs text-gray-400 mt-1">by {event.user}</p>
+                              <p className="text-sm font-medium text-stone-900">{event.action}</p>
+                              <p className="text-sm text-stone-500">{event.description}</p>
+                              <p className="text-xs text-stone-400 mt-1">by {event.user}</p>
                             </div>
-                            <div className="whitespace-nowrap text-right text-sm text-gray-500">
+                            <div className="whitespace-nowrap text-right text-sm text-stone-500">
                               <time dateTime={event.date}>
                                 {formatDateTime(event.date)}
                               </time>
@@ -786,26 +786,26 @@ const OrderDetails = () => {
               {/* Add Timeline Entry (Admin/Staff only) */}
               {(user?.role === 'admin' || user?.role === 'staff') && (
                 <div className="mt-6 pt-6 border-t">
-                  <h4 className="font-medium text-gray-900 mb-4">Add Timeline Entry</h4>
+                  <h4 className="font-medium text-stone-900 mb-4">Add Timeline Entry</h4>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-stone-700 mb-2">
                         Action
                       </label>
                       <input
                         type="text"
                         placeholder="e.g., Quality Check Completed"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-stone-700 mb-2">
                         Description
                       </label>
                       <textarea
                         placeholder="Additional details about this action..."
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <Button variant="outline">

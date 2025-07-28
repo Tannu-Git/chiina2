@@ -190,18 +190,18 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: index * 0.05 }}
-      className={`p-3 cursor-pointer border-b border-gray-100 hover:bg-blue-50 ${
-        isSelected ? 'bg-blue-50 border-blue-200' : ''
+      className={`p-3 cursor-pointer border-b border-stone-100 hover:bg-amber-50 ${
+        isSelected ? 'bg-amber-50 border-amber-300' : ''
       }`}
       onClick={() => selectSuggestion(item)}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            <Package className="h-4 w-4 text-gray-400" />
-            <span className="font-medium text-gray-900">{item.itemCode}</span>
+            <Package className="h-4 w-4 text-stone-400" />
+            <span className="font-medium text-stone-900">{item.itemCode}</span>
             {item.isAI && (
-              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
+              <Badge variant="outline" className="text-xs bg-stone-50 text-stone-700">
                 <Zap className="h-3 w-3 mr-1" />
                 AI {Math.round(item.confidence * 100)}%
               </Badge>
@@ -213,9 +213,9 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
               </Badge>
             )}
           </div>
-          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.description}</p>
+          <p className="text-sm text-stone-600 mt-1 line-clamp-2">{item.description}</p>
 
-          <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+          <div className="flex items-center space-x-4 mt-2 text-xs text-stone-500">
             {item.price && (
               <span className="flex items-center">
                 <TrendingUp className="h-3 w-3 mr-1" />
@@ -252,7 +252,7 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
           )}
 
           {item.leadTime && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-stone-500">
               Lead: {item.leadTime} days
             </span>
           )}
@@ -285,7 +285,7 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
 
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
           {loading && (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-600"></div>
           )}
 
           <Button
@@ -299,7 +299,7 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
             <Zap className="h-3 w-3" />
           </Button>
 
-          <Search className="h-4 w-4 text-gray-400" />
+          <Search className="h-4 w-4 text-stone-400" />
         </div>
       </div>
 
@@ -310,12 +310,12 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto"
+            className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-80 overflow-y-auto"
           >
             {/* Search History */}
             {suggestions.length === 0 && searchHistory.length > 0 && (
               <>
-                <div className="px-3 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-b">
+                <div className="px-3 py-2 text-xs font-medium text-stone-500 bg-stone-50 border-b">
                   Recent Searches
                 </div>
                 {searchHistory.map((item, index) => (
@@ -333,7 +333,7 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
             {suggestions.length > 0 && (
               <>
                 {searchHistory.length > 0 && suggestions.some(s => !searchHistory.find(h => h.itemCode === s.itemCode)) && (
-                  <div className="px-3 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-b">
+                  <div className="px-3 py-2 text-xs font-medium text-stone-500 bg-stone-50 border-b">
                     Suggestions
                   </div>
                 )}
@@ -350,8 +350,8 @@ const CodeAutoComplete = ({ value, onChange, onEstimatePrice }) => {
 
             {/* No results */}
             {suggestions.length === 0 && searchHistory.length === 0 && value.length >= 2 && !loading && (
-              <div className="p-4 text-center text-gray-500">
-                <Package className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+              <div className="p-4 text-center text-stone-500">
+                <Package className="h-8 w-8 mx-auto mb-2 text-stone-300" />
                 <p className="text-sm">No items found</p>
                 <Button
                   size="sm"

@@ -246,7 +246,7 @@ router.post('/', auth, [
   body('items.*.unitWeight').isFloat({ min: 0 }).withMessage('Unit weight must be non-negative'),
   body('items.*.unitCbm').isFloat({ min: 0 }).withMessage('Unit CBM must be non-negative'),
   body('items.*.cartons').isInt({ min: 1 }).withMessage('Cartons must be at least 1'),
-  body('items.*.paymentType').isIn(['TO_AGENT', 'TO_FACTORY']).withMessage('Invalid payment type'),
+  body('items.*.paymentType').isIn(['CLIENT_DIRECT', 'THROUGH_ME']).withMessage('Invalid payment type'),
   body('items.*.carryingCharge.basis').isIn(['carton', 'weight', 'cbm']).withMessage('Invalid carrying charge basis'),
   body('items.*.carryingCharge.rate').isFloat({ min: 0 }).withMessage('Carrying charge rate must be non-negative')
 ], async (req, res) => {

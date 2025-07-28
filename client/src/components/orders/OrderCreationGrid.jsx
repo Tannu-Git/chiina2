@@ -360,7 +360,7 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
             Export CSV
           </Button>
 
-          <Button onClick={() => onSave?.(rows)} size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600">
+          <Button onClick={() => onSave?.(rows)} size="sm" className="bg-gradient-to-r amber-gradient">
             <Save className="h-4 w-4 mr-1" />
             Save Order
           </Button>
@@ -372,13 +372,13 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
         <div className="overflow-x-auto" ref={gridRef}>
           <table className="w-full">
             {/* Header */}
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-stone-50 border-b">
               <tr>
                 <th className="w-12 p-2 text-center">#</th>
                 {columns.map(column => (
                   <th
                     key={column.key}
-                    className="p-2 text-left font-medium text-gray-900 border-r"
+                    className="p-2 text-left font-medium text-stone-900 border-r"
                     style={{ width: column.width }}
                   >
                     <div className="flex items-center space-x-1">
@@ -414,9 +414,9 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="border-b hover:bg-gray-50"
+                  className="border-b hover:bg-stone-50"
                 >
-                  <td className="p-2 text-center text-sm text-gray-500 border-r">
+                  <td className="p-2 text-center text-sm text-stone-500 border-r">
                     {rowIndex + 1}
                   </td>
 
@@ -474,7 +474,7 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
                           onChange={(e) => updateRow(row.id, column.key,
                             column.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value
                           )}
-                          className="border-0 focus:ring-1 focus:ring-blue-500 rounded-none"
+                          className="border-0 focus:ring-1 focus:ring-amber-500 rounded-none"
                           onClick={() => {
                             const cellId = `${row.id}-${column.key}`
                             setSelectedCells(new Set([cellId]))
@@ -510,7 +510,7 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
             </tbody>
 
             {/* Footer with totals */}
-            <tfoot className="bg-gray-50 border-t">
+            <tfoot className="bg-stone-50 border-t">
               <tr>
                 <td className="p-2 font-medium text-center">Total</td>
                 <td className="p-2"></td>
@@ -535,19 +535,19 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
       {/* Summary */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg border">
-          <div className="text-sm text-gray-600">Total Items</div>
+          <div className="text-sm text-stone-600">Total Items</div>
           <div className="text-2xl font-bold">{rows.length}</div>
         </div>
         <div className="bg-white p-4 rounded-lg border">
-          <div className="text-sm text-gray-600">Total Quantity</div>
+          <div className="text-sm text-stone-600">Total Quantity</div>
           <div className="text-2xl font-bold">{totals.quantity}</div>
         </div>
         <div className="bg-white p-4 rounded-lg border">
-          <div className="text-sm text-gray-600">Total Value</div>
+          <div className="text-sm text-stone-600">Total Value</div>
           <div className="text-2xl font-bold">{formatCurrency(totals.totalPrice)}</div>
         </div>
         <div className="bg-white p-4 rounded-lg border">
-          <div className="text-sm text-gray-600">Total Weight</div>
+          <div className="text-sm text-stone-600">Total Weight</div>
           <div className="text-2xl font-bold">{totals.totalWeight.toFixed(2)} kg</div>
         </div>
       </div>

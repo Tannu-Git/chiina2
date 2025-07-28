@@ -24,8 +24,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, MetricCard } from '@/components/ui/card'
 import { SearchInput } from '@/components/ui/input'
-import UniversalDataDisplay from '@/components/ui/UniversalDataDisplay'
-import DataLoopManager from '@/components/ui/DataLoopManager'
+
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, getStatusColor, formatDate } from '@/lib/utils'
 import axios from 'axios'
@@ -37,147 +36,9 @@ const Containers = () => {
   const [containers, setContainers] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [selectedView, setSelectedView] = useState('grid')
-  const [currentDisplayData, setCurrentDisplayData] = useState([])
 
-  // Data sources for looping
-  const dataSources = [
-    {
-      name: 'All Containers',
-      icon: ContainerIcon,
-      description: 'Complete container list',
-      getData: () => filteredContainers,
-      color: 'blue'
-    },
-    {
-      name: 'Active Containers',
-      icon: Ship,
-      description: 'In transit or loading',
-      getData: () => filteredContainers.filter(c => ['loading', 'shipped', 'in_transit'].includes(c.status)),
-      color: 'green'
-    },
-    {
-      name: 'High Utilization',
-      icon: BarChart3,
-      description: 'Above 80% capacity',
-      getData: () => filteredContainers.filter(c => (c.currentCbm / c.maxCbm) > 0.8),
-      color: 'yellow'
-    },
-    {
-      name: 'Planning Stage',
-      icon: Clock,
-      description: 'Awaiting allocation',
-      getData: () => filteredContainers.filter(c => c.status === 'planning'),
-      color: 'purple'
-    },
-    {
-      name: 'Delivered',
-      icon: Anchor,
-      description: 'Completed shipments',
-      getData: () => filteredContainers.filter(c => c.status === 'delivered'),
-      color: 'gray'
-    }
-  ]
 
-  // Column configuration for containers
-  const containerColumns = [
-    {
-      key: 'clientFacingId',
-      label: 'Container ID',
-      render: (value, item) => (
-        <div className="flex items-center space-x-2">
-          {getStatusIcon(item.status)}
-          <Link
-            to={`/containers/${item._id}`}
-            className="font-medium text-blue-600 hover:text-blue-800"
-          >
-            {value}
-          </Link>
-        </div>
-      )
-    },
-    {
-      key: 'type',
-      label: 'Type',
-      render: (value) => (
-        <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-sm">
-          {value}
-        </span>
-      )
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (value) => (
-        <span className={`status-badge ${getStatusColor(value)}`}>
-          {value}
-        </span>
-      )
-    },
-    {
-      key: 'utilization',
-      label: 'CBM Utilization',
-      render: (_, item) => {
-        const percentage = ((item.currentCbm / item.maxCbm) * 100).toFixed(1)
-        return (
-          <div className="w-full">
-            <div className="flex justify-between text-sm mb-1">
-              <span>{percentage}%</span>
-              <span>{item.currentCbm}/{item.maxCbm} m³</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full ${getUtilizationColor(percentage)}`}
-                style={{ width: `${Math.min(percentage, 100)}%` }}
-              />
-            </div>
-          </div>
-        )
-      }
-    },
-    {
-      key: 'location',
-      label: 'Location',
-      render: (value) => (
-        <div className="flex items-center text-sm">
-          <MapPin className="h-4 w-4 mr-1 text-gray-500" />
-          {value?.current || 'Unknown'}
-        </div>
-      )
-    },
-    {
-      key: 'estimatedDeparture',
-      label: 'Departure',
-      render: (value) => value ? formatDate(value) : 'TBD'
-    },
-    {
-      key: 'orders',
-      label: 'Orders',
-      render: (value) => (
-        <span className="text-sm text-gray-600">
-          {value?.length || 0} orders
-        </span>
-      )
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (_, item) => (
-        <div className="flex space-x-1">
-          <Link to={`/containers/${item._id}`}>
-            <Button variant="ghost" size="sm">
-              <Eye className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Link to={`/containers/${item._id}/edit`}>
-            <Button variant="ghost" size="sm">
-              <Edit className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      )
-    }
-  ]
+
 
   // Fetch containers
   const fetchContainers = async () => {
@@ -212,7 +73,7 @@ const Containers = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'planning':
-        return <Clock className="h-4 w-4 text-blue-500" />
+        return <Clock className="h-4 w-4 text-amber-500" />
       case 'loading':
         return <Package className="h-4 w-4 text-yellow-500" />
       case 'shipped':
@@ -220,7 +81,7 @@ const Containers = () => {
       case 'delivered':
         return <CheckCircle className="h-4 w-4 text-green-600" />
       default:
-        return <AlertTriangle className="h-4 w-4 text-gray-500" />
+        return <AlertTriangle className="h-4 w-4 text-stone-500" />
     }
   }
 
@@ -259,8 +120,8 @@ const Containers = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Container Management</h1>
-            <p className="text-gray-600 mt-2">Track and manage shipping containers</p>
+            <h1 className="text-3xl font-bold text-stone-900">Container Management</h1>
+            <p className="text-stone-600 mt-2">Track and manage shipping containers</p>
           </div>
           <div className="flex space-x-3">
             <Button variant="outline" onClick={fetchContainers}>
@@ -354,7 +215,7 @@ const Containers = () => {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="all">All Status</option>
                   <option value="planning">Planning</option>
@@ -371,30 +232,108 @@ const Containers = () => {
           </CardContent>
         </Card>
 
-        {/* Data Loop Manager */}
-        <DataLoopManager
-          dataSources={dataSources}
-          onDataChange={(data, source) => setCurrentDisplayData(data)}
-          className="mb-6"
-        />
-
-        {/* Universal Data Display */}
-        <UniversalDataDisplay
-          data={currentDisplayData.length > 0 ? currentDisplayData : filteredContainers}
-          title="Container Management"
-          columns={containerColumns}
-          onItemClick={(container) => window.location.href = `/containers/${container._id}`}
-          enableLoop={true}
-          enableAutoSwitch={true}
-          className="mb-8"
-        />
+        {/* Containers Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <ContainerIcon className="h-5 w-5 mr-2" />
+              Containers ({filteredContainers.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {filteredContainers.length === 0 ? (
+              <div className="text-center py-8">
+                <ContainerIcon className="h-12 w-12 mx-auto mb-4 text-stone-300" />
+                <p className="text-stone-500">No containers found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-stone-200">
+                      <th className="text-left py-3 px-4 font-medium text-stone-700">Container ID</th>
+                      <th className="text-left py-3 px-4 font-medium text-stone-700">Status</th>
+                      <th className="text-left py-3 px-4 font-medium text-stone-700">Type</th>
+                      <th className="text-left py-3 px-4 font-medium text-stone-700">Utilization</th>
+                      <th className="text-left py-3 px-4 font-medium text-stone-700">Weight</th>
+                      <th className="text-left py-3 px-4 font-medium text-stone-700">CBM</th>
+                      <th className="text-left py-3 px-4 font-medium text-stone-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredContainers.map((container) => (
+                      <tr key={container._id} className="border-b border-stone-100 hover:bg-stone-50">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-2">
+                            {getStatusIcon(container.status)}
+                            <Link
+                              to={`/containers/${container._id}`}
+                              className="font-medium text-amber-600 hover:text-amber-800"
+                            >
+                              {container.clientFacingId}
+                            </Link>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(container.status)}`}>
+                            {container.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-medium">{container.type}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-16 bg-stone-200 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full ${getUtilizationColor((container.currentCbm / container.maxCbm) * 100)}`}
+                                style={{ width: `${Math.min((container.currentCbm / container.maxCbm) * 100, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-sm text-stone-600">
+                              {((container.currentCbm / container.maxCbm) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-sm">
+                            {container.currentWeight?.toFixed(1)} / {container.maxWeight} kg
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-sm">
+                            {container.currentCbm?.toFixed(2)} / {container.maxCbm} m³
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-2">
+                            <Link to={`/containers/${container._id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Link to={`/containers/${container._id}/edit`}>
+                              <Button variant="ghost" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Empty State */}
         {filteredContainers.length === 0 && !loading && (
           <div className="text-center py-12">
-            <ContainerIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No containers found</h3>
-            <p className="text-gray-500 mb-6">
+            <ContainerIcon className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-stone-900 mb-2">No containers found</h3>
+            <p className="text-stone-500 mb-6">
               {searchTerm ? 'Try adjusting your search criteria' : 'Get started by creating your first container'}
             </p>
             <Link to="/containers/create">

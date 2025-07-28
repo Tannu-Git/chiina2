@@ -97,10 +97,10 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'in_progress': return 'bg-blue-100 text-blue-800'
+      case 'in_progress': return 'bg-amber-100 text-amber-800'
       case 'completed': return 'bg-green-100 text-green-800'
       case 'cancelled': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -108,9 +108,9 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
     switch (reason) {
       case 'SHORTAGE': return 'bg-orange-100 text-orange-800'
       case 'DAMAGE': return 'bg-red-100 text-red-800'
-      case 'QUALITY_ISSUE': return 'bg-purple-100 text-purple-800'
-      case 'PARTIAL_ALLOCATION': return 'bg-blue-100 text-blue-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'QUALITY_ISSUE': return 'bg-stone-100 text-stone-800'
+      case 'PARTIAL_ALLOCATION': return 'bg-amber-100 text-amber-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -119,7 +119,7 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
       case 'high': return 'bg-red-100 text-red-800'
       case 'medium': return 'bg-yellow-100 text-yellow-800'
       case 'low': return 'bg-green-100 text-green-800'
-      default: return 'bg-gray-100 text-gray-800'
+      default: return 'bg-stone-100 text-stone-800'
     }
   }
 
@@ -147,12 +147,12 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
       {/* Header with Stats */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Loop-Back Monitor</h2>
-          <p className="text-gray-600">Track and manage shortage and defect orders</p>
+          <h2 className="text-2xl font-bold text-stone-900">Loop-Back Monitor</h2>
+          <p className="text-stone-600">Track and manage shortage and defect orders</p>
         </div>
         <Button 
           onClick={onCreateLoopback}
-          className="bg-gradient-to-r from-blue-600 to-purple-600"
+          className="bg-gradient-to-r amber-gradient"
         >
           <Plus className="h-4 w-4 mr-2" />
           Create Loop-back
@@ -169,10 +169,10 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <RotateCcw className="h-8 w-8 text-blue-600" />
+                <RotateCcw className="h-8 w-8 text-amber-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Loop-backs</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  <p className="text-sm font-medium text-stone-600">Total Loop-backs</p>
+                  <p className="text-2xl font-bold text-stone-900">{stats.total}</p>
                 </div>
               </div>
             </CardContent>
@@ -189,8 +189,8 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
               <div className="flex items-center">
                 <Clock className="h-8 w-8 text-yellow-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Pending</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
+                  <p className="text-sm font-medium text-stone-600">Pending</p>
+                  <p className="text-2xl font-bold text-stone-900">{stats.pending}</p>
                 </div>
               </div>
             </CardContent>
@@ -205,10 +205,10 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
-                <Truck className="h-8 w-8 text-blue-600" />
+                <Truck className="h-8 w-8 text-amber-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">In Progress</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.inProgress}</p>
+                  <p className="text-sm font-medium text-stone-600">In Progress</p>
+                  <p className="text-2xl font-bold text-stone-900">{stats.inProgress}</p>
                 </div>
               </div>
             </CardContent>
@@ -225,8 +225,8 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
               <div className="flex items-center">
                 <TrendingUp className="h-8 w-8 text-green-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Avg Resolution</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.avgResolutionTime}d</p>
+                  <p className="text-sm font-medium text-stone-600">Avg Resolution</p>
+                  <p className="text-2xl font-bold text-stone-900">{stats.avgResolutionTime}d</p>
                 </div>
               </div>
             </CardContent>
@@ -245,9 +245,9 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+              <label className="block text-sm font-medium text-stone-700 mb-2">Search</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <Input
                   placeholder="Search orders..."
                   value={filters.search}
@@ -258,7 +258,7 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <label className="block text-sm font-medium text-stone-700 mb-2">Status</label>
               <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
                 <SelectTrigger>
                   <SelectValue />
@@ -274,7 +274,7 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
+              <label className="block text-sm font-medium text-stone-700 mb-2">Reason</label>
               <Select value={filters.reason} onValueChange={(value) => setFilters(prev => ({ ...prev, reason: value }))}>
                 <SelectTrigger>
                   <SelectValue />
@@ -290,7 +290,7 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+              <label className="block text-sm font-medium text-stone-700 mb-2">Priority</label>
               <Select value={filters.priority} onValueChange={(value) => setFilters(prev => ({ ...prev, priority: value }))}>
                 <SelectTrigger>
                   <SelectValue />
@@ -318,13 +318,13 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
             </div>
           ) : filteredOrders.length === 0 ? (
             <div className="text-center py-12">
-              <RotateCcw className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Loop-back Orders</h3>
-              <p className="text-gray-500">No loop-back orders found matching your criteria.</p>
+              <RotateCcw className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-stone-900 mb-2">No Loop-back Orders</h3>
+              <p className="text-stone-500">No loop-back orders found matching your criteria.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -340,8 +340,8 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
                     <div className="flex items-center space-x-3">
                       {getStatusIcon(order.status)}
                       <div>
-                        <h3 className="font-semibold text-gray-900">{order.orderNumber}</h3>
-                        <p className="text-sm text-gray-500">
+                        <h3 className="font-semibold text-stone-900">{order.orderNumber}</h3>
+                        <p className="text-sm text-stone-500">
                           Original: {order.originalOrderNumber} • Created {formatDate(order.createdAt)}
                         </p>
                       </div>
@@ -361,15 +361,15 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
-                      <p className="text-sm text-gray-600">Client</p>
+                      <p className="text-sm text-stone-600">Client</p>
                       <p className="font-medium">{order.clientName}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Items</p>
+                      <p className="text-sm text-stone-600">Items</p>
                       <p className="font-medium">{order.items?.length || 0} items</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Total Value</p>
+                      <p className="text-sm text-stone-600">Total Value</p>
                       <p className="font-medium">{formatCurrency(order.totalAmount || 0)}</p>
                     </div>
                   </div>
@@ -377,10 +377,10 @@ const LoopBackMonitor = ({ onCreateLoopback }) => {
                   {order.deadline && (
                     <div className="mb-4">
                       <div className="flex items-center text-sm">
-                        <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-                        <span className="text-gray-600">Deadline: </span>
+                        <Calendar className="h-4 w-4 mr-1 text-stone-400" />
+                        <span className="text-stone-600">Deadline: </span>
                         <span className={`ml-1 ${
-                          new Date(order.deadline) < new Date() ? 'text-red-600 font-medium' : 'text-gray-900'
+                          new Date(order.deadline) < new Date() ? 'text-red-600 font-medium' : 'text-stone-900'
                         }`}>
                           {formatDate(order.deadline)}
                         </span>

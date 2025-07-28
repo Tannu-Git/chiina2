@@ -25,6 +25,7 @@ import Profile from './pages/Profile'
 
 // Hooks and Stores
 import { useAuthStore } from './stores/authStore'
+import { useThemeStore } from './stores/themeStore'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -63,10 +64,17 @@ const PublicRoute = ({ children }) => {
 }
 
 function App() {
+  // Initialize theme store
+  const { initialize } = useThemeStore()
+
+  React.useEffect(() => {
+    initialize()
+  }, [initialize])
+
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="min-h-screen bg-background">
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={
@@ -203,9 +211,9 @@ function App() {
             <Route path="*" element={
               <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
-                  <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                  <p className="text-gray-600 mb-8">Page not found</p>
-                  <a href="/dashboard" className="text-blue-600 hover:text-blue-800">
+                  <h1 className="text-4xl font-bold text-stone-900 mb-4">404</h1>
+                  <p className="text-stone-600 mb-8">Page not found</p>
+                  <a href="/dashboard" className="text-amber-600 hover:text-amber-800">
                     Go back to dashboard
                   </a>
                 </div>
@@ -219,21 +227,22 @@ function App() {
             toastOptions={{
               duration: 4000,
               style: {
-                background: '#363636',
-                color: '#fff',
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--card-foreground))',
+                border: '1px solid hsl(var(--border))',
               },
               success: {
                 duration: 3000,
                 iconTheme: {
-                  primary: '#4ade80',
-                  secondary: '#fff',
+                  primary: 'hsl(var(--primary))',
+                  secondary: 'hsl(var(--primary-foreground))',
                 },
               },
               error: {
                 duration: 5000,
                 iconTheme: {
-                  primary: '#ef4444',
-                  secondary: '#fff',
+                  primary: 'hsl(var(--destructive))',
+                  secondary: 'hsl(var(--destructive-foreground))',
                 },
               },
             }}

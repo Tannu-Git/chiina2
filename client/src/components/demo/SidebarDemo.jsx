@@ -50,8 +50,8 @@ const SidebarDemo = () => {
   ]
 
   const accentOptions = [
-    { value: 'blue', label: 'Blue', color: 'bg-blue-500' },
-    { value: 'purple', label: 'Purple', color: 'bg-purple-500' },
+    { value: 'blue', label: 'Blue', color: 'bg-amber-500' },
+    { value: 'purple', label: 'Purple', color: 'bg-stone-500' },
     { value: 'green', label: 'Green', color: 'bg-green-500' },
     { value: 'orange', label: 'Orange', color: 'bg-orange-500' }
   ]

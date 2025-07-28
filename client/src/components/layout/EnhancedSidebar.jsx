@@ -66,7 +66,7 @@ const EnhancedSidebar = ({ navigation, onLogout }) => {
         "sidebar-container fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-lg transition-all duration-300",
         sidebarStyle === 'glass' && "sidebar-glass",
         sidebarStyle === 'minimal' && "bg-white/95 backdrop-blur-sm",
-        isCollapsed ? "w-16" : "w-64"
+        isCollapsed ? "w-20" : "w-64"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -97,7 +97,7 @@ const EnhancedSidebar = ({ navigation, onLogout }) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-400 scrollbar-track-stone-100 hover:scrollbar-thumb-stone-500">
         {updatedNavigation.map((item) => (
           <Link
             key={item.name}
@@ -161,7 +161,7 @@ const EnhancedSidebar = ({ navigation, onLogout }) => {
           "flex items-center mb-3",
           isCollapsed && "justify-center"
         )}>
-          <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-full flex-shrink-0">
+          <div className="amber-gradient p-2 rounded-full flex-shrink-0">
             <User className="h-5 w-5 text-white" />
           </div>
 

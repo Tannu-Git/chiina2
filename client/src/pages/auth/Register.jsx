@@ -68,9 +68,9 @@ const Register = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex">
+    <div className="min-h-screen bg-stone-100 flex">
       {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:flex-1 relative overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700">
+      <div className="hidden lg:flex lg:flex-1 relative overflow-hidden amber-gradient">
         <div className="flex flex-col justify-center px-12 text-white relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -78,7 +78,7 @@ const Register = () => {
             transition={{ duration: 0.6 }}
           >
             <h1 className="text-4xl font-bold mb-6">Join Logistics OMS</h1>
-            <p className="text-xl mb-8 text-blue-100">
+            <p className="text-xl mb-8 text-amber-100">
               Start managing your logistics operations with our comprehensive platform
             </p>
 
@@ -124,7 +124,7 @@ const Register = () => {
 
         {/* Floating elements */}
         <div className="absolute top-20 right-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
-        <div className="absolute bottom-20 left-20 w-24 h-24 bg-blue-300/20 rounded-full blur-lg" />
+        <div className="absolute bottom-20 left-20 w-24 h-24 bg-amber-300/20 rounded-full blur-lg" />
       </div>
 
       {/* Right Side - Registration Form */}
@@ -137,17 +137,17 @@ const Register = () => {
         >
           <Card className="shadow-2xl border-0">
             <CardHeader className="text-center pb-8">
-              <CardTitle className="text-2xl font-bold text-gray-900">
+              <CardTitle className="text-2xl font-bold text-stone-900">
                 Create Account
               </CardTitle>
-              <CardDescription className="text-gray-600">
+              <CardDescription className="text-stone-600">
                 Sign up for a new account to get started
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 mb-2">
                     Full Name *
                   </label>
                   <Input
@@ -162,7 +162,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 mb-2">
                     Email Address *
                   </label>
                   <Input
@@ -177,7 +177,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 mb-2">
                     Phone Number
                   </label>
                   <Input
@@ -191,7 +191,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 mb-2">
                     Company Name
                   </label>
                   <Input
@@ -205,7 +205,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 mb-2">
                     Password *
                   </label>
                   <div className="relative">
@@ -221,16 +221,16 @@ const Register = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-stone-400 hover:text-stone-600"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
+                  <p className="text-xs text-stone-500 mt-1">Password must be at least 6 characters long</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 mb-2">
                     Confirm Password *
                   </label>
                   <div className="relative">
@@ -246,7 +246,7 @@ const Register = () => {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-stone-400 hover:text-stone-600"
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -272,11 +272,11 @@ const Register = () => {
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-gray-600">
+                <p className="text-stone-600">
                   Already have an account?{' '}
                   <Link
                     to="/login"
-                    className="text-blue-600 hover:text-blue-800 font-medium"
+                    className="text-amber-600 hover:text-amber-800 font-medium"
                   >
                     Sign in
                   </Link>
