@@ -16,6 +16,16 @@ module.exports = {
         "2xl": "1400px",
       },
     },
+    screens: {
+      'sm': '640px',
+      'md': '768px',
+      'lg': '1024px',
+      'xl': '1280px',
+      '2xl': '1536px',
+      // Custom breakpoints for better laptop support
+      'laptop': '1024px',
+      'desktop': '1280px',
+    },
     extend: {
       colors: {
         border: "hsl(var(--border))",

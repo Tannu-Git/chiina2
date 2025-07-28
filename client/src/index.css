@@ -24,6 +24,25 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.75rem;
+
+    /* Enhanced Sidebar Variables */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-hover: 210 40% 96%;
+    --sidebar-active: 221.2 83.2% 53.3%;
+    --sidebar-active-foreground: 210 40% 98%;
+    --sidebar-muted: 215.4 16.3% 46.9%;
+    --sidebar-accent: 221.2 83.2% 53.3%;
+
+    /* Glassmorphism Variables */
+    --glass-background: 255 255 255 / 0.1;
+    --glass-border: 255 255 255 / 0.2;
+    --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+
+    /* Animation Variables */
+    --sidebar-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --sidebar-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
 
   .dark {
@@ -46,6 +65,21 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 94.1%;
+
+    /* Enhanced Dark Sidebar Variables */
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-hover: 217.2 32.6% 17.5%;
+    --sidebar-active: 217.2 91.2% 59.8%;
+    --sidebar-active-foreground: 222.2 84% 4.9%;
+    --sidebar-muted: 215 20.2% 65.1%;
+    --sidebar-accent: 217.2 91.2% 59.8%;
+
+    /* Dark Glassmorphism Variables */
+    --glass-background: 0 0 0 / 0.1;
+    --glass-border: 255 255 255 / 0.1;
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
   }
 }
 
@@ -187,6 +221,186 @@
     .excel-input {
       @apply px-1 py-1 text-xs;
     }
+  }
+
+  /* Laptop-specific improvements */
+  @media (min-width: 768px) and (max-width: 1279px) {
+    .excel-cell {
+      @apply px-2 py-2 text-sm;
+    }
+
+    .excel-header {
+      @apply px-3 py-2 text-sm;
+    }
+
+    .excel-input {
+      @apply px-2 py-2 text-sm;
+    }
+  }
+
+  /* Advanced Sidebar Components */
+  .sidebar-container {
+    background: hsl(var(--sidebar-background));
+    border-color: hsl(var(--sidebar-border));
+    color: hsl(var(--sidebar-foreground));
+    transition: var(--sidebar-transition);
+  }
+
+  .sidebar-glass {
+    background: rgba(var(--glass-background));
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(var(--glass-border));
+    box-shadow: var(--glass-shadow);
+  }
+
+  .sidebar-nav-item {
+    @apply relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200;
+    color: hsl(var(--sidebar-foreground));
+  }
+
+  .sidebar-nav-item:hover {
+    background: hsl(var(--sidebar-hover));
+    transform: translateX(2px);
+  }
+
+  .sidebar-nav-item.active {
+    background: hsl(var(--sidebar-active));
+    color: hsl(var(--sidebar-active-foreground));
+    box-shadow: 0 4px 12px rgba(var(--sidebar-accent) / 0.3);
+  }
+
+  .sidebar-nav-item.active::before {
+    content: '';
+    @apply absolute left-0 top-0 bottom-0 w-1 bg-current rounded-r-full;
+  }
+
+  .sidebar-tooltip {
+    @apply absolute left-full ml-3 px-3 py-2 text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50 pointer-events-none;
+    background: hsl(var(--sidebar-background));
+    border: 1px solid hsl(var(--sidebar-border));
+    color: hsl(var(--sidebar-foreground));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateX(-8px);
+  }
+
+  .sidebar-tooltip::before {
+    content: '';
+    @apply absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent;
+    border-right-color: hsl(var(--sidebar-border));
+  }
+
+  .group:hover .sidebar-tooltip {
+    transform: translateX(0);
+  }
+
+  .sidebar-brand {
+    @apply flex items-center px-4 py-4 border-b;
+    border-color: hsl(var(--sidebar-border));
+  }
+
+  .sidebar-brand-icon {
+    @apply p-2 rounded-lg mr-3;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  }
+
+  .sidebar-user-section {
+    @apply p-4 border-t mt-auto;
+    border-color: hsl(var(--sidebar-border));
+  }
+
+  .sidebar-expand-button {
+    @apply absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200;
+    background: hsl(var(--sidebar-background));
+    border-color: hsl(var(--sidebar-border));
+    color: hsl(var(--sidebar-muted));
+  }
+
+  .sidebar-expand-button:hover {
+    color: hsl(var(--sidebar-accent));
+    border-color: hsl(var(--sidebar-accent));
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  /* Enhanced animations and effects */
+  .sidebar-nav-item-enter {
+    animation: slideInLeft 0.3s ease-out;
+  }
+
+  .sidebar-nav-item-exit {
+    animation: slideOutLeft 0.3s ease-in;
+  }
+
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideOutLeft {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+  }
+
+  /* Glassmorphism enhancements */
+  .glass-effect {
+    background: rgba(var(--glass-background));
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(var(--glass-border));
+    box-shadow: var(--glass-shadow);
+  }
+
+  /* Theme-aware scrollbars */
+  .sidebar-container::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar-container::-webkit-scrollbar-track {
+    background: hsl(var(--sidebar-background));
+  }
+
+  .sidebar-container::-webkit-scrollbar-thumb {
+    background: hsl(var(--sidebar-muted));
+    border-radius: 3px;
+  }
+
+  .sidebar-container::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--sidebar-accent));
+  }
+
+  /* Accessibility improvements */
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar-container,
+    .sidebar-nav-item,
+    .sidebar-tooltip,
+    .sidebar-expand-button {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+
+  /* High contrast mode */
+  .high-contrast .sidebar-nav-item {
+    border: 2px solid transparent;
+  }
+
+  .high-contrast .sidebar-nav-item:focus {
+    border-color: hsl(var(--sidebar-accent));
+    outline: none;
+  }
+
+  .high-contrast .sidebar-nav-item.active {
+    border-color: hsl(var(--sidebar-accent));
   }
 
   .status-badge {
