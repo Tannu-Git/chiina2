@@ -103,13 +103,13 @@ export const validateOrderItem = (item, index) => {
     if (unitPriceError) errors.push(`Item ${index + 1}: ${unitPriceError}`)
   }
 
-  const unitWeightError = validateNumber(item.unitWeight, 'Unit weight', { min: 0 })
+  const unitWeightError = validateNumber(item.unitWeight, 'Unit weight', { min: 0, required: true })
   if (unitWeightError) errors.push(`Item ${index + 1}: ${unitWeightError}`)
 
-  const unitCbmError = validateNumber(item.unitCbm, 'Unit CBM', { min: 0 })
+  const unitCbmError = validateNumber(item.unitCbm, 'Unit CBM', { min: 0, required: true })
   if (unitCbmError) errors.push(`Item ${index + 1}: ${unitCbmError}`)
 
-  const cartonsError = validateInteger(item.cartons, 'Cartons', { min: 1 })
+  const cartonsError = validateInteger(item.cartons, 'Cartons', { min: 1, required: true })
   if (cartonsError) errors.push(`Item ${index + 1}: ${cartonsError}`)
 
   // Select field validations
@@ -121,8 +121,40 @@ export const validateOrderItem = (item, index) => {
     const basisError = validateSelect(item.carryingCharge.basis, 'Carrying charge basis', ['carton', 'weight', 'cbm'])
     if (basisError) errors.push(`Item ${index + 1}: ${basisError}`)
 
-    const rateError = validateNumber(item.carryingCharge.rate, 'Carrying charge rate', { min: 0 })
+    const rateError = validateNumber(item.carryingCharge.rate, 'Carrying charge rate', { min: 0, required: true })
     if (rateError) errors.push(`Item ${index + 1}: ${rateError}`)
+    
+    // Validate logical consistency
+    if (item.carryingCharge.basis === 'weight' && (!item.unitWeight || item.unitWeight <= 0)) {
+      errors.push(`Item ${index + 1}: Weight-based carrying charge requires valid unit weight`)
+    }
+    
+    if (item.carryingCharge.basis === 'cbm' && (!item.unitCbm || item.unitCbm <= 0)) {
+      errors.push(`Item ${index + 1}: CBM-based carrying charge requires valid unit CBM`)
+    }
+    
+    if (item.carryingCharge.basis === 'carton' && (!item.cartons || item.cartons <= 0)) {
+      errors.push(`Item ${index + 1}: Carton-based carrying charge requires valid carton count`)
+    }
+  }
+
+  // Business logic validations
+  if (item.unitWeight && item.cartons) {
+    const totalWeight = item.unitWeight * item.cartons
+    if (totalWeight > 30000) { // 30 tons limit per item
+      errors.push(`Item ${index + 1}: Total weight (${totalWeight}kg) exceeds maximum limit of 30,000kg`)
+    }
+  }
+  
+  if (item.unitCbm && item.cartons) {
+    const totalCbm = item.unitCbm * item.cartons
+    if (totalCbm > 100) { // 100 CBM limit per item
+      errors.push(`Item ${index + 1}: Total CBM (${totalCbm}m³) exceeds maximum limit of 100m³`)
+    }
+  }
+  
+  if (item.quantity && item.cartons && item.quantity > item.cartons * 1000) {
+    errors.push(`Item ${index + 1}: Quantity seems unusually high compared to cartons. Please verify.`)
   }
 
   return errors
@@ -139,10 +171,34 @@ export const validateOrder = (orderData) => {
   if (!orderData.items || orderData.items.length === 0) {
     errors.push('At least one item is required')
   } else {
+    // Validate maximum items limit
+    if (orderData.items.length > 100) {
+      errors.push('Maximum 100 items allowed per order')
+    }
+    
     orderData.items.forEach((item, index) => {
       const itemErrors = validateOrderItem(item, index)
       errors.push(...itemErrors)
     })
+    
+    // Validate order totals
+    const orderTotals = calculateOrderTotals(orderData.items)
+    
+    if (orderTotals.totalWeight > 50000) { // 50 tons limit
+      errors.push('Order total weight exceeds maximum limit of 50,000kg')
+    }
+    
+    if (orderTotals.totalCbm > 200) { // 200 CBM limit
+      errors.push('Order total CBM exceeds maximum limit of 200m³')
+    }
+    
+    if (orderTotals.totalCartons > 10000) { // 10k cartons limit
+      errors.push('Order total cartons exceed maximum limit of 10,000')
+    }
+    
+    if (orderTotals.totalAmount > 10000000) { // 1 crore limit
+      errors.push('Order total amount exceeds maximum limit of ₹1,00,00,000')
+    }
   }
 
   // Priority validation
@@ -157,7 +213,9 @@ export const validateOrder = (orderData) => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    if (deadlineDate < today) {
+    if (isNaN(deadlineDate.getTime())) {
+      errors.push('Invalid deadline date format')
+    } else if (deadlineDate < today) {
       errors.push('Deadline cannot be in the past')
     }
   }
@@ -168,6 +226,48 @@ export const validateOrder = (orderData) => {
   }
 
   return errors
+}
+
+// Helper function to calculate order totals for validation
+export const calculateOrderTotals = (items) => {
+  return items.reduce((totals, item) => {
+    const quantity = parseFloat(item.quantity) || 0
+    const unitPrice = parseFloat(item.unitPrice) || 0
+    const unitWeight = parseFloat(item.unitWeight) || 0
+    const unitCbm = parseFloat(item.unitCbm) || 0
+    const cartons = parseInt(item.cartons) || 0
+    const carryingRate = parseFloat(item.carryingCharge?.rate) || 0
+    
+    // Calculate carrying charge based on correct logic
+    let carryingAmount = 0
+    if (item.carryingCharge?.basis && carryingRate > 0) {
+      switch (item.carryingCharge.basis) {
+        case 'carton':
+          carryingAmount = cartons * carryingRate
+          break
+        case 'weight':
+          carryingAmount = (unitWeight * cartons) * carryingRate
+          break
+        case 'cbm':
+          carryingAmount = (unitCbm * cartons) * carryingRate
+          break
+      }
+    }
+    
+    return {
+      totalAmount: totals.totalAmount + (quantity * unitPrice),
+      totalCarryingCharges: totals.totalCarryingCharges + carryingAmount,
+      totalWeight: totals.totalWeight + (unitWeight * cartons),
+      totalCbm: totals.totalCbm + (unitCbm * cartons),
+      totalCartons: totals.totalCartons + cartons
+    }
+  }, {
+    totalAmount: 0,
+    totalCarryingCharges: 0,
+    totalWeight: 0,
+    totalCbm: 0,
+    totalCartons: 0
+  })
 }
 
 export const validateUser = (userData) => {

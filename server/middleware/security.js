@@ -191,6 +191,69 @@ const validateRequest = (req, res, next) => {
 };
 
 /**
+ * Enhanced input sanitization and validation
+ */
+const sanitizeAndValidateInput = (req, res, next) => {
+  // Validate array inputs to prevent server crashes
+  if (req.body) {
+    const validateArrayFields = (obj, path = '') => {
+      for (const [key, value] of Object.entries(obj)) {
+        const currentPath = path ? `${path}.${key}` : key;
+        
+        if (Array.isArray(value)) {
+          // Validate array size to prevent DoS
+          if (value.length > 1000) {
+            return res.status(400).json({
+              error: `Array field '${currentPath}' exceeds maximum size of 1000 items`
+            });
+          }
+          
+          // Validate each array item
+          value.forEach((item, index) => {
+            if (typeof item === 'object' && item !== null) {
+              validateArrayFields(item, `${currentPath}[${index}]`);
+            }
+          });
+        } else if (typeof value === 'object' && value !== null) {
+          validateArrayFields(value, currentPath);
+        } else if (typeof value === 'string') {
+          // Validate string length to prevent DoS
+          if (value.length > 10000) {
+            return res.status(400).json({
+              error: `String field '${currentPath}' exceeds maximum length of 10000 characters`
+            });
+          }
+          
+          // Sanitize dangerous HTML/Script content
+          if (/<script|javascript:|vbscript:|onload=|onerror=/i.test(value)) {
+            return res.status(400).json({
+              error: `Field '${currentPath}' contains potentially dangerous content`
+            });
+          }
+        } else if (typeof value === 'number') {
+          // Validate number range to prevent overflow
+          if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) {
+            return res.status(400).json({
+              error: `Numeric field '${currentPath}' is out of safe range`
+            });
+          }
+        }
+      }
+    };
+    
+    try {
+      validateArrayFields(req.body);
+    } catch (error) {
+      return res.status(400).json({
+        error: 'Invalid request data structure'
+      });
+    }
+  }
+  
+  next();
+};
+
+/**
  * Session security middleware
  */
 const sessionSecurity = (req, res, next) => {
@@ -292,6 +355,7 @@ module.exports = {
   adminIPWhitelist,
   securityHeaders,
   validateRequest,
+  sanitizeAndValidateInput,
   sessionSecurity,
   fileUploadSecurity,
   corsOptions

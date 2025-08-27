@@ -68,119 +68,22 @@ const OrderDetails = () => {
     }
   }, [id])
 
-  // Use real order data from API
-  const orderData = {
+  // Use real order data from API, fallback to safe defaults
+  const displayOrder = order || {
     _id: id,
-    orderNumber: 'ORD-001234',
-    clientName: 'ABC Trading Co.',
-    clientContact: {
-      name: 'John Smith',
-      email: 'john@abctrading.com',
-      phone: '+1-555-0123',
-      company: 'ABC Trading Co.',
-      address: '123 Business St, New York, NY 10001'
-    },
-    status: 'confirmed',
-    priority: 'high',
-    totalAmount: 125000,
-    totalCarryingCharges: 8500,
-    totalCartons: 45,
-    totalCbm: 23.5,
-    totalWeight: 1250,
-    deadline: '2024-01-25',
-    createdAt: '2024-01-15T10:30:00Z',
-    updatedAt: '2024-01-16T14:20:00Z',
-    notes: 'Urgent delivery required. Handle with care - fragile electronics.',
-    items: [
-      {
-        _id: '1',
-        itemCode: 'ELEC-001',
-        description: 'High-end Electronics Components',
-        quantity: 100,
-        unitPrice: 850,
-        totalPrice: 85000,
-        unitWeight: 2.5,
-        unitCbm: 0.15,
-        cartons: 20,
-        supplier: {
-          name: 'TechSupply Inc.',
-          contact: 'Mike Johnson',
-          email: 'mike@techsupply.com',
-          phone: '+1-555-0456'
-        },
-        paymentType: 'CLIENT_DIRECT',
-        carryingCharge: {
-          basis: 'carton',
-          rate: 150,
-          amount: 3000
-        }
-      },
-      {
-        _id: '2',
-        itemCode: 'TEXT-002',
-        description: 'Premium Textile Products',
-        quantity: 50,
-        unitPrice: 800,
-        totalPrice: 40000,
-        unitWeight: 1.8,
-        unitCbm: 0.12,
-        cartons: 25,
-        supplier: {
-          name: 'Fabric World Ltd.',
-          contact: 'Sarah Wilson',
-          email: 'sarah@fabricworld.com',
-          phone: '+1-555-0789'
-        },
-        paymentType: 'THROUGH_ME',
-        carryingCharge: {
-          basis: 'cbm',
-          rate: 200,
-          amount: 1200
-        }
-      }
-    ],
-    containers: [
-      {
-        _id: 'cont1',
-        clientFacingId: 'SHIP-ABC123',
-        status: 'loading',
-        allocatedCbm: 15.2,
-        allocatedWeight: 800
-      }
-    ],
-    timeline: [
-      {
-        date: '2024-01-15T10:30:00Z',
-        action: 'Order Created',
-        description: 'Order created by John Smith',
-        user: 'John Smith',
-        status: 'draft'
-      },
-      {
-        date: '2024-01-15T11:45:00Z',
-        action: 'Order Submitted',
-        description: 'Order submitted for review',
-        user: 'John Smith',
-        status: 'submitted'
-      },
-      {
-        date: '2024-01-16T09:15:00Z',
-        action: 'Order Confirmed',
-        description: 'Order confirmed by admin',
-        user: 'Admin User',
-        status: 'confirmed'
-      },
-      {
-        date: '2024-01-16T14:20:00Z',
-        action: 'Container Allocated',
-        description: 'Allocated to container SHIP-ABC123',
-        user: 'Warehouse Staff',
-        status: 'confirmed'
-      }
-    ]
+    orderNumber: 'Loading...',
+    clientName: 'Loading...',
+    status: 'draft',
+    priority: 'medium',
+    totalAmount: 0,
+    totalCarryingCharges: 0,
+    totalCartons: 0,
+    totalCbm: 0,
+    totalWeight: 0,
+    items: [],
+    containers: [],
+    timeline: []
   }
-
-  const displayOrder = order || null
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -353,35 +256,60 @@ const OrderDetails = () => {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h3 className="font-semibold text-stone-900 mb-3">{displayOrder.clientName}</h3>
+                      <h3 className="font-semibold text-stone-900 mb-3">{displayOrder.clientName || 'No client name'}</h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center text-stone-600">
-                          <User className="h-4 w-4 mr-2" />
-                          <span>{displayOrder.clientContact?.name}</span>
-                        </div>
-                        <div className="flex items-center text-stone-600">
-                          <Mail className="h-4 w-4 mr-2" />
-                          <a href={`mailto:${displayOrder.clientContact?.email}`} className="text-amber-600 hover:underline">
-                            {displayOrder.clientContact?.email}
-                          </a>
-                        </div>
-                        <div className="flex items-center text-stone-600">
-                          <Phone className="h-4 w-4 mr-2" />
-                          <a href={`tel:${displayOrder.clientContact?.phone}`} className="text-amber-600 hover:underline">
-                            {displayOrder.clientContact?.phone}
-                          </a>
-                        </div>
-                        <div className="flex items-center text-stone-600">
-                          <Building className="h-4 w-4 mr-2" />
-                          <span>{displayOrder.clientContact?.company}</span>
-                        </div>
+                        {displayOrder.clientContact?.name && (
+                          <div className="flex items-center text-stone-600">
+                            <User className="h-4 w-4 mr-2" />
+                            <span>{displayOrder.clientContact.name}</span>
+                          </div>
+                        )}
+                        {displayOrder.clientContact?.email && (
+                          <div className="flex items-center text-stone-600">
+                            <Mail className="h-4 w-4 mr-2" />
+                            <a href={`mailto:${displayOrder.clientContact.email}`} className="text-amber-600 hover:underline">
+                              {displayOrder.clientContact.email}
+                            </a>
+                          </div>
+                        )}
+                        {displayOrder.clientContact?.phone && (
+                          <div className="flex items-center text-stone-600">
+                            <Phone className="h-4 w-4 mr-2" />
+                            <a href={`tel:${displayOrder.clientContact.phone}`} className="text-amber-600 hover:underline">
+                              {displayOrder.clientContact.phone}
+                            </a>
+                          </div>
+                        )}
+                        {displayOrder.clientContact?.company && (
+                          <div className="flex items-center text-stone-600">
+                            <Building className="h-4 w-4 mr-2" />
+                            <span>{displayOrder.clientContact.company}</span>
+                          </div>
+                        )}
+                        {displayOrder.clientId && (
+                          <div className="flex items-center text-stone-600">
+                            <Package className="h-4 w-4 mr-2" />
+                            <span className="text-xs bg-stone-100 px-2 py-1 rounded">ID: {displayOrder.clientId}</span>
+                          </div>
+                        )}
+                        {!displayOrder.clientContact?.name && !displayOrder.clientContact?.email && !displayOrder.clientContact?.phone && (
+                          <div className="text-stone-500 text-sm italic">
+                            No additional client details available
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium text-stone-900 mb-2">Address</h4>
-                      <p className="text-sm text-stone-600">
-                        {displayOrder.clientContact?.address}
-                      </p>
+                      <h4 className="font-medium text-stone-900 mb-2">Contact Details</h4>
+                      {displayOrder.clientContact?.address ? (
+                        <p className="text-sm text-stone-600">
+                          {displayOrder.clientContact.address}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-stone-500 italic">
+                          No address information available
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>

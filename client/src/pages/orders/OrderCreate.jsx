@@ -17,7 +17,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, calculateCarryingCharge } from '@/lib/utils'
-import { validateOrder, displayValidationErrors } from '@/lib/validation'
+import { validateOrder, displayValidationErrors, calculateOrderTotals } from '@/lib/validation'
+import ImageUploadField from '@/components/orders/ImageUploadField'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
@@ -46,6 +47,7 @@ const OrderCreate = () => {
       cartons: 1,
       supplier: '',
       paymentType: 'CLIENT_DIRECT',
+      image: null,
       carryingCharge: {
         basis: 'carton',
         rate: 0,
@@ -114,8 +116,9 @@ const OrderCreate = () => {
           unitWeight: item.unitWeight || 0,
           unitCbm: item.unitCbm || 0,
           cartons: item.cartons || 1,
-          supplier: item.supplier || '',
+          supplier: typeof item.supplier === 'object' && item.supplier ? item.supplier.name || '' : item.supplier || '',
           paymentType: item.paymentType || 'CLIENT_DIRECT',
+          image: item.image || null,
           carryingCharge: {
             basis: item.carryingCharge?.basis || 'carton',
             rate: item.carryingCharge?.rate || 0,
@@ -146,6 +149,7 @@ const OrderCreate = () => {
         cartons: 1,
         supplier: '',
         paymentType: 'CLIENT_DIRECT',
+        image: null,
         carryingCharge: {
           basis: 'carton',
           rate: 0,
@@ -226,8 +230,8 @@ const OrderCreate = () => {
     return {
       totalAmount: acc.totalAmount + totalPrice,
       totalCarryingCharges: acc.totalCarryingCharges + carryingChargeAmount,
-      totalWeight: acc.totalWeight + (unitWeight * quantity),
-      totalCbm: acc.totalCbm + (unitCbm * quantity),
+      totalWeight: acc.totalWeight + (unitWeight * cartons),
+      totalCbm: acc.totalCbm + (unitCbm * cartons),
       totalCartons: acc.totalCartons + cartons
     }
   }, {
@@ -255,12 +259,25 @@ const OrderCreate = () => {
         status,
         items: orderData.items.map(item => {
           // Convert empty strings to numbers for submission
-          const quantity = item.quantity === '' ? 0 : (typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0)
+          const quantity = item.quantity === '' ? 1 : (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 1)
           const unitPrice = item.unitPrice === '' ? 0 : (typeof item.unitPrice === 'number' ? item.unitPrice : parseFloat(item.unitPrice) || 0)
           const unitWeight = item.unitWeight === '' ? 0 : (typeof item.unitWeight === 'number' ? item.unitWeight : parseFloat(item.unitWeight) || 0)
           const unitCbm = item.unitCbm === '' ? 0 : (typeof item.unitCbm === 'number' ? item.unitCbm : parseFloat(item.unitCbm) || 0)
-          const cartons = item.cartons === '' ? 0 : (typeof item.cartons === 'number' ? item.cartons : parseInt(item.cartons) || 0)
+          const cartons = item.cartons === '' ? 1 : (typeof item.cartons === 'number' ? item.cartons : parseInt(item.cartons) || 1)
           const carryingRate = item.carryingCharge.rate === '' ? 0 : (typeof item.carryingCharge.rate === 'number' ? item.carryingCharge.rate : parseFloat(item.carryingCharge.rate) || 0)
+          
+          // Process supplier field to match backend schema
+          const supplierData = item.supplier ? {
+            name: item.supplier,
+            contact: '',
+            email: ''
+          } : null
+          
+          // Process image field to match backend schema
+          const imageData = item.image ? {
+            url: item.image.url,
+            publicId: item.image.publicId || ''
+          } : null
 
           const processedItem = {
             ...item,
@@ -269,22 +286,65 @@ const OrderCreate = () => {
             unitWeight,
             unitCbm,
             cartons,
+            supplier: supplierData,
+            image: imageData,
             carryingCharge: {
               ...item.carryingCharge,
               rate: carryingRate
             }
           }
 
+          // Calculate totalPrice and carryingCharge amount
+          const totalPrice = quantity * unitPrice
+          const carryingChargeAmount = calculateCarryingCharge(processedItem.carryingCharge.basis, carryingRate, processedItem)
+
           return {
             ...processedItem,
-            totalPrice: quantity * unitPrice,
+            totalPrice,
             carryingCharge: {
               ...processedItem.carryingCharge,
-              amount: calculateCarryingCharge(processedItem.carryingCharge.basis, carryingRate, processedItem)
+              amount: carryingChargeAmount
             }
           }
         })
       }
+
+      // Calculate and add order totals to ensure validation passes
+      const calculatedTotals = orderPayload.items.reduce((totals, item) => {
+        const itemTotalPrice = isNaN(item.totalPrice) ? 0 : item.totalPrice
+        const itemCarryingAmount = isNaN(item.carryingCharge.amount) ? 0 : item.carryingCharge.amount
+        const itemWeight = isNaN(item.unitWeight) ? 0 : item.unitWeight
+        const itemCbm = isNaN(item.unitCbm) ? 0 : item.unitCbm
+        const itemCartons = isNaN(item.cartons) ? 0 : item.cartons
+        
+        return {
+          totalAmount: totals.totalAmount + itemTotalPrice,
+          totalCarryingCharges: totals.totalCarryingCharges + itemCarryingAmount,
+          totalWeight: totals.totalWeight + (itemWeight * itemCartons),
+          totalCbm: totals.totalCbm + (itemCbm * itemCartons),
+          totalCartons: totals.totalCartons + itemCartons
+        }
+      }, {
+        totalAmount: 0,
+        totalCarryingCharges: 0,
+        totalWeight: 0,
+        totalCbm: 0,
+        totalCartons: 0
+      })
+
+      // Ensure all totals are valid numbers
+      const safeTotals = {
+        totalAmount: isNaN(calculatedTotals.totalAmount) ? 0 : calculatedTotals.totalAmount,
+        totalCarryingCharges: isNaN(calculatedTotals.totalCarryingCharges) ? 0 : calculatedTotals.totalCarryingCharges,
+        totalWeight: isNaN(calculatedTotals.totalWeight) ? 0 : calculatedTotals.totalWeight,
+        totalCbm: isNaN(calculatedTotals.totalCbm) ? 0 : calculatedTotals.totalCbm,
+        totalCartons: isNaN(calculatedTotals.totalCartons) ? 0 : calculatedTotals.totalCartons
+      }
+
+      // Add calculated totals to orderPayload
+      Object.assign(orderPayload, safeTotals)
+      
+      console.log('Frontend calculated totals being sent:', safeTotals)
 
       let response
       if (isEditMode) {
@@ -499,10 +559,8 @@ const OrderCreate = () => {
                         Quantity
                       </label>
                       <Input
-                        type="number"
                         value={item.quantity}
                         onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                        min="1"
                       />
                     </div>
                     <div>
@@ -510,11 +568,8 @@ const OrderCreate = () => {
                         Unit Price
                       </label>
                       <Input
-                        type="number"
-                        step="0.01"
                         value={item.unitPrice}
                         onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                        min="0"
                       />
                     </div>
                     <div>
@@ -522,10 +577,8 @@ const OrderCreate = () => {
                         Cartons
                       </label>
                       <Input
-                        type="number"
                         value={item.cartons}
                         onChange={(e) => updateItem(index, 'cartons', e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                        min="1"
                       />
                     </div>
 
@@ -534,11 +587,8 @@ const OrderCreate = () => {
                         Unit Weight (kg)
                       </label>
                       <Input
-                        type="number"
-                        step="0.01"
                         value={item.unitWeight}
                         onChange={(e) => updateItem(index, 'unitWeight', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                        min="0"
                       />
                     </div>
                     <div>
@@ -546,11 +596,8 @@ const OrderCreate = () => {
                         Unit CBM
                       </label>
                       <Input
-                        type="number"
-                        step="0.001"
                         value={item.unitCbm}
                         onChange={(e) => updateItem(index, 'unitCbm', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                        min="0"
                       />
                     </div>
                     <div>
@@ -561,6 +608,16 @@ const OrderCreate = () => {
                         value={item.supplier}
                         onChange={(e) => updateItem(index, 'supplier', e.target.value)}
                         placeholder="Supplier name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">
+                        Item Image
+                      </label>
+                      <ImageUploadField
+                        value={item.image}
+                        onChange={(value) => updateItem(index, 'image', value)}
+                        maxFiles={1}
                       />
                     </div>
 
@@ -604,11 +661,8 @@ const OrderCreate = () => {
                         Carrying Rate
                       </label>
                       <Input
-                        type="number"
-                        step="0.01"
                         value={item.carryingCharge.rate}
                         onChange={(e) => updateItem(index, 'carryingCharge.rate', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                        min="0"
                       />
                     </div>
                   </div>
@@ -621,11 +675,11 @@ const OrderCreate = () => {
                       </div>
                       <div>
                         <span className="text-stone-500">Total Weight:</span>
-                        <div className="font-medium">{((item.unitWeight === '' ? 0 : parseFloat(item.unitWeight) || 0) * (item.quantity === '' ? 0 : parseFloat(item.quantity) || 0)).toFixed(2)} kg</div>
+                        <div className="font-medium">{((item.unitWeight === '' ? 0 : parseFloat(item.unitWeight) || 0) * (item.cartons === '' ? 0 : parseFloat(item.cartons) || 0)).toFixed(2)} kg</div>
                       </div>
                       <div>
                         <span className="text-stone-500">Total CBM:</span>
-                        <div className="font-medium">{((item.unitCbm === '' ? 0 : parseFloat(item.unitCbm) || 0) * (item.quantity === '' ? 0 : parseFloat(item.quantity) || 0)).toFixed(3)} m³</div>
+                        <div className="font-medium">{((item.unitCbm === '' ? 0 : parseFloat(item.unitCbm) || 0) * (item.cartons === '' ? 0 : parseFloat(item.cartons) || 0)).toFixed(3)} m³</div>
                       </div>
                       <div>
                         <span className="text-stone-500">Carrying Charge:</span>

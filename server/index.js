@@ -11,6 +11,7 @@ const {
   adminLimiter,
   securityHeaders,
   validateRequest,
+  sanitizeAndValidateInput,
   sessionSecurity,
   corsOptions
 } = require('./middleware/security');
@@ -33,6 +34,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Security validation
 app.use(validateRequest);
+app.use(sanitizeAndValidateInput);
 
 // General rate limiting
 app.use('/api', generalLimiter);

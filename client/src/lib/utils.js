@@ -102,16 +102,21 @@ export function debounce(func, wait) {
 }
 
 // Unified carrying charge calculation function
+// Note: CBM and weight calculations use cartons, not quantity
+// This is because CBM represents the space occupied by cartons, not individual items
 export function calculateCarryingCharge(basis, rate, item) {
   if (!rate || rate <= 0) return 0
 
   switch (basis) {
     case 'carton':
+      // Rate per carton
       return (item.cartons || 0) * rate
     case 'weight':
-      return (item.unitWeight || 0) * (item.quantity || 0) * rate
+      // Rate per kg - total weight is unitWeight × cartons
+      return (item.unitWeight || 0) * (item.cartons || 0) * rate
     case 'cbm':
-      return (item.unitCbm || 0) * (item.quantity || 0) * rate
+      // Rate per CBM - total volume is unitCbm × cartons
+      return (item.unitCbm || 0) * (item.cartons || 0) * rate
     default:
       return 0
   }

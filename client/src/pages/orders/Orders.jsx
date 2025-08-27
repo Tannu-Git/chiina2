@@ -6,6 +6,7 @@ import {
   Search,
   Eye,
   Edit,
+  Trash2,
   Download,
   RefreshCw,
   Package,
@@ -28,6 +29,8 @@ const Orders = () => {
   const [orders, setOrders] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [selectedOrders, setSelectedOrders] = useState([])
+  const [selectAllChecked, setSelectAllChecked] = useState(false)
 
   // Get status icon
   const getStatusIcon = (status) => {
@@ -63,7 +66,101 @@ const Orders = () => {
 
   useEffect(() => {
     fetchOrders()
+    // Reset selections when filters change
+    setSelectedOrders([])
+    setSelectAllChecked(false)
   }, [searchTerm, statusFilter])
+
+  // Delete order
+  const handleDeleteOrder = async (orderId, orderNumber) => {
+    // Check if user has permission to delete
+    if (user.role !== 'admin' && user.role !== 'staff') {
+      toast.error('You do not have permission to delete orders')
+      return
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete order ${orderNumber}? This action cannot be undone.`
+    )
+
+    if (!confirmDelete) return
+
+    try {
+      await axios.delete(`/api/orders/${orderId}`)
+      toast.success(`Order ${orderNumber} deleted successfully`)
+      // Refresh the orders list
+      fetchOrders()
+    } catch (error) {
+      console.error('Error deleting order:', error)
+      
+      let errorMessage = 'Failed to delete order'
+      if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to delete this order'
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Order not found'
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      }
+      
+      toast.error(errorMessage)
+    }
+  }
+
+  // Bulk delete orders
+  const handleBulkDelete = async () => {
+    if (selectedOrders.length === 0) {
+      toast.error('Please select orders to delete')
+      return
+    }
+
+    if (user.role !== 'admin' && user.role !== 'staff') {
+      toast.error('You do not have permission to delete orders')
+      return
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedOrders.length} order(s)? This action cannot be undone.`
+    )
+
+    if (!confirmDelete) return
+
+    try {
+      // Delete orders in parallel
+      const deletePromises = selectedOrders.map(orderId => 
+        axios.delete(`/api/orders/${orderId}`)
+      )
+      
+      await Promise.all(deletePromises)
+      
+      toast.success(`${selectedOrders.length} order(s) deleted successfully`)
+      setSelectedOrders([])
+      setSelectAllChecked(false)
+      fetchOrders()
+    } catch (error) {
+      console.error('Error deleting orders:', error)
+      toast.error('Failed to delete some orders. Please try again.')
+    }
+  }
+
+  // Handle individual checkbox change
+  const handleOrderSelect = (orderId, checked) => {
+    if (checked) {
+      setSelectedOrders(prev => [...prev, orderId])
+    } else {
+      setSelectedOrders(prev => prev.filter(id => id !== orderId))
+      setSelectAllChecked(false)
+    }
+  }
+
+  // Handle select all checkbox
+  const handleSelectAll = (checked) => {
+    setSelectAllChecked(checked)
+    if (checked) {
+      setSelectedOrders(filteredOrders.map(order => order._id))
+    } else {
+      setSelectedOrders([])
+    }
+  }
 
   // Filter orders
   const filteredOrders = orders.filter(order => {
@@ -99,6 +196,16 @@ const Orders = () => {
             <p className="text-stone-600 mt-2">Manage and track all your orders</p>
           </div>
           <div className="flex space-x-3">
+            {selectedOrders.length > 0 && (user.role === 'admin' || user.role === 'staff') && (
+              <Button 
+                variant="outline" 
+                onClick={handleBulkDelete}
+                className="text-red-600 border-red-300 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Selected ({selectedOrders.length})
+              </Button>
+            )}
             <Button variant="outline" onClick={fetchOrders}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -170,6 +277,16 @@ const Orders = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-stone-200">
+                      {(user.role === 'admin' || user.role === 'staff') && (
+                        <th className="text-left py-3 px-4 font-medium text-stone-700">
+                          <input
+                            type="checkbox"
+                            checked={selectAllChecked}
+                            onChange={(e) => handleSelectAll(e.target.checked)}
+                            className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                          />
+                        </th>
+                      )}
                       <th className="text-left py-3 px-4 font-medium text-stone-700">Order #</th>
                       <th className="text-left py-3 px-4 font-medium text-stone-700">Client</th>
                       <th className="text-left py-3 px-4 font-medium text-stone-700">Status</th>
@@ -182,6 +299,16 @@ const Orders = () => {
                   <tbody>
                     {filteredOrders.map((order) => (
                       <tr key={order._id} className="border-b border-stone-100 hover:bg-stone-50">
+                        {(user.role === 'admin' || user.role === 'staff') && (
+                          <td className="py-3 px-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedOrders.includes(order._id)}
+                              onChange={(e) => handleOrderSelect(order._id, e.target.checked)}
+                              className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                            />
+                          </td>
+                        )}
                         <td className="py-3 px-4">
                           <div className="flex items-center space-x-2">
                             {getStatusIcon(order.status)}
@@ -216,15 +343,26 @@ const Orders = () => {
                         <td className="py-3 px-4">
                           <div className="flex items-center space-x-2">
                             <Link to={`/orders/${order._id}`}>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" title="View order">
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
                             <Link to={`/orders/${order._id}/edit`}>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" title="Edit order">
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </Link>
+                            {(user.role === 'admin' || user.role === 'staff') && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleDeleteOrder(order._id, order.orderNumber)}
+                                className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                                title="Delete order"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>

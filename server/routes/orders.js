@@ -241,14 +241,54 @@ router.post('/', auth, [
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
   body('items.*.itemCode').trim().notEmpty().withMessage('Item code is required'),
   body('items.*.description').trim().notEmpty().withMessage('Item description is required'),
-  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('items.*.unitPrice').optional().isFloat({ min: 0 }).withMessage('Unit price must be non-negative'),
-  body('items.*.unitWeight').isFloat({ min: 0 }).withMessage('Unit weight must be non-negative'),
-  body('items.*.unitCbm').isFloat({ min: 0 }).withMessage('Unit CBM must be non-negative'),
-  body('items.*.cartons').isInt({ min: 1 }).withMessage('Cartons must be at least 1'),
+  body('items.*.quantity').custom((value) => {
+    const num = parseInt(value);
+    if (isNaN(num) || num < 1) {
+      throw new Error('Quantity must be at least 1');
+    }
+    return true;
+  }),
+  body('items.*.unitPrice').optional().custom((value) => {
+    if (value !== undefined && value !== null && value !== '') {
+      const num = parseFloat(value);
+      if (isNaN(num) || num < 0) {
+        throw new Error('Unit price must be non-negative');
+      }
+    }
+    return true;
+  }),
+  body('items.*.unitWeight').custom((value) => {
+    const num = parseFloat(value);
+    if (isNaN(num) || num < 0) {
+      throw new Error('Unit weight must be non-negative');
+    }
+    return true;
+  }),
+  body('items.*.unitCbm').custom((value) => {
+    const num = parseFloat(value);
+    if (isNaN(num) || num < 0) {
+      throw new Error('Unit CBM must be non-negative');
+    }
+    return true;
+  }),
+  body('items.*.cartons').custom((value) => {
+    const num = parseInt(value);
+    if (isNaN(num) || num < 1) {
+      throw new Error('Cartons must be at least 1');
+    }
+    return true;
+  }),
   body('items.*.paymentType').isIn(['CLIENT_DIRECT', 'THROUGH_ME']).withMessage('Invalid payment type'),
   body('items.*.carryingCharge.basis').isIn(['carton', 'weight', 'cbm']).withMessage('Invalid carrying charge basis'),
-  body('items.*.carryingCharge.rate').isFloat({ min: 0 }).withMessage('Carrying charge rate must be non-negative')
+  body('items.*.carryingCharge.rate').custom((value) => {
+    if (value !== undefined && value !== null && value !== '') {
+      const num = parseFloat(value);
+      if (isNaN(num) || num < 0) {
+        throw new Error('Carrying charge rate must be non-negative');
+      }
+    }
+    return true;
+  })
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -259,7 +299,22 @@ router.post('/', auth, [
       });
     }
 
-    const { clientName, items, notes, deadline, priority } = req.body;
+    // Debug logging to see what we receive
+    console.log('Order creation request body:', JSON.stringify(req.body, null, 2));
+
+    const { 
+      clientName, 
+      items, 
+      notes, 
+      deadline, 
+      priority,
+      totalAmount,
+      totalCarryingCharges,
+      totalWeight,
+      totalCbm,
+      totalCartons,
+      status
+    } = req.body;
 
     // Generate order number
     const orderNumber = await Order.generateOrderNumber();
@@ -273,14 +328,37 @@ router.post('/', auth, [
       clientId = req.body.clientId || `CLI-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
     }
 
+    // Validate and process items to ensure required fields
+    const processedItems = items.map(item => ({
+      ...item,
+      quantity: parseInt(item.quantity) || 1,
+      unitPrice: parseFloat(item.unitPrice) || 0,
+      unitWeight: parseFloat(item.unitWeight) || 0,
+      unitCbm: parseFloat(item.unitCbm) || 0,
+      cartons: parseInt(item.cartons) || 1,
+      totalPrice: item.totalPrice || (parseInt(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0),
+      carryingCharge: {
+        basis: item.carryingCharge?.basis || 'carton',
+        rate: parseFloat(item.carryingCharge?.rate) || 0,
+        amount: parseFloat(item.carryingCharge?.amount) || 0
+      }
+    }));
+
     const order = new Order({
       orderNumber,
       clientId,
       clientName,
-      items,
+      items: processedItems,
       notes,
       deadline,
       priority: priority || 'medium',
+      status: status || 'draft',
+      // Include calculated totals from frontend
+      totalAmount: parseFloat(totalAmount) || 0,
+      totalCarryingCharges: parseFloat(totalCarryingCharges) || 0,
+      totalWeight: parseFloat(totalWeight) || 0,
+      totalCbm: parseFloat(totalCbm) || 0,
+      totalCartons: parseInt(totalCartons) || 0,
       createdBy: req.user.id
     });
 
@@ -313,10 +391,44 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     // Update fields
-    const allowedUpdates = ['items', 'notes', 'deadline', 'priority', 'status'];
+    const allowedUpdates = [
+      'items', 
+      'notes', 
+      'deadline', 
+      'priority', 
+      'status',
+      'totalAmount',
+      'totalCarryingCharges',
+      'totalWeight',
+      'totalCbm',
+      'totalCartons'
+    ];
+    
     allowedUpdates.forEach(field => {
       if (req.body[field] !== undefined) {
-        order[field] = req.body[field];
+        if (['totalAmount', 'totalCarryingCharges', 'totalWeight', 'totalCbm'].includes(field)) {
+          order[field] = parseFloat(req.body[field]) || 0;
+        } else if (field === 'totalCartons') {
+          order[field] = parseInt(req.body[field]) || 0;
+        } else if (field === 'items' && Array.isArray(req.body[field])) {
+          // Process items to ensure proper data types
+          order[field] = req.body[field].map(item => ({
+            ...item,
+            quantity: parseInt(item.quantity) || 1,
+            unitPrice: parseFloat(item.unitPrice) || 0,
+            unitWeight: parseFloat(item.unitWeight) || 0,
+            unitCbm: parseFloat(item.unitCbm) || 0,
+            cartons: parseInt(item.cartons) || 1,
+            totalPrice: item.totalPrice || (parseInt(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0),
+            carryingCharge: {
+              basis: item.carryingCharge?.basis || 'carton',
+              rate: parseFloat(item.carryingCharge?.rate) || 0,
+              amount: parseFloat(item.carryingCharge?.amount) || 0
+            }
+          }));
+        } else {
+          order[field] = req.body[field];
+        }
       }
     });
 
