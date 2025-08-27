@@ -226,7 +226,7 @@ router.get('/:id', auth, async (req, res) => {
     // Mask financial data for non-admin users
     const maskedOrder = maskFinancialData(order, req.user);
 
-    res.json(maskedOrder);
+    res.json({ order: maskedOrder });
   } catch (error) {
     console.error('Get order error:', error);
     res.status(500).json({ message: 'Server error' });

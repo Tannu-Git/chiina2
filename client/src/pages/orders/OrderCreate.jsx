@@ -180,10 +180,23 @@ const OrderCreate = () => {
 
       // Recalculate carrying charge when relevant fields change
       if (['carryingCharge.basis', 'carryingCharge.rate', 'cartons', 'unitWeight', 'unitCbm', 'quantity'].includes(field)) {
+        // Use numeric values for calculation, defaulting to 0 for empty strings
+        const numericItem = {
+          ...item,
+          quantity: item.quantity === '' ? 0 : (typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0),
+          cartons: item.cartons === '' ? 0 : (typeof item.cartons === 'number' ? item.cartons : parseInt(item.cartons) || 0),
+          unitWeight: item.unitWeight === '' ? 0 : (typeof item.unitWeight === 'number' ? item.unitWeight : parseFloat(item.unitWeight) || 0),
+          unitCbm: item.unitCbm === '' ? 0 : (typeof item.unitCbm === 'number' ? item.unitCbm : parseFloat(item.unitCbm) || 0),
+          carryingCharge: {
+            ...item.carryingCharge,
+            rate: item.carryingCharge.rate === '' ? 0 : (typeof item.carryingCharge.rate === 'number' ? item.carryingCharge.rate : parseFloat(item.carryingCharge.rate) || 0)
+          }
+        }
+
         item.carryingCharge.amount = calculateCarryingCharge(
           item.carryingCharge.basis,
-          item.carryingCharge.rate,
-          item
+          numericItem.carryingCharge.rate,
+          numericItem
         )
       }
 
@@ -194,15 +207,28 @@ const OrderCreate = () => {
 
   // Calculate totals
   const totals = orderData.items.reduce((acc, item) => {
-    const totalPrice = item.quantity * item.unitPrice
-    const carryingChargeAmount = calculateCarryingCharge(item.carryingCharge.basis, item.carryingCharge.rate, item)
+    const quantity = item.quantity === '' ? 0 : (typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0)
+    const unitPrice = item.unitPrice === '' ? 0 : (typeof item.unitPrice === 'number' ? item.unitPrice : parseFloat(item.unitPrice) || 0)
+    const unitWeight = item.unitWeight === '' ? 0 : (typeof item.unitWeight === 'number' ? item.unitWeight : parseFloat(item.unitWeight) || 0)
+    const unitCbm = item.unitCbm === '' ? 0 : (typeof item.unitCbm === 'number' ? item.unitCbm : parseFloat(item.unitCbm) || 0)
+    const cartons = item.cartons === '' ? 0 : (typeof item.cartons === 'number' ? item.cartons : parseInt(item.cartons) || 0)
+    const carryingRate = item.carryingCharge.rate === '' ? 0 : (typeof item.carryingCharge.rate === 'number' ? item.carryingCharge.rate : parseFloat(item.carryingCharge.rate) || 0)
+
+    const totalPrice = quantity * unitPrice
+    const carryingChargeAmount = calculateCarryingCharge(item.carryingCharge.basis, carryingRate, {
+      ...item,
+      quantity,
+      unitWeight,
+      unitCbm,
+      cartons
+    })
 
     return {
       totalAmount: acc.totalAmount + totalPrice,
       totalCarryingCharges: acc.totalCarryingCharges + carryingChargeAmount,
-      totalWeight: acc.totalWeight + (item.unitWeight * item.quantity),
-      totalCbm: acc.totalCbm + (item.unitCbm * item.quantity),
-      totalCartons: acc.totalCartons + item.cartons
+      totalWeight: acc.totalWeight + (unitWeight * quantity),
+      totalCbm: acc.totalCbm + (unitCbm * quantity),
+      totalCartons: acc.totalCartons + cartons
     }
   }, {
     totalAmount: 0,
@@ -227,14 +253,37 @@ const OrderCreate = () => {
       const orderPayload = {
         ...orderData,
         status,
-        items: orderData.items.map(item => ({
-          ...item,
-          totalPrice: item.quantity * item.unitPrice,
-          carryingCharge: {
-            ...item.carryingCharge,
-            amount: calculateCarryingCharge(item.carryingCharge.basis, item.carryingCharge.rate, item)
+        items: orderData.items.map(item => {
+          // Convert empty strings to numbers for submission
+          const quantity = item.quantity === '' ? 0 : (typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0)
+          const unitPrice = item.unitPrice === '' ? 0 : (typeof item.unitPrice === 'number' ? item.unitPrice : parseFloat(item.unitPrice) || 0)
+          const unitWeight = item.unitWeight === '' ? 0 : (typeof item.unitWeight === 'number' ? item.unitWeight : parseFloat(item.unitWeight) || 0)
+          const unitCbm = item.unitCbm === '' ? 0 : (typeof item.unitCbm === 'number' ? item.unitCbm : parseFloat(item.unitCbm) || 0)
+          const cartons = item.cartons === '' ? 0 : (typeof item.cartons === 'number' ? item.cartons : parseInt(item.cartons) || 0)
+          const carryingRate = item.carryingCharge.rate === '' ? 0 : (typeof item.carryingCharge.rate === 'number' ? item.carryingCharge.rate : parseFloat(item.carryingCharge.rate) || 0)
+
+          const processedItem = {
+            ...item,
+            quantity,
+            unitPrice,
+            unitWeight,
+            unitCbm,
+            cartons,
+            carryingCharge: {
+              ...item.carryingCharge,
+              rate: carryingRate
+            }
           }
-        }))
+
+          return {
+            ...processedItem,
+            totalPrice: quantity * unitPrice,
+            carryingCharge: {
+              ...processedItem.carryingCharge,
+              amount: calculateCarryingCharge(processedItem.carryingCharge.basis, carryingRate, processedItem)
+            }
+          }
+        })
       }
 
       let response
@@ -452,7 +501,7 @@ const OrderCreate = () => {
                       <Input
                         type="number"
                         value={item.quantity}
-                        onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 0)}
+                        onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                         min="1"
                       />
                     </div>
@@ -464,7 +513,7 @@ const OrderCreate = () => {
                         type="number"
                         step="0.01"
                         value={item.unitPrice}
-                        onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                         min="0"
                       />
                     </div>
@@ -475,7 +524,7 @@ const OrderCreate = () => {
                       <Input
                         type="number"
                         value={item.cartons}
-                        onChange={(e) => updateItem(index, 'cartons', parseInt(e.target.value) || 0)}
+                        onChange={(e) => updateItem(index, 'cartons', e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                         min="1"
                       />
                     </div>
@@ -488,7 +537,7 @@ const OrderCreate = () => {
                         type="number"
                         step="0.01"
                         value={item.unitWeight}
-                        onChange={(e) => updateItem(index, 'unitWeight', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateItem(index, 'unitWeight', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                         min="0"
                       />
                     </div>
@@ -500,7 +549,7 @@ const OrderCreate = () => {
                         type="number"
                         step="0.001"
                         value={item.unitCbm}
-                        onChange={(e) => updateItem(index, 'unitCbm', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateItem(index, 'unitCbm', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                         min="0"
                       />
                     </div>
@@ -558,7 +607,7 @@ const OrderCreate = () => {
                         type="number"
                         step="0.01"
                         value={item.carryingCharge.rate}
-                        onChange={(e) => updateItem(index, 'carryingCharge.rate', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateItem(index, 'carryingCharge.rate', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                         min="0"
                       />
                     </div>
@@ -568,19 +617,19 @@ const OrderCreate = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-stone-500">Total Price:</span>
-                        <div className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</div>
+                        <div className="font-medium">{formatCurrency((item.quantity === '' ? 0 : parseFloat(item.quantity) || 0) * (item.unitPrice === '' ? 0 : parseFloat(item.unitPrice) || 0))}</div>
                       </div>
                       <div>
                         <span className="text-stone-500">Total Weight:</span>
-                        <div className="font-medium">{(item.unitWeight * item.quantity).toFixed(2)} kg</div>
+                        <div className="font-medium">{((item.unitWeight === '' ? 0 : parseFloat(item.unitWeight) || 0) * (item.quantity === '' ? 0 : parseFloat(item.quantity) || 0)).toFixed(2)} kg</div>
                       </div>
                       <div>
                         <span className="text-stone-500">Total CBM:</span>
-                        <div className="font-medium">{(item.unitCbm * item.quantity).toFixed(3)} m³</div>
+                        <div className="font-medium">{((item.unitCbm === '' ? 0 : parseFloat(item.unitCbm) || 0) * (item.quantity === '' ? 0 : parseFloat(item.quantity) || 0)).toFixed(3)} m³</div>
                       </div>
                       <div>
                         <span className="text-stone-500">Carrying Charge:</span>
-                        <div className="font-medium">{formatCurrency(item.carryingCharge.amount)}</div>
+                        <div className="font-medium">{formatCurrency(item.carryingCharge.amount || 0)}</div>
                       </div>
                     </div>
                   </div>

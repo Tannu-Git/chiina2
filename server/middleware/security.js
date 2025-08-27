@@ -77,10 +77,8 @@ const ipWhitelist = (allowedIPs = []) => {
     const clientIP = req.ip || req.connection.remoteAddress;
     const isAllowed = allowedIPs.some(ip => {
       if (ip.includes('/')) {
-        // CIDR notation support (basic)
-        const [network, bits] = ip.split('/');
-        // Simplified CIDR check - in production, use a proper library
-        return clientIP.startsWith(network.split('.').slice(0, Math.floor(bits / 8)).join('.'));
+        // Proper CIDR validation implementation
+        return isIPInCIDR(clientIP, ip);
       }
       return clientIP === ip;
     });

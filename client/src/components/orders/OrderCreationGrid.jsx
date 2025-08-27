@@ -82,7 +82,9 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
 
         // Auto-calculate total price
         if (field === 'quantity' || field === 'unitPrice') {
-          updatedRow.totalPrice = updatedRow.quantity * updatedRow.unitPrice
+          const quantity = updatedRow.quantity === '' ? 0 : (typeof updatedRow.quantity === 'number' ? updatedRow.quantity : parseFloat(updatedRow.quantity) || 0)
+          const unitPrice = updatedRow.unitPrice === '' ? 0 : (typeof updatedRow.unitPrice === 'number' ? updatedRow.unitPrice : parseFloat(updatedRow.unitPrice) || 0)
+          updatedRow.totalPrice = quantity * unitPrice
         }
 
         return updatedRow
@@ -472,7 +474,7 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
                           type={column.type === 'number' ? 'number' : 'text'}
                           value={row[column.key] || ''}
                           onChange={(e) => updateRow(row.id, column.key,
-                            column.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value
+                            column.type === 'number' ? (e.target.value === '' ? '' : parseFloat(e.target.value) || 0) : e.target.value
                           )}
                           className="border-0 focus:ring-1 focus:ring-amber-500 rounded-none"
                           onClick={() => {
