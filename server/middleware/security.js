@@ -123,14 +123,15 @@ const securityHeaders = helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "http://localhost:*"], // Allow localhost images
       scriptSrc: ["'self'"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "http://localhost:*"], // Allow localhost connections
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],
     },
   },
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resource sharing
   hsts: {
     maxAge: 31536000,
     includeSubDomains: true,
@@ -142,6 +143,11 @@ const securityHeaders = helmet({
  * Request validation middleware
  */
 const validateRequest = (req, res, next) => {
+  // Skip validation for file upload routes
+  if (req.originalUrl.includes('/api/upload') || req.headers['content-type']?.includes('multipart/form-data')) {
+    return next();
+  }
+
   // Check for suspicious patterns
   const suspiciousPatterns = [
     /(<script|javascript:|vbscript:|onload=|onerror=)/i,
@@ -160,12 +166,21 @@ const validateRequest = (req, res, next) => {
     return false;
   };
 
-  // Check URL, query params, and body
-  const suspicious = [
-    req.originalUrl,
-    JSON.stringify(req.query),
-    JSON.stringify(req.body)
-  ].some(checkValue);
+  // Check URL, query params, and body (safely)
+  const urlCheck = checkValue(req.originalUrl);
+  const queryCheck = req.query ? checkValue(JSON.stringify(req.query)) : false;
+  
+  let bodyCheck = false;
+  if (req.body) {
+    try {
+      bodyCheck = checkValue(JSON.stringify(req.body));
+    } catch (error) {
+      // If JSON.stringify fails (e.g., circular reference, binary data), skip body check
+      console.warn('Body validation skipped due to serialization error:', error.message);
+    }
+  }
+
+  const suspicious = urlCheck || queryCheck || bodyCheck;
 
   if (suspicious) {
     // Log security violation
@@ -194,6 +209,11 @@ const validateRequest = (req, res, next) => {
  * Enhanced input sanitization and validation
  */
 const sanitizeAndValidateInput = (req, res, next) => {
+  // Skip validation for file upload routes
+  if (req.originalUrl.includes('/api/upload') || req.headers['content-type']?.includes('multipart/form-data')) {
+    return next();
+  }
+
   // Validate array inputs to prevent server crashes
   if (req.body) {
     const validateArrayFields = (obj, path = '') => {
@@ -244,6 +264,7 @@ const sanitizeAndValidateInput = (req, res, next) => {
     try {
       validateArrayFields(req.body);
     } catch (error) {
+      console.warn('Input validation skipped due to error:', error.message);
       return res.status(400).json({
         error: 'Invalid request data structure'
       });
@@ -330,13 +351,17 @@ const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:3000',
-      'http://localhost:3001',
+      'http://localhost:3001', 
       'http://localhost:3002',
       'http://localhost:5173',
+      'http://localhost:5001', // Allow server origin for static files
       // Add your production domains here
     ];
 
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    // and allow all localhost origins for development
+    if (!origin || allowedOrigins.includes(origin) || 
+        (origin && origin.startsWith('http://localhost:'))) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));

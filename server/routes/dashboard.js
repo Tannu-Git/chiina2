@@ -28,10 +28,11 @@ router.get('/', auth, async (req, res) => {
       containerQuery['orders.clientId'] = user.clientId;
     }
 
-    // Get current month data
+    // Get current month data (exclude loop-backs)
     const currentMonthOrders = await Order.find({
       ...orderQuery,
-      createdAt: { $gte: startOfMonth }
+      createdAt: { $gte: startOfMonth },
+      isLoopBack: { $ne: true }
     });
 
     const currentMonthContainers = await Container.find({
@@ -39,10 +40,11 @@ router.get('/', auth, async (req, res) => {
       createdAt: { $gte: startOfMonth }
     });
 
-    // Get last month data for comparison
+    // Get last month data for comparison (exclude loop-backs)
     const lastMonthOrders = await Order.find({
       ...orderQuery,
-      createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth }
+      createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
+      isLoopBack: { $ne: true }
     });
 
     const lastMonthContainers = await Container.find({
@@ -87,8 +89,8 @@ router.get('/', auth, async (req, res) => {
         : 0;
     }
 
-    // Get recent orders (last 5)
-    const recentOrders = await Order.find(orderQuery)
+    // Get recent orders (last 5, exclude loop-backs)
+    const recentOrders = await Order.find({ ...orderQuery, isLoopBack: { $ne: true } })
       .sort({ createdAt: -1 })
       .limit(5)
       .select('orderNumber clientName status totalAmount createdAt');

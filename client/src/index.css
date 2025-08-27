@@ -478,19 +478,19 @@
   }
 
   .metric-card {
-    @apply bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow;
+    @apply bg-white rounded-lg shadow-sm border p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer;
   }
 
   .metric-value {
-    @apply text-2xl font-bold text-stone-900;
+    @apply text-2xl font-bold text-stone-900 transition-colors duration-200;
   }
 
   .metric-label {
-    @apply text-sm font-medium text-stone-500;
+    @apply text-sm font-medium text-stone-500 transition-colors duration-200;
   }
 
   .metric-change {
-    @apply text-sm font-medium;
+    @apply text-sm font-medium transition-colors duration-200;
   }
 
   .metric-change-positive {

@@ -139,19 +139,13 @@ export const validateOrderItem = (item, index) => {
   }
 
   // Business logic validations
-  if (item.unitWeight && item.cartons) {
-    const totalWeight = item.unitWeight * item.cartons
-    if (totalWeight > 30000) { // 30 tons limit per item
-      errors.push(`Item ${index + 1}: Total weight (${totalWeight}kg) exceeds maximum limit of 30,000kg`)
-    }
-  }
+  // Weight limits removed as per user request
+  // Previously: if (totalWeight > 30000) { // 30 tons limit per item
+  //   errors.push(`Item ${index + 1}: Total weight (${totalWeight}kg) exceeds maximum limit of 30,000kg`)
+  // }
   
-  if (item.unitCbm && item.cartons) {
-    const totalCbm = item.unitCbm * item.cartons
-    if (totalCbm > 100) { // 100 CBM limit per item
-      errors.push(`Item ${index + 1}: Total CBM (${totalCbm}m³) exceeds maximum limit of 100m³`)
-    }
-  }
+  // CBM limits have been removed as per business requirements
+  // No CBM validation limits are enforced
   
   if (item.quantity && item.cartons && item.quantity > item.cartons * 1000) {
     errors.push(`Item ${index + 1}: Quantity seems unusually high compared to cartons. Please verify.`)
@@ -184,13 +178,13 @@ export const validateOrder = (orderData) => {
     // Validate order totals
     const orderTotals = calculateOrderTotals(orderData.items)
     
-    if (orderTotals.totalWeight > 50000) { // 50 tons limit
-      errors.push('Order total weight exceeds maximum limit of 50,000kg')
-    }
+    // Weight limits removed as per user request
+    // Previously: if (orderTotals.totalWeight > 50000) { // 50 tons limit
+    //   errors.push('Order total weight exceeds maximum limit of 50,000kg')
+    // }
     
-    if (orderTotals.totalCbm > 200) { // 200 CBM limit
-      errors.push('Order total CBM exceeds maximum limit of 200m³')
-    }
+    // CBM limits have been removed as per business requirements
+    // No CBM validation limits are enforced
     
     if (orderTotals.totalCartons > 10000) { // 10k cartons limit
       errors.push('Order total cartons exceed maximum limit of 10,000')

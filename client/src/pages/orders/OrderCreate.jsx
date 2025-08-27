@@ -19,6 +19,9 @@ import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, calculateCarryingCharge } from '@/lib/utils'
 import { validateOrder, displayValidationErrors, calculateOrderTotals } from '@/lib/validation'
 import ImageUploadField from '@/components/orders/ImageUploadField'
+import ClientSelector from '@/components/orders/ClientSelector'
+import SupplierSelector from '@/components/orders/SupplierSelector'
+import ItemSelector from '@/components/orders/ItemSelector'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
@@ -34,9 +37,11 @@ const OrderCreate = () => {
 
   const [orderData, setOrderData] = useState({
     clientName: '',
+    clientId: '', // Add clientId to track selected client
     deadline: '',
     priority: 'medium',
     notes: '',
+    status: 'draft', // Add status to track current order status
     items: [{
       itemCode: '',
       description: '',
@@ -72,7 +77,7 @@ const OrderCreate = () => {
         setAutoSaving(true)
         const validationErrors = validateOrder(orderData)
         if (validationErrors.length === 0) {
-          await handleSave('draft', true) // Silent save
+          await handleSave(orderData.status || 'draft', true) // Preserve existing status for auto-save
         }
       } catch (error) {
         console.error('Auto-save failed:', error)
@@ -105,26 +110,49 @@ const OrderCreate = () => {
 
       setOrderData({
         clientName: order.clientName || '',
+        clientId: order.clientId || '', // Preserve clientId when editing
         deadline: order.deadline ? order.deadline.split('T')[0] : '',
         priority: order.priority || 'medium',
         notes: order.notes || '',
-        items: order.items?.map(item => ({
-          itemCode: item.itemCode || '',
-          description: item.description || '',
-          quantity: item.quantity || 1,
-          unitPrice: item.unitPrice || 0,
-          unitWeight: item.unitWeight || 0,
-          unitCbm: item.unitCbm || 0,
-          cartons: item.cartons || 1,
-          supplier: typeof item.supplier === 'object' && item.supplier ? item.supplier.name || '' : item.supplier || '',
-          paymentType: item.paymentType || 'CLIENT_DIRECT',
-          image: item.image || null,
-          carryingCharge: {
-            basis: item.carryingCharge?.basis || 'carton',
-            rate: item.carryingCharge?.rate || 0,
-            amount: item.carryingCharge?.amount || 0
+        status: order.status || 'draft', // PRESERVE EXISTING STATUS
+        items: order.items?.map(item => {
+          // Fix image URL to be absolute if it's relative
+          let imageData = null
+          if (item.image) {
+            const baseURL = axios.defaults.baseURL || 'http://localhost:5001'
+            const imageUrl = item.image.url
+            const fullImageURL = imageUrl && imageUrl.startsWith('http') 
+              ? imageUrl 
+              : imageUrl 
+                ? `${baseURL}${imageUrl}` 
+                : null
+            
+            imageData = {
+              ...item.image,
+              url: fullImageURL
+            }
           }
-        })) || [orderData.items[0]]
+          
+          return {
+            itemCode: item.itemCode || '',
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            unitPrice: item.unitPrice || 0,
+            unitWeight: item.unitWeight || 0,
+            unitCbm: item.unitCbm || 0,
+            cartons: item.cartons || 1,
+            supplier: typeof item.supplier === 'object' && item.supplier ? 
+              item.supplier : 
+              (item.supplier || ''),
+            paymentType: item.paymentType || 'CLIENT_DIRECT',
+            image: imageData,
+            carryingCharge: {
+              basis: item.carryingCharge?.basis || 'carton',
+              rate: item.carryingCharge?.rate || 0,
+              amount: item.carryingCharge?.amount || 0
+            }
+          }
+        }) || [orderData.items[0]]
       })
     } catch (error) {
       console.error('Error fetching order:', error)
@@ -247,6 +275,24 @@ const OrderCreate = () => {
     try {
       setSaving(true)
 
+      // Comprehensive status validation - ensure valid status values
+      const validStatuses = ['draft', 'submitted', 'confirmed', 'in_progress', 'completed', 'cancelled', 'pending', 'ready', 'qc_failed', 'partial_ready', 'qc_partial', 'qc_completed']
+      
+      // For edit mode, preserve current order status if no specific status is provided
+      // CRITICAL FIX: Don't force status to 'draft' when editing - preserve existing status
+      let finalStatus = status
+      if (isEditMode && status === 'draft') {
+        // When updating an existing order, preserve the current status instead of forcing to draft
+        finalStatus = orderData.status || 'draft'
+      }
+      
+      // Validate final status
+      if (!validStatuses.includes(finalStatus)) {
+        console.error(`Invalid status detected: ${finalStatus}. Falling back to 'draft'.`)
+        toast.error(`Invalid status: ${finalStatus}. Using 'draft' instead.`)
+        finalStatus = 'draft'
+      }
+
       // Comprehensive validation
       const validationErrors = validateOrder(orderData)
       if (!displayValidationErrors(validationErrors, toast)) {
@@ -256,7 +302,8 @@ const OrderCreate = () => {
 
       const orderPayload = {
         ...orderData,
-        status,
+        clientId: orderData.clientId, // Include clientId in payload
+        status: finalStatus, // Use validated status
         items: orderData.items.map(item => {
           // Convert empty strings to numbers for submission
           const quantity = item.quantity === '' ? 1 : (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 1)
@@ -267,11 +314,22 @@ const OrderCreate = () => {
           const carryingRate = item.carryingCharge.rate === '' ? 0 : (typeof item.carryingCharge.rate === 'number' ? item.carryingCharge.rate : parseFloat(item.carryingCharge.rate) || 0)
           
           // Process supplier field to match backend schema
-          const supplierData = item.supplier ? {
-            name: item.supplier,
-            contact: '',
-            email: ''
-          } : null
+          let supplierData = null
+          if (item.supplier) {
+            if (typeof item.supplier === 'string') {
+              supplierData = {
+                name: item.supplier,
+                contact: '',
+                email: ''
+              }
+            } else if (typeof item.supplier === 'object') {
+              supplierData = {
+                name: item.supplier.name || '',
+                contact: item.supplier.contact || '',
+                email: item.supplier.email || ''
+              }
+            }
+          }
           
           // Process image field to match backend schema
           const imageData = item.image ? {
@@ -356,7 +414,7 @@ const OrderCreate = () => {
       } else {
         response = await axios.post('/api/orders', orderPayload)
         if (!silent) {
-          toast.success(`Order ${status === 'draft' ? 'saved as draft' : 'submitted'} successfully!`)
+          toast.success(`Order ${finalStatus === 'draft' ? 'saved as draft' : 'submitted'} successfully!`)
           setHasUnsavedChanges(false)
         }
       }
@@ -366,7 +424,38 @@ const OrderCreate = () => {
       }
     } catch (error) {
       console.error('Error saving order:', error)
-      toast.error(error.response?.data?.message || 'Failed to save order')
+      
+      let errorMessage = 'Failed to save order'
+      
+      if (error.response?.data) {
+        const { data } = error.response
+        
+        // Handle validation errors from server
+        if (data.errors && Array.isArray(data.errors)) {
+          const errorMessages = data.errors.map(err => `${err.field}: ${err.message}`)
+          errorMessage = `Validation errors: ${errorMessages.join(', ')}`
+        } else if (data.details) {
+          errorMessage = `${data.message || 'Validation Error'}: ${data.details}`
+        } else if (data.message) {
+          errorMessage = data.message
+        }
+        
+        // Handle specific status codes
+        if (error.response.status === 400) {
+          // Show detailed validation errors
+          if (data.details) {
+            errorMessage = `Validation Error: ${data.details}`
+          }
+        } else if (error.response.status === 403) {
+          errorMessage = 'You do not have permission to perform this action'
+        } else if (error.response.status === 404) {
+          errorMessage = 'Order not found'
+        } else if (error.response.status === 409) {
+          errorMessage = 'Conflict: Order was modified by another user. Please refresh and try again.'
+        }
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setSaving(false)
     }
@@ -420,7 +509,7 @@ const OrderCreate = () => {
             )}
             <Button
               variant="gradient"
-              onClick={() => handleSave(isEditMode ? 'updated' : 'submitted')}
+              onClick={() => handleSave(isEditMode ? (orderData.status || 'draft') : 'submitted')}
               disabled={saving}
             >
               {saving ? (
@@ -447,14 +536,25 @@ const OrderCreate = () => {
                 <label className="block text-sm font-medium text-stone-700 mb-2">
                   Client Name *
                 </label>
-                <Input
+                <ClientSelector
                   value={orderData.clientName}
-                  onChange={(e) => {
-                    setOrderData({ ...orderData, clientName: e.target.value })
+                  onChange={(clientName, clientData) => {
+                    // Extract clientId from selected client data or generate a fallback
+                    let resolvedClientId = ''
+                    if (clientData && typeof clientData === 'object') {
+                      resolvedClientId = clientData.clientId || clientData.id || ''
+                      console.log('Selected client data:', clientData)
+                    }
+                    
+                    setOrderData({ 
+                      ...orderData, 
+                      clientName,
+                      clientId: resolvedClientId
+                    })
                     setHasUnsavedChanges(true)
                   }}
-                  placeholder="Enter client name"
-                  required
+                  placeholder="Enter or select client name"
+                  className="w-full"
                 />
               </div>
               <div>
@@ -537,15 +637,28 @@ const OrderCreate = () => {
                       <label className="block text-sm font-medium text-stone-700 mb-1">
                         Item Code *
                       </label>
-                      <Input
+                      <ItemSelector
                         value={item.itemCode}
-                        onChange={(e) => updateItem(index, 'itemCode', e.target.value)}
-                        placeholder="Enter item code"
+                        onChange={(itemData) => {
+                          if (typeof itemData === 'object') {
+                            // Auto-fill item details from selected item
+                            updateItem(index, 'itemCode', itemData.itemCode)
+                            if (itemData.description) updateItem(index, 'description', itemData.description)
+                            if (itemData.unitPrice) updateItem(index, 'unitPrice', itemData.unitPrice)
+                            if (itemData.unitWeight) updateItem(index, 'unitWeight', itemData.unitWeight)
+                            if (itemData.unitCbm) updateItem(index, 'unitCbm', itemData.unitCbm)
+                          } else {
+                            updateItem(index, 'itemCode', itemData)
+                          }
+                          setHasUnsavedChanges(true)
+                        }}
+                        placeholder="Select or enter item code"
+                        className="w-full"
                       />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-stone-700 mb-1">
-                        Description *
+                        Description
                       </label>
                       <Input
                         value={item.description}
@@ -604,10 +717,14 @@ const OrderCreate = () => {
                       <label className="block text-sm font-medium text-stone-700 mb-1">
                         Supplier
                       </label>
-                      <Input
+                      <SupplierSelector
                         value={item.supplier}
-                        onChange={(e) => updateItem(index, 'supplier', e.target.value)}
-                        placeholder="Supplier name"
+                        onChange={(supplierData) => {
+                          updateItem(index, 'supplier', supplierData)
+                          setHasUnsavedChanges(true)
+                        }}
+                        placeholder="Select or enter supplier"
+                        className="w-full"
                       />
                     </div>
                     <div>

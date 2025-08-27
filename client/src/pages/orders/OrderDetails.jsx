@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency, getStatusColor, getPriorityColor, formatDate, formatDateTime } from '@/lib/utils'
 import axios from 'axios'
@@ -37,7 +38,24 @@ const OrderDetails = () => {
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [order, setOrder] = useState(null)
+  const [timeline, setTimeline] = useState([])
+  const [loadingTimeline, setLoadingTimeline] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview')
+
+  // Fetch order timeline
+  const fetchTimeline = async () => {
+    try {
+      setLoadingTimeline(true)
+      const response = await axios.get(`/api/orders/${id}/timeline`)
+      setTimeline(response.data.timeline || [])
+    } catch (error) {
+      console.error('Error fetching timeline:', error)
+      // Don't show error toast for timeline - it's not critical
+      setTimeline([])
+    } finally {
+      setLoadingTimeline(false)
+    }
+  }
 
   // Fetch order details
   const fetchOrder = async () => {
@@ -67,6 +85,13 @@ const OrderDetails = () => {
       fetchOrder()
     }
   }, [id])
+
+  // Fetch timeline when timeline tab is selected
+  useEffect(() => {
+    if (selectedTab === 'timeline' && id && timeline.length === 0 && !loadingTimeline) {
+      fetchTimeline()
+    }
+  }, [selectedTab, id])
 
   // Use real order data from API, fallback to safe defaults
   const displayOrder = order || {
@@ -220,6 +245,7 @@ const OrderDetails = () => {
               {[
                 { id: 'overview', name: 'Overview', icon: Package },
                 { id: 'items', name: 'Items', icon: FileText },
+                { id: 'qc', name: 'QC Status', icon: CheckCircle },
                 { id: 'containers', name: 'Containers', icon: ContainerIcon },
                 { id: 'timeline', name: 'Timeline', icon: Clock }
               ].map((tab) => (
@@ -420,41 +446,42 @@ const OrderDetails = () => {
                   {/* Status Actions */}
                   {(user?.role === 'admin' || user?.role === 'staff') && (
                     <div className="pt-4 border-t">
-                      <h4 className="font-medium text-stone-900 mb-3">Status Actions</h4>
-                      <div className="space-y-2">
-                        {displayOrder.status === 'submitted' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => handleStatusUpdate('confirmed')}
+                      <h4 className="font-medium text-stone-900 mb-3">Status Management</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-stone-700 mb-2">
+                            Change Status
+                          </label>
+                          <Select 
+                            value={displayOrder.status} 
+                            onValueChange={(newStatus) => {
+                              if (newStatus !== displayOrder.status) {
+                                handleStatusUpdate(newStatus)
+                              }
+                            }}
                           >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Confirm Order
-                          </Button>
-                        )}
-                        {displayOrder.status === 'confirmed' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => handleStatusUpdate('in_progress')}
-                          >
-                            <Clock className="h-4 w-4 mr-2" />
-                            Start Processing
-                          </Button>
-                        )}
-                        {displayOrder.status === 'in_progress' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => handleStatusUpdate('completed')}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Mark Complete
-                          </Button>
-                        )}
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="draft">Draft</SelectItem>
+                              <SelectItem value="submitted">Submitted</SelectItem>
+                              <SelectItem value="confirmed">Confirmed</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="ready">Ready</SelectItem>
+                              <SelectItem value="qc_failed">QC Failed</SelectItem>
+                              <SelectItem value="partial_ready">Partial Ready</SelectItem>
+                              <SelectItem value="qc_partial">QC Partial</SelectItem>
+                              <SelectItem value="qc_completed">QC Completed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="text-xs text-stone-500">
+                          Current status: <span className="font-medium">{displayOrder.status.replace('_', ' ')}</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -589,6 +616,264 @@ const OrderDetails = () => {
           </Card>
         )}
 
+        {/* QC Status Tab */}
+        {selectedTab === 'qc' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Quality Control Status
+              </CardTitle>
+              <CardDescription>Carton-based QC tracking and loop-back information</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* QC Summary */}
+              <div className="mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {(() => {
+                    const totalCartons = displayOrder.items?.reduce((sum, item) => sum + (item.cartons || 0), 0) || 0
+                    const qcPassedCartons = displayOrder.items?.reduce((sum, item) => sum + (item.qcPassedCartons || 0), 0) || 0
+                    const loopBackCartons = displayOrder.items?.reduce((sum, item) => sum + (item.loopBackCartons || 0), 0) || 0
+                    const pendingCartons = Math.max(0, totalCartons - qcPassedCartons - loopBackCartons)
+                    const qcPercentage = totalCartons > 0 ? (qcPassedCartons / totalCartons) * 100 : 0
+                    
+                    return (
+                      <>
+                        <div className="text-center p-4 border rounded-lg bg-stone-50">
+                          <div className="text-2xl font-bold text-stone-900">{totalCartons}</div>
+                          <div className="text-sm text-stone-600">Total Cartons</div>
+                        </div>
+                        <div className="text-center p-4 border rounded-lg bg-green-50 border-green-200">
+                          <div className="text-2xl font-bold text-green-700">{qcPassedCartons}</div>
+                          <div className="text-sm text-green-600">QC Passed</div>
+                          <div className="text-xs text-green-500">{qcPercentage.toFixed(1)}%</div>
+                        </div>
+                        <div className="text-center p-4 border rounded-lg bg-orange-50 border-orange-200">
+                          <div className="text-2xl font-bold text-orange-700">{loopBackCartons}</div>
+                          <div className="text-sm text-orange-600">Loop-back</div>
+                          <div className="text-xs text-orange-500">{totalCartons > 0 ? ((loopBackCartons / totalCartons) * 100).toFixed(1) : 0}%</div>
+                        </div>
+                        <div className="text-center p-4 border rounded-lg bg-amber-50 border-amber-200">
+                          <div className="text-2xl font-bold text-amber-700">{pendingCartons}</div>
+                          <div className="text-sm text-amber-600">Pending QC</div>
+                          <div className="text-xs text-amber-500">{totalCartons > 0 ? ((pendingCartons / totalCartons) * 100).toFixed(1) : 0}%</div>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              {/* QC Progress Bar */}
+              <div className="mb-6">
+                <div className="flex justify-between text-sm text-stone-600 mb-2">
+                  <span>Overall QC Progress</span>
+                  <span>
+                    {(() => {
+                      const totalCartons = displayOrder.items?.reduce((sum, item) => sum + (item.cartons || 0), 0) || 0
+                      const qcPassedCartons = displayOrder.items?.reduce((sum, item) => sum + (item.qcPassedCartons || 0), 0) || 0
+                      const loopBackCartons = displayOrder.items?.reduce((sum, item) => sum + (item.loopBackCartons || 0), 0) || 0
+                      const processedCartons = qcPassedCartons + loopBackCartons
+                      return `${processedCartons} / ${totalCartons} cartons processed`
+                    })()}
+                  </span>
+                </div>
+                <div className="w-full bg-stone-200 rounded-full h-3 overflow-hidden">
+                  <div className="h-full flex">
+                    {(() => {
+                      const totalCartons = displayOrder.items?.reduce((sum, item) => sum + (item.cartons || 0), 0) || 0
+                      const qcPassedCartons = displayOrder.items?.reduce((sum, item) => sum + (item.qcPassedCartons || 0), 0) || 0
+                      const loopBackCartons = displayOrder.items?.reduce((sum, item) => sum + (item.loopBackCartons || 0), 0) || 0
+                      const qcPercentage = totalCartons > 0 ? (qcPassedCartons / totalCartons) * 100 : 0
+                      const loopBackPercentage = totalCartons > 0 ? (loopBackCartons / totalCartons) * 100 : 0
+                      
+                      return (
+                        <>
+                          <div 
+                            className="bg-green-500 transition-all duration-300"
+                            style={{ width: `${qcPercentage}%` }}
+                          ></div>
+                          <div 
+                            className="bg-orange-500 transition-all duration-300"
+                            style={{ width: `${loopBackPercentage}%` }}
+                          ></div>
+                        </>
+                      )
+                    })()}
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs mt-1">
+                  <span className="text-green-600">✓ QC Passed</span>
+                  <span className="text-orange-600">⚠ Loop-back</span>
+                  <span className="text-stone-500">⏳ Pending</span>
+                </div>
+              </div>
+
+              {/* Item-level QC Details */}
+              <div className="overflow-x-auto">
+                <h4 className="font-medium text-stone-900 mb-4">Item-level QC Details</h4>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-stone-200">
+                      <th className="excel-header text-left">Item Code</th>
+                      <th className="excel-header text-left">Description</th>
+                      <th className="excel-header text-center">Total Cartons</th>
+                      <th className="excel-header text-center">QC Passed</th>
+                      <th className="excel-header text-center">Loop-back</th>
+                      <th className="excel-header text-center">Pending</th>
+                      <th className="excel-header text-center">QC Status</th>
+                      <th className="excel-header text-center">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayOrder.items?.map((item, index) => {
+                      const totalCartons = item.cartons || 0
+                      const qcPassedCartons = item.qcPassedCartons || 0
+                      const loopBackCartons = item.loopBackCartons || 0
+                      const pendingCartons = Math.max(0, totalCartons - qcPassedCartons - loopBackCartons)
+                      const qcPercentage = totalCartons > 0 ? (qcPassedCartons / totalCartons) * 100 : 0
+                      const loopBackPercentage = totalCartons > 0 ? (loopBackCartons / totalCartons) * 100 : 0
+                      
+                      // Determine QC status based on carton progress
+                      let qcStatus = 'pending'
+                      let statusColor = 'bg-stone-100 text-stone-800'
+                      
+                      if (qcPassedCartons === totalCartons) {
+                        qcStatus = 'completed'
+                        statusColor = 'bg-green-100 text-green-800'
+                      } else if (qcPassedCartons > 0 || loopBackCartons > 0) {
+                        qcStatus = 'partial'
+                        statusColor = 'bg-amber-100 text-amber-800'
+                      }
+                      
+                      return (
+                        <tr key={item._id || index} className="border-b border-stone-100 hover:bg-stone-50">
+                          <td className="excel-cell font-medium">{item.itemCode}</td>
+                          <td className="excel-cell max-w-xs truncate" title={item.description}>{item.description}</td>
+                          <td className="excel-cell text-center">{totalCartons}</td>
+                          <td className="excel-cell text-center">
+                            <span className="text-green-700 font-medium">{qcPassedCartons}</span>
+                            <div className="text-xs text-green-600">{qcPercentage.toFixed(1)}%</div>
+                          </td>
+                          <td className="excel-cell text-center">
+                            <span className="text-orange-700 font-medium">{loopBackCartons}</span>
+                            <div className="text-xs text-orange-600">{loopBackPercentage.toFixed(1)}%</div>
+                          </td>
+                          <td className="excel-cell text-center">
+                            <span className="text-stone-700 font-medium">{pendingCartons}</span>
+                          </td>
+                          <td className="excel-cell text-center">
+                            <span className={`status-badge ${statusColor}`}>
+                              {qcStatus.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="excel-cell text-center">
+                            <div className="w-full bg-stone-200 rounded-full h-2 overflow-hidden">
+                              <div className="h-full flex">
+                                <div 
+                                  className="bg-green-500 transition-all duration-300"
+                                  style={{ width: `${qcPercentage}%` }}
+                                ></div>
+                                <div 
+                                  className="bg-orange-500 transition-all duration-300"
+                                  style={{ width: `${loopBackPercentage}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-stone-500 mt-1">
+                              {(qcPassedCartons + loopBackCartons)} / {totalCartons}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    }) || (
+                      <tr>
+                        <td colSpan="8" className="excel-cell text-center text-stone-500 py-8">
+                          No items available for QC tracking
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* QC Notes and Timeline */}
+              {(displayOrder.qcCompletedAt || displayOrder.qcNotes) && (
+                <div className="mt-6 pt-6 border-t">
+                  <h4 className="font-medium text-stone-900 mb-4">QC Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {displayOrder.qcCompletedAt && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center text-green-800 mb-2">
+                          <CheckCircle className="h-5 w-5 mr-2" />
+                          <span className="font-medium">QC Completed</span>
+                        </div>
+                        <p className="text-sm text-green-700">
+                          {formatDateTime(displayOrder.qcCompletedAt)}
+                        </p>
+                        {displayOrder.qcInspectorName && (
+                          <p className="text-xs text-green-600 mt-1">
+                            Inspector: {displayOrder.qcInspectorName}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {displayOrder.qcNotes && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex items-center text-amber-800 mb-2">
+                          <FileText className="h-5 w-5 mr-2" />
+                          <span className="font-medium">QC Notes</span>
+                        </div>
+                        <p className="text-sm text-amber-700">
+                          {displayOrder.qcNotes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Loop-back Summary */}
+              {(() => {
+                const loopBackItems = displayOrder.items?.filter(item => (item.loopBackCartons || 0) > 0) || []
+                if (loopBackItems.length === 0) return null
+                
+                return (
+                  <div className="mt-6 pt-6 border-t">
+                    <h4 className="font-medium text-stone-900 mb-4 flex items-center">
+                      <RotateCcw className="h-5 w-5 mr-2 text-orange-600" />
+                      Loop-back Items ({loopBackItems.length})
+                    </h4>
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                      <p className="text-sm text-orange-800 mb-3">
+                        The following items have cartons allocated for loop-back delivery:
+                      </p>
+                      <div className="space-y-2">
+                        {loopBackItems.map((item, index) => (
+                          <div key={index} className="flex justify-between items-center text-sm">
+                            <span className="text-orange-700 font-medium">{item.itemCode}</span>
+                            <div className="text-orange-600">
+                              {item.loopBackCartons} cartons
+                              {item.loopBackReason && (
+                                <span className="text-xs text-orange-500 ml-2">({item.loopBackReason})</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-orange-200">
+                        <p className="text-xs text-orange-600">
+                          Total loop-back cartons: {loopBackItems.reduce((sum, item) => sum + (item.loopBackCartons || 0), 0)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Containers Tab */}
         {selectedTab === 'containers' && (
           <Card>
@@ -678,38 +963,51 @@ const OrderDetails = () => {
               <CardDescription>Complete history of order activities and status changes</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flow-root">
-                <ul className="-mb-8">
-                  {displayOrder.timeline?.map((event, index) => (
-                    <li key={index}>
-                      <div className="relative pb-8">
-                        {index !== displayOrder.timeline.length - 1 && (
-                          <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-stone-200" aria-hidden="true" />
-                        )}
-                        <div className="relative flex space-x-3">
-                          <div>
-                            <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${getStatusColor(event.status)}`}>
-                              {getStatusIcon(event.status)}
-                            </span>
-                          </div>
-                          <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+              {loadingTimeline ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin h-6 w-6 border-2 border-amber-500 border-t-transparent rounded-full mr-3"></div>
+                  <span className="text-stone-600">Loading timeline...</span>
+                </div>
+              ) : timeline && timeline.length > 0 ? (
+                <div className="flow-root">
+                  <ul className="-mb-8">
+                    {timeline.map((event, index) => (
+                      <li key={index}>
+                        <div className="relative pb-8">
+                          {index !== timeline.length - 1 && (
+                            <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-stone-200" aria-hidden="true" />
+                          )}
+                          <div className="relative flex space-x-3">
                             <div>
-                              <p className="text-sm font-medium text-stone-900">{event.action}</p>
-                              <p className="text-sm text-stone-500">{event.description}</p>
-                              <p className="text-xs text-stone-400 mt-1">by {event.user}</p>
+                              <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${getStatusColor(event.status || 'draft')}`}>
+                                {getStatusIcon(event.status || 'draft')}
+                              </span>
                             </div>
-                            <div className="whitespace-nowrap text-right text-sm text-stone-500">
-                              <time dateTime={event.date}>
-                                {formatDateTime(event.date)}
-                              </time>
+                            <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                              <div>
+                                <p className="text-sm font-medium text-stone-900">{event.action || event.description}</p>
+                                <p className="text-sm text-stone-500">{event.description}</p>
+                                <p className="text-xs text-stone-400 mt-1">by {event.user || event.performedByName || 'System'}</p>
+                              </div>
+                              <div className="whitespace-nowrap text-right text-sm text-stone-500">
+                                <time dateTime={event.date || event.createdAt}>
+                                  {formatDateTime(event.date || event.createdAt)}
+                                </time>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Clock className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-stone-900 mb-2">No timeline available</h3>
+                  <p className="text-stone-500">Timeline tracking will appear here as order progresses</p>
+                </div>
+              )}
 
               {/* Add Timeline Entry (Admin/Staff only) */}
               {(user?.role === 'admin' || user?.role === 'staff') && (

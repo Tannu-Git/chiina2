@@ -11,10 +11,19 @@
     "start": "cd server && npm start",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install"
   },
-  "keywords": ["logistics", "oms", "react", "express", "mongodb"],
+  "keywords": [
+    "logistics",
+    "oms",
+    "react",
+    "express",
+    "mongodb"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "mongoose": "^8.18.0"
   }
 }

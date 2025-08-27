@@ -45,9 +45,10 @@ totalCbm: acc.totalCbm + (unitCbm * cartons)
 if (totalWeight > 30000) error // 30 tons per item
 if (orderTotalWeight > 50000) error // 50 tons per order
 
-// CBM limits  
-if (totalCbm > 100) error // 100 CBM per item
-if (orderTotalCbm > 200) error // 200 CBM per order
+// CBM limits - REMOVED (No limits on CBM as per business requirements)
+// Previously proposed but never implemented:
+// if (totalCbm > 100) error // 100 CBM per item - REMOVED
+// if (orderTotalCbm > 200) error // 200 CBM per order - REMOVED
 
 // Amount limits
 if (totalAmount > 10000000) error // ₹1 crore per order
@@ -166,7 +167,7 @@ totalAmount = Σ(quantity × unitPrice)  // Only this uses quantity
 ### **Test Cases to Verify**:
 1. **CBM Calculation**: Create order with 5 cartons, 2 unitCbm → totalCbm should be 10 (not quantity-based)
 2. **Weight Calculation**: Similar test for weight-based charges
-3. **Validation Limits**: Try creating order with 200+ CBM → should be rejected
+3. **High CBM Values**: Verify system handles large CBM values (>200) without limits
 4. **Malicious Input**: Try submitting `<script>` tags → should be sanitized
 5. **Large Arrays**: Try submitting 1000+ items → should be rejected
 

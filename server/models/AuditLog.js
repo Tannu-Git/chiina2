@@ -32,7 +32,10 @@ const auditLogSchema = new mongoose.Schema({
       'PRICE_ESTIMATION',
       'SUPPLIER_MATCHED',
       'DATA_EXPORT',
-      'SECURITY_VIOLATION'
+      'SECURITY_VIOLATION',
+      'FILE_UPLOADED',
+      'MULTIPLE_FILES_UPLOADED',
+      'FILE_DELETED'
     ]
   },
   userId: {
@@ -51,7 +54,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   resourceType: {
     type: String,
-    enum: ['user', 'order', 'container', 'financial', 'warehouse', 'system'],
+    enum: ['user', 'order', 'container', 'financial', 'warehouse', 'system', 'file'],
     required: true
   },
   resourceId: {

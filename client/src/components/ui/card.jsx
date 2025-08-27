@@ -80,25 +80,26 @@ const MetricCard = React.forwardRef(({
   className,
   ...props 
 }, ref) => (
-  <Card ref={ref} className={cn("metric-card", className)} {...props}>
+  <Card ref={ref} className={cn("metric-card hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group", className)} {...props}>
     <CardContent className="p-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="metric-label">{title}</p>
-          <p className="metric-value">{value}</p>
+          <p className="metric-label group-hover:text-stone-600 transition-colors duration-200">{title}</p>
+          <p className="metric-value group-hover:text-amber-700 transition-colors duration-200">{value}</p>
           {change && (
             <p className={cn(
-              "metric-change",
-              changeType === 'positive' && "metric-change-positive",
-              changeType === 'negative' && "metric-change-negative"
+              "metric-change transition-colors duration-200",
+              changeType === 'positive' && "metric-change-positive group-hover:text-green-700",
+              changeType === 'negative' && "metric-change-negative group-hover:text-red-700",
+              changeType === 'neutral' && "group-hover:text-stone-600"
             )}>
               {change}
             </p>
           )}
         </div>
         {Icon && (
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Icon className="h-6 w-6 text-primary" />
+          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-amber-500/20 group-hover:scale-110 transition-all duration-300">
+            <Icon className="h-6 w-6 text-primary group-hover:text-amber-600 transition-colors duration-200" />
           </div>
         )}
       </div>

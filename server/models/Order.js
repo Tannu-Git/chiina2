@@ -22,7 +22,8 @@ const orderItemSchema = new mongoose.Schema({
   },
   unitPrice: {
     type: Number,
-    required: true,
+    required: false,
+    default: 0,
     min: [0, 'Unit price cannot be negative']
   },
   totalPrice: {
@@ -32,12 +33,14 @@ const orderItemSchema = new mongoose.Schema({
   },
   unitWeight: {
     type: Number,
-    required: true,
+    required: false,
+    default: 0,
     min: [0, 'Weight cannot be negative']
   },
   unitCbm: {
     type: Number,
-    required: true,
+    required: false,
+    default: 0,
     min: [0, 'CBM cannot be negative']
   },
   cartons: {
@@ -76,7 +79,99 @@ const orderItemSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'confirmed', 'in_production', 'ready', 'shipped', 'delivered'],
     default: 'pending'
-  }
+  },
+  // QC Inspection fields for individual items
+  receivedQuantity: {
+    type: Number,
+    min: [0, 'Received quantity cannot be negative'],
+    default: 0
+  },
+  // NEW: Loop-back quantity tracking within the same order
+  qcPassedQuantity: {
+    type: Number,
+    min: [0, 'QC passed quantity cannot be negative'],
+    default: 0
+  },
+  loopBackQuantity: {
+    type: Number,
+    min: [0, 'Loop-back quantity cannot be negative'],
+    default: 0
+  },
+  // CARTON-BASED TRACKING: Primary tracking for logistics operations
+  qcPassedCartons: {
+    type: Number,
+    min: [0, 'QC passed cartons cannot be negative'],
+    default: 0
+  },
+  loopBackCartons: {
+    type: Number,
+    min: [0, 'Loop-back cartons cannot be negative'],
+    default: 0
+  },
+  // Calculated field: pendingCartons = cartons - (qcPassedCartons + loopBackCartons)
+  pendingCartons: {
+    type: Number,
+    min: [0, 'Pending cartons cannot be negative'],
+    default: function() { 
+      const qcPassed = this.qcPassedCartons || 0;
+      const loopBack = this.loopBackCartons || 0;
+      return Math.max(0, this.cartons - qcPassed - loopBack);
+    }
+  },
+  // Calculated field: pendingQuantity = quantity - (qcPassedQuantity + loopBackQuantity)
+  pendingQuantity: {
+    type: Number,
+    min: [0, 'Pending quantity cannot be negative'],
+    default: function() { 
+      const qcPassed = this.qcPassedQuantity || 0;
+      const loopBack = this.loopBackQuantity || 0;
+      return Math.max(0, this.quantity - qcPassed - loopBack);
+    }
+  },
+  qcStatus: {
+    type: String,
+    enum: ['pending', 'partial', 'completed', 'shortage', 'damaged'],
+    default: 'pending'
+  },
+  qcNotes: {
+    type: String,
+    maxlength: [1000, 'QC notes cannot exceed 1000 characters']
+  },
+  qcDefects: [{
+    type: String,
+    maxlength: [500, 'Defect description cannot exceed 500 characters']
+  }],
+  // Loop-back metadata within the same order
+  loopBackReason: {
+    type: String,
+    enum: ['SHORTAGE', 'DAMAGE', 'QUALITY_ISSUE', 'PARTIAL_ALLOCATION']
+  },
+  loopBackStatus: {
+    type: String,
+    enum: ['none', 'pending', 'in_progress', 'resolved', 'cancelled'],
+    default: 'none'
+  },
+  loopBackNotes: {
+    type: String,
+    maxlength: [1000, 'Loop-back notes cannot exceed 1000 characters']
+  },
+  loopBackCreatedAt: {
+    type: Date
+  },
+  loopBackUpdatedAt: {
+    type: Date
+  },
+  // Track QC history for this item
+  qcHistory: [{
+    date: { type: Date, default: Date.now },
+    receivedQuantity: Number,
+    status: String,
+    notes: String,
+    inspector: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  }]
 });
 
 const orderSchema = new mongoose.Schema({
@@ -122,8 +217,43 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'submitted', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+    enum: ['draft', 'submitted', 'confirmed', 'in_progress', 'completed', 'cancelled', 'pending', 'ready', 'qc_failed', 'partial_ready', 'qc_partial', 'qc_completed'],
     default: 'draft'
+  },
+  // QC completion tracking
+  qcStatus: {
+    type: String,
+    enum: ['pending', 'in_progress', 'partial', 'completed', 'failed'],
+    default: 'pending'
+  },
+  // Overall quantity tracking
+  totalReceivedQuantity: {
+    type: Number,
+    default: 0,
+    min: [0, 'Total received quantity cannot be negative']
+  },
+  totalPendingQuantity: {
+    type: Number,
+    default: function() { 
+      return this.items ? this.items.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
+    },
+    min: [0, 'Total pending quantity cannot be negative']
+  },
+  // CARTON-BASED ORDER TOTALS: Primary tracking for logistics operations
+  totalQcPassedCartons: {
+    type: Number,
+    default: 0,
+    min: [0, 'Total QC passed cartons cannot be negative']
+  },
+  totalLoopBackCartons: {
+    type: Number,
+    default: 0,
+    min: [0, 'Total loop-back cartons cannot be negative']
+  },
+  totalPendingCartons: {
+    type: Number,
+    default: 0,
+    min: [0, 'Total pending cartons cannot be negative']
   },
   priority: {
     type: String,
@@ -136,19 +266,6 @@ const orderSchema = new mongoose.Schema({
   notes: {
     type: String,
     maxlength: [1000, 'Notes cannot exceed 1000 characters']
-  },
-  // Loop-back related fields
-  isLoopBack: {
-    type: Boolean,
-    default: false
-  },
-  parentOrderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order'
-  },
-  loopBackReason: {
-    type: String,
-    enum: ['DAMAGE', 'SHORTAGE', 'QUALITY_ISSUE', 'PARTIAL_ALLOCATION']
   },
   // Container assignment
   containerId: {
@@ -164,6 +281,39 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: 'INR'
   },
+  // QC Inspection fields
+  qcCompletedAt: {
+    type: Date
+  },
+  qcInspector: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  qcNotes: {
+    type: String,
+    maxlength: [2000, 'QC notes cannot exceed 2000 characters']
+  },
+  // QC completion percentage
+  qcCompletionPercentage: {
+    type: Number,
+    default: 0,
+    min: [0, 'QC completion percentage cannot be negative'],
+    max: [100, 'QC completion percentage cannot exceed 100']
+  },
+  // Re-inspection tracking
+  qcReInspectionCount: {
+    type: Number,
+    default: 0
+  },
+  qcReInspectionHistory: [{
+    date: Date,
+    inspector: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    reason: String,
+    previousStatus: String
+  }],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -206,14 +356,55 @@ function calculateItemCarryingCharge(basis, rate, item) {
   }
 }
 
-// Pre-save middleware to calculate totals
+// Pre-save middleware to calculate totals and loop-back quantities
 orderSchema.pre('save', function(next) {
   if (this.items && this.items.length > 0) {
-    // Calculate missing item-level fields first
+    // Calculate missing item-level fields and validate loop-back quantities
     this.items.forEach(item => {
+      // PRIMARY CARTON-BASED TRACKING (for logistics operations)
+      const qcPassedCtn = item.qcPassedCartons || 0;
+      const loopBackCtn = item.loopBackCartons || 0;
+      const expectedCtn = item.cartons || 0;
+      
+      // Ensure total allocated cartons don't exceed expected
+      const totalAllocatedCtn = qcPassedCtn + loopBackCtn;
+      if (totalAllocatedCtn > expectedCtn) {
+        // Auto-adjust loop-back cartons if total exceeds expected
+        const excess = totalAllocatedCtn - expectedCtn;
+        item.loopBackCartons = Math.max(0, loopBackCtn - excess);
+      }
+      
+      // Calculate pending cartons (what's left to receive)
+      item.pendingCartons = Math.max(0, expectedCtn - qcPassedCtn - (item.loopBackCartons || 0));
+      
+      // SECONDARY QUANTITY-BASED TRACKING (for legacy compatibility)
+      const qcPassed = item.qcPassedQuantity || 0;
+      const loopBack = item.loopBackQuantity || 0;
+      const expectedQty = item.quantity || 0;
+      
+      // Ensure total allocated quantities don't exceed expected
+      const totalAllocated = qcPassed + loopBack;
+      if (totalAllocated > expectedQty) {
+        // Auto-adjust loop-back if total exceeds expected
+        const excess = totalAllocated - expectedQty;
+        item.loopBackQuantity = Math.max(0, loopBack - excess);
+      }
+      
+      // Calculate pending quantity (what's left to receive)
+      item.pendingQuantity = Math.max(0, expectedQty - qcPassed - (item.loopBackQuantity || 0));
+      
+      // Update receivedQuantity to reflect QC passed items (use carton-based as primary)
+      if (qcPassedCtn > 0) {
+        // Convert cartons to pieces for receivedQuantity (backward compatibility)
+        const piecesPerCarton = expectedQty > 0 && expectedCtn > 0 ? expectedQty / expectedCtn : 10; // Default 10 pieces per carton
+        item.receivedQuantity = qcPassedCtn * piecesPerCarton;
+      } else {
+        item.receivedQuantity = qcPassed;
+      }
+      
       // Calculate totalPrice if not provided
       if (!item.totalPrice || item.totalPrice === 0) {
-        item.totalPrice = (item.quantity || 0) * (item.unitPrice || 0);
+        item.totalPrice = expectedQty * (item.unitPrice || 0);
       }
       
       // Calculate carrying charge amount if not provided
@@ -224,21 +415,150 @@ orderSchema.pre('save', function(next) {
           item
         );
       }
+      
+      // Update item QC status based on CARTON-BASED loop-back quantities (primary logic)
+      // CRITICAL: Calculate QC completion percentage to avoid false positives
+      const cartonCompletionPercentage = expectedCtn > 0 ? (qcPassedCtn / expectedCtn) * 100 : 0;
+      const quantityCompletionPercentage = expectedQty > 0 ? (qcPassed / expectedQty) * 100 : 0;
+      
+      // Use carton-based calculation as primary, fall back to quantity-based for legacy compatibility
+      const primaryCompletionPercentage = expectedCtn > 0 ? cartonCompletionPercentage : quantityCompletionPercentage;
+      
+      if ((qcPassedCtn === 0 && qcPassed === 0) && ((item.loopBackCartons || 0) === 0 && (item.loopBackQuantity || 0) === 0)) {
+        item.qcStatus = 'pending';
+      } else if (primaryCompletionPercentage >= 100) {
+        // Only mark as completed if we truly have 100% or more QC'd
+        item.qcStatus = 'completed';
+      } else if (qcPassedCtn > 0 || qcPassed > 0 || (item.loopBackCartons || 0) > 0 || (item.loopBackQuantity || 0) > 0) {
+        item.qcStatus = 'partial';
+      }
+      
+      console.log(`Item ${item.itemCode || 'unknown'} QC status calculation:`, {
+        expectedCtn,
+        expectedQty,
+        qcPassedCtn,
+        qcPassed,
+        cartonCompletionPercentage: cartonCompletionPercentage.toFixed(1) + '%',
+        quantityCompletionPercentage: quantityCompletionPercentage.toFixed(1) + '%',
+        primaryCompletionPercentage: primaryCompletionPercentage.toFixed(1) + '%',
+        qcStatus: item.qcStatus
+      });
+      
+      // Update loop-back status (prioritize carton-based tracking)
+      const hasCartonLoopBack = (item.loopBackCartons || 0) > 0;
+      const hasQuantityLoopBack = (item.loopBackQuantity || 0) > 0;
+      
+      if (hasCartonLoopBack || hasQuantityLoopBack) {
+        if (!item.loopBackStatus || item.loopBackStatus === 'none') {
+          item.loopBackStatus = 'pending';
+          item.loopBackCreatedAt = new Date();
+        }
+        item.loopBackUpdatedAt = new Date();
+      } else {
+        item.loopBackStatus = 'none';
+      }
     });
     
-    // Now calculate order totals
+    // Calculate order totals
     this.totalAmount = this.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
     this.totalCarryingCharges = this.items.reduce((sum, item) => sum + (item.carryingCharge.amount || 0), 0);
     this.totalWeight = this.items.reduce((sum, item) => sum + ((item.unitWeight || 0) * (item.cartons || 0)), 0);
     this.totalCbm = this.items.reduce((sum, item) => sum + ((item.unitCbm || 0) * (item.cartons || 0)), 0);
-    this.totalCartons = this.items.reduce((sum, item) => sum + (item.cartons || 0), 0);
     
-    console.log('Order pre-save calculated totals:', {
-      totalAmount: this.totalAmount,
-      totalCarryingCharges: this.totalCarryingCharges,
-      totalWeight: this.totalWeight,
-      totalCbm: this.totalCbm,
-      totalCartons: this.totalCartons
+    // Calculate totalCartons from items array (fixes carton update issues)
+    const calculatedCartons = this.items.reduce((sum, item) => sum + (item.cartons || 0), 0);
+    console.log(`Recalculating totalCartons: ${this.totalCartons} → ${calculatedCartons} for order ${this.orderNumber}`);
+    this.totalCartons = calculatedCartons;
+    
+    // Calculate NEW quantity tracking with loop-back support
+    const totalOrderQuantity = this.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const totalQcPassedQuantity = this.items.reduce((sum, item) => sum + (item.qcPassedQuantity || 0), 0);
+    const totalLoopBackQuantity = this.items.reduce((sum, item) => sum + (item.loopBackQuantity || 0), 0);
+    
+    // Calculate CARTON-BASED tracking (primary for logistics)
+    const totalOrderCartons = this.items.reduce((sum, item) => sum + (item.cartons || 0), 0);
+    const totalQcPassedCartons = this.items.reduce((sum, item) => sum + (item.qcPassedCartons || 0), 0);
+    const totalLoopBackCartons = this.items.reduce((sum, item) => sum + (item.loopBackCartons || 0), 0);
+    const totalPendingCartons = Math.max(0, totalOrderCartons - totalQcPassedCartons - totalLoopBackCartons);
+    
+    // UPDATE ORDER-LEVEL CARTON TOTALS
+    this.totalQcPassedCartons = totalQcPassedCartons;
+    this.totalLoopBackCartons = totalLoopBackCartons;
+    this.totalPendingCartons = totalPendingCartons;
+    
+    // Update receivedQuantity to reflect QC passed items (use carton-based as primary)
+    if (totalQcPassedCartons > 0) {
+      // Convert total cartons to pieces for totalReceivedQuantity
+      const avgPiecesPerCarton = totalOrderQuantity > 0 && totalOrderCartons > 0 ? totalOrderQuantity / totalOrderCartons : 10;
+      this.totalReceivedQuantity = totalQcPassedCartons * avgPiecesPerCarton;
+    } else {
+      this.totalReceivedQuantity = totalQcPassedQuantity;
+    }
+    
+    // Calculate pending quantity (use carton-based as primary)
+    if (totalOrderCartons > 0) {
+      // Convert carton-based pending to pieces
+      const avgPiecesPerCarton = totalOrderQuantity > 0 ? totalOrderQuantity / totalOrderCartons : 10;
+      const pendingCartonsPieces = totalPendingCartons * avgPiecesPerCarton;
+      this.totalPendingQuantity = Math.max(0, pendingCartonsPieces);
+    } else {
+      this.totalPendingQuantity = Math.max(0, totalOrderQuantity - totalQcPassedQuantity - totalLoopBackQuantity);
+    }
+    
+    // Calculate QC completion percentage based on CARTON tracking (primary) with quantity fallback
+    let primaryCompletionPercentage = 0;
+    if (totalOrderCartons > 0) {
+      primaryCompletionPercentage = Math.round((totalQcPassedCartons / totalOrderCartons) * 100);
+    } else if (totalOrderQuantity > 0) {
+      primaryCompletionPercentage = Math.round((totalQcPassedQuantity / totalOrderQuantity) * 100);
+    }
+    this.qcCompletionPercentage = primaryCompletionPercentage;
+    
+    // Update order QC status based on new carton-based loop-back system
+    // Use carton-based calculation as primary, fall back to quantity-based
+    const overallCartonPercentage = totalOrderCartons > 0 ? (totalQcPassedCartons / totalOrderCartons) * 100 : 0;
+    const overallQtyPercentage = totalOrderQuantity > 0 ? (totalQcPassedQuantity / totalOrderQuantity) * 100 : 0;
+    const overallQcPercentage = totalOrderCartons > 0 ? overallCartonPercentage : overallQtyPercentage;
+    
+    const hasAnyLoopBack = totalLoopBackCartons > 0 || totalLoopBackQuantity > 0;
+    const hasAnyQcPassed = totalQcPassedCartons > 0 || totalQcPassedQuantity > 0;
+    
+    if (!hasAnyQcPassed && !hasAnyLoopBack) {
+      this.qcStatus = 'pending';
+    } else if (overallQcPercentage >= 100) {
+      // Only mark as completed if we truly have 100% or more QC'd
+      this.qcStatus = 'completed';
+      // Only auto-change status if it's currently qc_partial, not if manually set to confirmed
+      if (this.status === 'qc_partial') {
+        this.status = 'qc_completed';
+      }
+    } else {
+      this.qcStatus = 'partial';
+      // DO NOT automatically change confirmed status to any other status
+      // This allows orders to maintain confirmed status during edits
+      // Only auto-change if status is draft, submitted, or in_progress
+      if (this.status === 'draft' || this.status === 'submitted' || this.status === 'in_progress') {
+        this.status = 'qc_partial';
+      }
+    }
+    
+    console.log('Order loop-back quantity tracking calculated:', {
+      orderNumber: this.orderNumber,
+      // Carton-based tracking (primary)
+      totalOrderCartons,
+      totalQcPassedCartons,
+      totalLoopBackCartons,
+      totalPendingCartons,
+      cartonQcPercentage: totalOrderCartons > 0 ? ((totalQcPassedCartons / totalOrderCartons) * 100).toFixed(1) + '%' : '0%',
+      // Quantity-based tracking (legacy/fallback)
+      totalOrderQuantity,
+      totalQcPassedQuantity,
+      totalLoopBackQuantity,
+      totalPendingQuantity: this.totalPendingQuantity,
+      qcCompletionPercentage: this.qcCompletionPercentage,
+      overallQcPercentage: totalOrderCartons > 0 ? ((totalQcPassedCartons / totalOrderCartons) * 100).toFixed(1) + '%' : ((totalQcPassedQuantity / totalOrderQuantity) * 100).toFixed(1) + '%',
+      qcStatus: this.qcStatus,
+      status: this.status
     });
   } else {
     // Set defaults if no items
@@ -247,14 +567,65 @@ orderSchema.pre('save', function(next) {
     this.totalWeight = 0;
     this.totalCbm = 0;
     this.totalCartons = 0;
+    this.totalReceivedQuantity = 0;
+    this.totalPendingQuantity = 0;
+    this.qcCompletionPercentage = 0;
+    this.qcStatus = 'pending';
   }
   next();
 });
 
-// Static method to generate order number
+// Static method to generate order number with collision prevention
 orderSchema.statics.generateOrderNumber = async function() {
-  const count = await this.countDocuments();
-  return `ORD-${(count + 1).toString().padStart(6, '0')}`;
+  const maxRetries = 5;
+  let attempt = 0;
+  
+  while (attempt < maxRetries) {
+    try {
+      // Find the highest order number by sorting in descending order
+      const lastOrder = await this.findOne(
+        { orderNumber: { $regex: /^ORD-\d{6}$/ } },
+        { orderNumber: 1 }
+      ).sort({ orderNumber: -1 }).limit(1);
+      
+      let nextNumber = 1;
+      if (lastOrder && lastOrder.orderNumber) {
+        // Extract number from ORD-XXXXXX format
+        const lastNumber = parseInt(lastOrder.orderNumber.substring(4));
+        nextNumber = lastNumber + 1;
+      }
+      
+      const orderNumber = `ORD-${nextNumber.toString().padStart(6, '0')}`;
+      
+      // Verify this order number doesn't exist (double-check for race conditions)
+      const existingOrder = await this.findOne({ orderNumber });
+      if (existingOrder) {
+        console.log(`Order number ${orderNumber} already exists, retrying...`);
+        attempt++;
+        continue;
+      }
+      
+      console.log(`Generated order number: ${orderNumber} (attempt ${attempt + 1})`);
+      return orderNumber;
+      
+    } catch (error) {
+      console.error(`Error generating order number (attempt ${attempt + 1}):`, error.message);
+      attempt++;
+      
+      if (attempt >= maxRetries) {
+        // Fallback: use timestamp-based generation
+        const timestamp = Date.now();
+        const fallbackNumber = `ORD-${timestamp.toString().slice(-6)}`;
+        console.log(`Using fallback order number: ${fallbackNumber}`);
+        return fallbackNumber;
+      }
+      
+      // Wait briefly before retry to reduce collision chance
+      await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+    }
+  }
+  
+  throw new Error('Failed to generate unique order number after maximum retries');
 };
 
 // Optimistic locking methods

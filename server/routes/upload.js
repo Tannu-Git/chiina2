@@ -13,22 +13,47 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Create a custom middleware to parse the type parameter first
+const parseTypeMiddleware = (req, res, next) => {
+  // For multipart form data, we need to parse the type from the raw body
+  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+    // Extract type from the content-type or set default based on field
+    req.uploadType = 'order-item'; // Default for image uploads from order form
+    
+    // Try to parse type from the raw body if available
+    if (req.body && req.body.type) {
+      req.uploadType = req.body.type;
+    }
+  }
+  next();
+};
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const type = req.body.type || 'general';
+    // Use the pre-parsed type or default based on field name
+    let type = req.uploadType || 'general';
+    
+    // Override based on field name if no type specified
+    if (!req.uploadType && file.fieldname === 'image') {
+      type = 'order-item';
+    }
+    
     const typeDir = path.join(uploadDir, type);
     
     if (!fs.existsSync(typeDir)) {
       fs.mkdirSync(typeDir, { recursive: true });
     }
     
+    console.log(`Uploading file to directory: ${typeDir} (type: ${type})`);
     cb(null, typeDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+    const filename = `${file.fieldname}-${uniqueSuffix}${ext}`;
+    console.log(`Generated filename: ${filename}`);
+    cb(null, filename);
   }
 });
 
@@ -57,13 +82,17 @@ const upload = multer({
 // @route   POST /api/upload/image
 // @desc    Upload single image
 // @access  Private
-router.post('/image', auth, upload.single('image'), async (req, res) => {
+router.post('/image', auth, parseTypeMiddleware, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const fileUrl = `/uploads/${req.body.type || 'general'}/${req.file.filename}`;
+    const uploadType = req.uploadType || req.body.type || 'order-item';
+    const fileUrl = `/uploads/${uploadType}/${req.file.filename}`;
+    const fullUrl = `${req.protocol}://${req.get('host')}${fileUrl}`;
+    
+    console.log(`File uploaded successfully: ${fileUrl}`);
     
     // Log file upload
     await AuditLogger.log(
@@ -78,14 +107,15 @@ router.post('/image', auth, upload.single('image'), async (req, res) => {
           filename: req.file.originalname,
           size: req.file.size,
           type: req.file.mimetype,
-          uploadType: req.body.type || 'general'
+          uploadType: req.uploadType || req.body.type || 'order-item'
         }
       }
     );
 
     res.json({
       message: 'File uploaded successfully',
-      url: fileUrl,
+      url: fileUrl, // Keep relative URL for frontend to construct
+      fullUrl: fullUrl, // Also provide full URL
       filename: req.file.filename,
       originalName: req.file.originalname,
       size: req.file.size,
@@ -100,14 +130,16 @@ router.post('/image', auth, upload.single('image'), async (req, res) => {
 // @route   POST /api/upload/multiple
 // @desc    Upload multiple files
 // @access  Private
-router.post('/multiple', auth, upload.array('files', 5), async (req, res) => {
+router.post('/multiple', auth, parseTypeMiddleware, upload.array('files', 5), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'No files uploaded' });
     }
 
+    const uploadType = req.uploadType || req.body.type || 'general';
     const uploadedFiles = req.files.map(file => ({
-      url: `/uploads/${req.body.type || 'general'}/${file.filename}`,
+      url: `/uploads/${uploadType}/${file.filename}`,
+      fullUrl: `${req.protocol}://${req.get('host')}/uploads/${uploadType}/${file.filename}`,
       filename: file.filename,
       originalName: file.originalname,
       size: file.size,
@@ -125,7 +157,7 @@ router.post('/multiple', auth, upload.array('files', 5), async (req, res) => {
         details: {
           fileCount: req.files.length,
           totalSize: req.files.reduce((sum, file) => sum + file.size, 0),
-          uploadType: req.body.type || 'general',
+          uploadType: uploadType,
           files: uploadedFiles.map(f => f.originalName)
         }
       }

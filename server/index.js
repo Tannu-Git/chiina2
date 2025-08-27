@@ -45,8 +45,37 @@ app.use(sessionSecurity);
 // Audit middleware for all API requests
 app.use('/api', auditMiddleware({ logAllRequests: false }));
 
-// Serve uploaded files
-app.use('/uploads', express.static('uploads'));
+// Serve uploaded files with proper CORS headers
+const path = require('path');
+app.use('/uploads', (req, res, next) => {
+  // Set comprehensive CORS headers for static files
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  
+  // Override restrictive policies for static files
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.header('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+}, express.static(path.join(__dirname, 'uploads'), {
+  // Additional static file options
+  setHeaders: (res, path) => {
+    // Set cache headers for images
+    if (path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.gif')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+    }
+    // Ensure CORS headers are set on the file response
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
+}));
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/logistics-oms')
@@ -61,7 +90,9 @@ app.use('/api/containers', require('./routes/containers'));
 app.use('/api/financials', financialLimiter, auditFinancialMiddleware, require('./routes/financials'));
 app.use('/api/users', adminLimiter, require('./routes/users'));
 app.use('/api/suppliers', require('./routes/suppliers'));
-app.use('/api/upload', require('./routes/upload'));
+app.use('/api/clients', require('./routes/clients'));
+app.use('/api/items', require('./routes/items'));
+app.use('/api/upload', require('./routes/upload')); // Upload routes with built-in security
 app.use('/api/audit', adminLimiter, require('./routes/audit'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
@@ -88,7 +119,7 @@ app.use('*', (_req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);

@@ -49,23 +49,27 @@ export function formatDateTime(date) {
 
 export function getStatusColor(status) {
   const statusColors = {
-    draft: 'bg-stone-100 text-stone-800',
-    pending: 'bg-amber-100 text-amber-800',
-    submitted: 'bg-amber-200 text-amber-900',
-    confirmed: 'bg-green-100 text-green-800',
-    in_progress: 'bg-amber-50 text-amber-700',
-    completed: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
-    planning: 'bg-stone-100 text-stone-800',
-    loading: 'bg-amber-100 text-amber-800',
-    sealed: 'bg-amber-200 text-amber-900',
-    shipped: 'bg-amber-100 text-amber-800',
-    in_transit: 'bg-amber-50 text-amber-700',
-    arrived: 'bg-green-50 text-green-700',
-    cleared: 'bg-green-100 text-green-800',
-    delivered: 'bg-green-100 text-green-800',
+    // Order statuses
+    draft: 'bg-stone-100 text-stone-700 border-stone-200',
+    pending: 'bg-amber-100 text-amber-800 border-amber-200',
+    submitted: 'bg-blue-100 text-blue-800 border-blue-200',
+    confirmed: 'bg-green-100 text-green-800 border-green-200',
+    in_progress: 'bg-amber-100 text-amber-800 border-amber-200',
+    ready: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    completed: 'bg-green-100 text-green-800 border-green-200',
+    cancelled: 'bg-red-100 text-red-800 border-red-200',
+    
+    // Container statuses
+    planning: 'bg-stone-100 text-stone-700 border-stone-200',
+    loading: 'bg-amber-100 text-amber-800 border-amber-200',
+    sealed: 'bg-blue-100 text-blue-800 border-blue-200',
+    shipped: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    in_transit: 'bg-purple-100 text-purple-800 border-purple-200',
+    arrived: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    cleared: 'bg-green-100 text-green-800 border-green-200',
+    delivered: 'bg-green-100 text-green-800 border-green-200',
   }
-  return statusColors[status] || 'bg-stone-100 text-stone-800'
+  return statusColors[status] || 'bg-stone-100 text-stone-700 border-stone-200'
 }
 
 export function getPriorityColor(priority) {

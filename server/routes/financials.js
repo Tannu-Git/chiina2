@@ -46,8 +46,8 @@ router.get('/', auth, async (req, res) => {
       }
     };
 
-    // Get orders and containers for the period
-    const orders = await Order.find(dateFilter);
+    // Get orders and containers for the period (exclude loop-backs)
+    const orders = await Order.find({ ...dateFilter, isLoopBack: { $ne: true } });
     const containers = await Container.find(dateFilter);
 
     // Calculate metrics
@@ -151,8 +151,8 @@ router.get('/dashboard', auth, authorize('admin'), async (req, res) => {
       };
     }
 
-    // Get orders in date range
-    const orders = await Order.find(dateFilter);
+    // Get orders in date range (exclude loop-backs)
+    const orders = await Order.find({ ...dateFilter, isLoopBack: { $ne: true } });
     const containers = await Container.find(dateFilter);
 
     // Calculate metrics
@@ -163,9 +163,9 @@ router.get('/dashboard', auth, authorize('admin'), async (req, res) => {
     const grossProfit = totalContainerRevenue - totalContainerCosts;
     const profitMargin = totalContainerRevenue > 0 ? (grossProfit / totalContainerRevenue) * 100 : 0;
 
-    // Revenue by month
+    // Revenue by month (exclude loop-backs)
     const revenueByMonth = await Order.aggregate([
-      { $match: dateFilter },
+      { $match: { ...dateFilter, isLoopBack: { $ne: true } } },
       {
         $group: {
           _id: {
@@ -179,9 +179,9 @@ router.get('/dashboard', auth, authorize('admin'), async (req, res) => {
       { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]);
 
-    // Top clients by revenue
+    // Top clients by revenue (exclude loop-backs)
     const topClients = await Order.aggregate([
-      { $match: dateFilter },
+      { $match: { ...dateFilter, isLoopBack: { $ne: true } } },
       {
         $group: {
           _id: '$clientId',
