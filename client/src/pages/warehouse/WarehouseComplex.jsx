@@ -168,7 +168,7 @@ const Warehouse = () => {
 
   if (loading) {
     return (
-      <div className="px-4 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
         <div className="flex items-center justify-center h-64">
           <div className="loading-spinner mr-2" />
           <span>Loading warehouse data...</span>
@@ -178,7 +178,7 @@ const Warehouse = () => {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
+    <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <motion.div
@@ -186,8 +186,8 @@ const Warehouse = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-3xl font-bold text-stone-900">Warehouse Management</h1>
-          <p className="text-stone-600 mt-2">
+          <h1 className="text-3xl font-bold text-foreground">Warehouse Management</h1>
+          <p className="text-muted-foreground mt-2">
             Manage inventory, quality control, and container allocation
           </p>
         </motion.div>
@@ -264,7 +264,7 @@ const Warehouse = () => {
 
       {/* Tab Navigation */}
       <div className="mb-6">
-        <div className="border-b border-stone-200">
+        <div className="border-b border-border">
           <nav className="-mb-px flex space-x-8">
             {[
               { id: 'overview', name: 'Overview', icon: BarChart3 },
@@ -280,7 +280,7 @@ const Warehouse = () => {
                 className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
                   selectedTab === tab.id
                     ? 'border-amber-500 text-amber-600'
-                    : 'border-transparent text-stone-500 hover:text-amber-600 hover:border-amber-300'
+                    : 'border-transparent text-muted-foreground hover:text-amber-600 hover:border-amber-300'
                 }`}
               >
                 <tab.icon className="h-4 w-4 mr-2" />
@@ -313,17 +313,17 @@ const Warehouse = () => {
                     { action: 'Loop-back Created', order: 'ORD-001235', time: '6 hours ago', status: 'warning' },
                     { action: 'Allocation Complete', order: 'ORD-001236', time: '8 hours ago', status: 'success' }
                   ].map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border border-stone-200 rounded-lg hover:border-amber-300 hover:bg-amber-50/30 transition-all duration-200 cursor-pointer">
+                    <div key={index} className="flex items-center justify-between p-3 border border-border rounded-lg hover:border-amber-300 hover:bg-amber-50/30 transition-all duration-200 cursor-pointer">
                       <div className="flex items-center space-x-3">
                         {activity.status === 'success' && <CheckCircle className="h-4 w-4 text-green-500" />}
                         {activity.status === 'progress' && <Clock className="h-4 w-4 text-amber-500" />}
                         {activity.status === 'warning' && <AlertTriangle className="h-4 w-4 text-yellow-500" />}
                         <div>
-                          <p className="font-medium text-stone-900">{activity.action}</p>
-                          <p className="text-sm text-stone-500">{activity.order}</p>
+                          <p className="font-medium text-foreground">{activity.action}</p>
+                          <p className="text-sm text-muted-foreground">{activity.order}</p>
                         </div>
                       </div>
-                      <span className="text-sm text-stone-500">{activity.time}</span>
+                      <span className="text-sm text-muted-foreground">{activity.time}</span>
                     </div>
                   ))}
                 </div>
@@ -345,7 +345,7 @@ const Warehouse = () => {
               <CardContent>
                 <div className="space-y-4">
                   {activeContainers.slice(0, 3).map((container) => (
-                    <div key={container._id} className="p-4 border border-stone-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/30 transition-all duration-200">
+                    <div key={container._id} className="p-4 border border-border rounded-lg hover:border-blue-300 hover:bg-blue-50/30 transition-all duration-200">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium">{container.clientFacingId}</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(container.status)}`}>
@@ -358,7 +358,7 @@ const Warehouse = () => {
                             <span>CBM Utilization</span>
                             <span>{((container.currentCbm / container.maxCbm) * 100).toFixed(1)}%</span>
                           </div>
-                          <div className="w-full bg-stone-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                             <div
                               className="bg-gradient-to-r from-amber-500 to-amber-600 h-2 rounded-full transition-all duration-300"
                               style={{ width: `${(container.currentCbm / container.maxCbm) * 100}%` }}
@@ -370,7 +370,7 @@ const Warehouse = () => {
                             <span>Weight Utilization</span>
                             <span>{((container.currentWeight / container.maxWeight) * 100).toFixed(1)}%</span>
                           </div>
-                          <div className="w-full bg-stone-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                             <div
                               className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all duration-300"
                               style={{ width: `${(container.currentWeight / container.maxWeight) * 100}%` }}
@@ -416,13 +416,13 @@ const Warehouse = () => {
             <CardContent>
               <div className="space-y-4">
                 {readyOrders.map((order) => (
-                  <div key={order._id} className="border border-stone-200 rounded-lg p-4 hover:border-amber-300 hover:shadow-lg hover:bg-amber-50/30 transition-all duration-300 cursor-pointer group">
+                  <div key={order._id} className="border border-border rounded-lg p-4 hover:border-amber-300 hover:shadow-lg hover:bg-amber-50/30 transition-all duration-300 cursor-pointer group">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-3">
                         {getStatusIcon(order.status)}
                         <div>
-                          <h3 className="font-semibold text-stone-900">{order.orderNumber}</h3>
-                          <p className="text-sm text-stone-500">{order.clientName}</p>
+                          <h3 className="font-semibold text-foreground">{order.orderNumber}</h3>
+                          <p className="text-sm text-muted-foreground">{order.clientName}</p>
                         </div>
                       </div>
                       <div className="flex space-x-2">
@@ -453,34 +453,34 @@ const Warehouse = () => {
 
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-stone-500">Cartons:</span>
+                        <span className="text-muted-foreground">Cartons:</span>
                         <span className="ml-1 font-medium">{order.totalCartons}</span>
                       </div>
                       <div>
-                        <span className="text-stone-500">CBM:</span>
+                        <span className="text-muted-foreground">CBM:</span>
                         <span className="ml-1 font-medium">{order.totalCbm} m³</span>
                       </div>
                       <div>
-                        <span className="text-stone-500">Weight:</span>
+                        <span className="text-muted-foreground">Weight:</span>
                         <span className="ml-1 font-medium">{order.totalWeight} kg</span>
                       </div>
                       <div>
-                        <span className="text-stone-500">Deadline:</span>
+                        <span className="text-muted-foreground">Deadline:</span>
                         <span className="ml-1 font-medium">{formatDate(order.deadline)}</span>
                       </div>
                     </div>
 
                     {order.items && (
                       <div className="mt-3 pt-3 border-t">
-                        <p className="text-sm font-medium text-stone-700 mb-2">Items:</p>
+                        <p className="text-sm font-medium text-foreground mb-2">Items:</p>
                         <div className="space-y-1">
                           {order.items.slice(0, 2).map((item, index) => (
-                            <div key={index} className="text-sm text-stone-600">
+                            <div key={index} className="text-sm text-muted-foreground">
                               {item.itemCode} - {item.description} (Qty: {item.quantity})
                             </div>
                           ))}
                           {order.items.length > 2 && (
-                            <div className="text-sm text-stone-500">
+                            <div className="text-sm text-muted-foreground">
                               +{order.items.length - 2} more items
                             </div>
                           )}
@@ -510,11 +510,11 @@ const Warehouse = () => {
             <CardContent>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {activeContainers.map((container) => (
-                  <div key={container._id} className="border border-stone-200 rounded-lg p-6 hover:border-blue-300 hover:shadow-lg hover:bg-blue-50/30 transition-all duration-300 cursor-pointer group">
+                  <div key={container._id} className="border border-border rounded-lg p-6 hover:border-blue-300 hover:shadow-lg hover:bg-blue-50/30 transition-all duration-300 cursor-pointer group">
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <h3 className="font-semibold text-stone-900 group-hover:text-blue-700 transition-colors duration-200">{container.clientFacingId}</h3>
-                        <p className="text-sm text-stone-500 group-hover:text-stone-600 transition-colors duration-200">{container.type} Container</p>
+                        <h3 className="font-semibold text-foreground group-hover:text-blue-700 transition-colors duration-200">{container.clientFacingId}</h3>
+                        <p className="text-sm text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">{container.type} Container</p>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(container.status)}`}>
                         {container.status}
@@ -549,16 +549,16 @@ const Warehouse = () => {
                       </div>
                     </div>
 
-                    <div className="text-sm text-stone-600 mb-3">
+                    <div className="text-sm text-muted-foreground mb-3">
                       <span className="font-medium">Location:</span> {container.location?.current}
                     </div>
 
                     {container.orders && container.orders.length > 0 && (
                       <div>
-                        <p className="text-sm font-medium text-stone-700 mb-2">Allocated Orders:</p>
+                        <p className="text-sm font-medium text-foreground mb-2">Allocated Orders:</p>
                         <div className="space-y-1">
                           {container.orders.map((order, index) => (
-                            <div key={index} className="text-sm text-stone-600">
+                            <div key={index} className="text-sm text-muted-foreground">
                               {order.orderId?.orderNumber} - {order.orderId?.clientName}
                             </div>
                           ))}
@@ -605,21 +605,21 @@ const Warehouse = () => {
                 {/* QC Orders List */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {readyOrders.map((order) => (
-                    <div key={order._id} className="border border-stone-200 rounded-lg p-4 hover:border-green-300 hover:shadow-lg hover:bg-green-50/30 transition-all duration-300 cursor-pointer group">
+                    <div key={order._id} className="border border-border rounded-lg p-4 hover:border-green-300 hover:shadow-lg hover:bg-green-50/30 transition-all duration-300 cursor-pointer group">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-2">
                           {getStatusIcon(order.status)}
                           <div>
                             <h3 className="font-semibold text-sm group-hover:text-green-700 transition-colors duration-200">{order.orderNumber}</h3>
-                            <p className="text-xs text-stone-500 group-hover:text-stone-600 transition-colors duration-200">{order.clientName}</p>
+                            <p className="text-xs text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">{order.clientName}</p>
                           </div>
                         </div>
                       </div>
                       <div className="space-y-2 mb-4">
-                        <div className="text-xs text-stone-600">
+                        <div className="text-xs text-muted-foreground">
                           Items: {order.items?.length || 0}
                         </div>
-                        <div className="text-xs text-stone-600">
+                        <div className="text-xs text-muted-foreground">
                           Total: {formatCurrency(order.totalAmount || 0)}
                         </div>
                       </div>

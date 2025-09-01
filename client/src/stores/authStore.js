@@ -404,6 +404,14 @@ const useAuthStore = create(
           }
         }
         return persistedState
+      },
+      // Hydration callback to restore axios headers
+      onRehydrateStorage: () => (state) => {
+        if (state?.token) {
+          // Restore axios authorization header when rehydrating from storage
+          axios.defaults.headers.common['Authorization'] = `Bearer ${state.token}`
+          console.log('Auth store rehydrated: axios header restored')
+        }
       }
     }
   )
@@ -411,7 +419,16 @@ const useAuthStore = create(
 
 // Initialize auth on app start with error handling
 try {
-  useAuthStore.getState().initialize()
+  const authState = useAuthStore.getState()
+  
+  // Ensure axios header is set if we have a token
+  if (authState.token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${authState.token}`
+    console.log('Auth store initialized: axios header set')
+  }
+  
+  // Initialize auth state
+  authState.initialize()
 } catch (error) {
   console.error('Failed to initialize auth store:', error)
 }

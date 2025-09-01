@@ -162,6 +162,59 @@ const Orders = () => {
     }
   }
 
+  // Export orders to CSV
+  const handleExportOrders = () => {
+    try {
+      // Prepare CSV data
+      const csvData = filteredOrders.map(order => ({
+        'Order Number': order.orderNumber,
+        'Client Name': order.clientName,
+        'Status': order.status?.replace('_', ' '),
+        'Priority': order.priority,
+        'Total Amount': order.totalAmount || 0,
+        'Items Count': order.items?.length || 0,
+        'Total CBM': order.totalCbm || 0,
+        'Total Weight': order.totalWeight || 0,
+        'Container ID': order.containerId?.clientFacingId || order.containerId?.realContainerId || 'Unassigned',
+        'Created Date': new Date(order.createdAt).toLocaleDateString(),
+        'Updated Date': new Date(order.updatedAt).toLocaleDateString(),
+        'Payment Type': order.paymentType || 'N/A',
+        'Deadline': order.deadline ? new Date(order.deadline).toLocaleDateString() : 'N/A',
+        'Notes': order.notes || ''
+      }))
+
+      // Convert to CSV
+      const headers = Object.keys(csvData[0] || {})
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header] || ''
+            // Escape commas and quotes in CSV
+            return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+              ? `"${value.replace(/"/g, '""')}"` 
+              : value
+          }).join(',')
+        )
+      ].join('\n')
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `orders-export-${new Date().toISOString().split('T')[0]}.csv`
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast.success(`Exported ${filteredOrders.length} orders to CSV`)
+    } catch (error) {
+      console.error('Export failed:', error)
+      toast.error('Failed to export orders')
+    }
+  }
+
   // Filter orders
   const filteredOrders = orders.filter(order => {
     const matchesSearch = !searchTerm || 
@@ -173,17 +226,17 @@ const Orders = () => {
 
   if (loading) {
     return (
-      <div className="px-4 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
         <div className="flex items-center justify-center h-64">
           <div className="loading-spinner mr-2" />
-          <span>Loading orders...</span>
+          <span className="text-muted-foreground">Loading orders...</span>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
+    <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -192,15 +245,15 @@ const Orders = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-stone-900">Orders</h1>
-            <p className="text-stone-600 mt-2">Manage and track all your orders</p>
+            <h1 className="text-3xl font-bold text-foreground">Orders</h1>
+            <p className="text-muted-foreground mt-2">Manage and track all your orders</p>
           </div>
           <div className="flex space-x-3">
             {selectedOrders.length > 0 && (user.role === 'admin' || user.role === 'staff') && (
               <Button 
                 variant="outline" 
                 onClick={handleBulkDelete}
-                className="text-red-600 border-red-300 hover:bg-red-50"
+                className="text-red-600 border-red-300 hover:bg-red-500/10 dark:hover:bg-red-500/10"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete Selected ({selectedOrders.length})
@@ -210,7 +263,7 @@ const Orders = () => {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExportOrders}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
@@ -224,12 +277,12 @@ const Orders = () => {
         </div>
 
         {/* Filters */}
-        <Card className="mb-6">
+        <Card className="mb-6 bg-card">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <Input
                     placeholder="Search orders..."
                     value={searchTerm}
@@ -259,9 +312,9 @@ const Orders = () => {
         </Card>
 
         {/* Orders Table */}
-        <Card>
+        <Card className="bg-card">
           <CardHeader>
-            <CardTitle className="flex items-center">
+            <CardTitle className="flex items-center text-foreground">
               <Package className="h-5 w-5 mr-2" />
               Orders ({filteredOrders.length})
             </CardTitle>
@@ -269,21 +322,21 @@ const Orders = () => {
           <CardContent>
             {filteredOrders.length === 0 ? (
               <div className="text-center py-8">
-                <Package className="h-12 w-12 mx-auto mb-4 text-stone-300" />
-                <p className="text-stone-500">No orders found</p>
+                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                <p className="text-muted-foreground">No orders found</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-stone-200">
+                    <tr className="border-b border-border">
                       {(user.role === 'admin' || user.role === 'staff') && (
-                        <th className="text-left py-3 px-4 font-medium text-stone-700">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                           <input
                             type="checkbox"
                             checked={selectAllChecked}
                             onChange={(e) => handleSelectAll(e.target.checked)}
-                            className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                            className="rounded border-border text-primary focus:ring-primary"
                           />
                         </th>
                       )}
@@ -298,14 +351,14 @@ const Orders = () => {
                   </thead>
                   <tbody>
                     {filteredOrders.map((order) => (
-                      <tr key={order._id} className="border-b border-stone-100 hover:bg-stone-50">
+                      <tr key={order._id} className="border-b border-border hover:bg-muted/50">
                         {(user.role === 'admin' || user.role === 'staff') && (
                           <td className="py-3 px-4">
                             <input
                               type="checkbox"
                               checked={selectedOrders.includes(order._id)}
                               onChange={(e) => handleOrderSelect(order._id, e.target.checked)}
-                              className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                              className="rounded border-border text-primary focus:ring-primary"
                             />
                           </td>
                         )}
@@ -314,15 +367,15 @@ const Orders = () => {
                             {getStatusIcon(order.status)}
                             <Link
                               to={`/orders/${order._id}`}
-                              className="font-medium text-amber-600 hover:text-amber-800"
+                              className="font-medium text-primary hover:text-primary/80"
                             >
                               {order.orderNumber}
                             </Link>
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="font-medium text-stone-900">{order.clientName}</div>
-                          <div className="text-sm text-stone-500">{order.items?.length || 0} items</div>
+                          <div className="font-medium text-foreground">{order.clientName}</div>
+                          <div className="text-sm text-muted-foreground">{order.items?.length || 0} items</div>
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
@@ -338,7 +391,7 @@ const Orders = () => {
                           <span className="font-medium">{formatCurrency(order.totalAmount)}</span>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="text-sm text-stone-500">{formatDate(order.createdAt)}</div>
+                          <div className="text-sm text-muted-foreground">{formatDate(order.createdAt)}</div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center space-x-2">
@@ -357,7 +410,7 @@ const Orders = () => {
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => handleDeleteOrder(order._id, order.orderNumber)}
-                                className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                                className="text-red-600 hover:text-red-800 hover:bg-red-500/10"
                                 title="Delete order"
                               >
                                 <Trash2 className="h-4 w-4" />

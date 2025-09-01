@@ -4,6 +4,8 @@ const Order = require('../models/Order');
 const Container = require('../models/Container');
 const ShippingCompany = require('../models/ShippingCompany');
 const { auth, authorize } = require('../middleware/auth');
+const currencyService = require('../services/CurrencyService');
+const { StructuredError, AllocationErrors } = require('../utils/errorHandler');
 
 const router = express.Router();
 
@@ -885,12 +887,107 @@ router.post('/allocate-container', auth, authorize('admin', 'staff'), async (req
   }
 });
 
+// @route   GET /api/warehouse/debug-qc
+// @desc    Debug endpoint to check QC ready orders issues
+// @access  Private (Admin/Staff only)
+router.get('/debug-qc', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    console.log('🔍 Debug QC endpoint called');
+    
+    // Check all orders
+    const allOrders = await Order.find({ isLoopBack: { $ne: true } });
+    
+    // Check orders by status
+    const ordersByStatus = {};
+    allOrders.forEach(order => {
+      ordersByStatus[order.status] = (ordersByStatus[order.status] || 0) + 1;
+    });
+    
+    // Check QC ready filter
+    const qcReadyFilter = {
+      status: { $in: ['ready', 'partial_ready'] },
+      isLoopBack: { $ne: true }
+    };
+    
+    const qcReadyOrders = await Order.find(qcReadyFilter);
+    
+    // Check items with QC status
+    const ordersWithQCStatus = await Order.find({
+      'items.qcStatus': { $in: ['completed', 'partial'] }
+    });
+    
+    const debugInfo = {
+      totalOrders: allOrders.length,
+      ordersByStatus,
+      qcReadyByStatus: qcReadyOrders.length,
+      ordersWithQCItems: ordersWithQCStatus.length,
+      sampleOrders: allOrders.slice(0, 3).map(order => ({
+        id: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        itemCount: order.items?.length || 0,
+        hasQCStatus: order.items?.some(item => item.qcStatus),
+        qcStatuses: order.items?.map(item => item.qcStatus).filter(Boolean)
+      })),
+      recommendations: []
+    };
+    
+    // Add recommendations
+    if (qcReadyOrders.length === 0) {
+      debugInfo.recommendations.push('No orders have ready/partial_ready status');
+      if (ordersByStatus['confirmed'] > 0) {
+        debugInfo.recommendations.push('Run QC inspection on confirmed orders first');
+      }
+    }
+    
+    if (ordersWithQCStatus.length === 0) {
+      debugInfo.recommendations.push('No orders have QC status on items. Items need qcStatus field.');
+    }
+    
+    res.json({
+      message: 'QC Debug Information',
+      debug: debugInfo,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Debug QC error:', error);
+    res.status(500).json({ message: 'Debug error', error: error.message });
+  }
+});
+
 // @route   GET /api/warehouse/qc-ready-orders
 // @desc    Get orders that have completed QC and are ready for container allocation
 // @access  Private (Admin/Staff only)
 router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, res) => {
   try {
     const { clientId, minQty = 0, includePartial = true } = req.query;
+    
+    // Ensure includePartial is boolean
+    const includePartialBool = includePartial === true || includePartial === 'true';
+    
+    console.log('🔍 QC READY ORDERS VALIDATION START');
+    console.log('Request params:', { clientId, minQty, includePartial, includePartialBool });
+    
+    // Step 1: Check all orders first
+    const allOrders = await Order.find({ isLoopBack: { $ne: true } })
+      .select('orderNumber status qcStatus items.qcStatus items.qcPassedCartons items.allocatedCartons items.cartons')
+      .lean();
+    
+    console.log(`📊 TOTAL ORDERS: ${allOrders.length}`);
+    
+    // Log order statuses
+    const statusBreakdown = {};
+    allOrders.forEach(order => {
+      statusBreakdown[order.status] = (statusBreakdown[order.status] || 0) + 1;
+      console.log(`Order ${order.orderNumber}: status="${order.status}", qcStatus="${order.qcStatus || 'null'}"`);
+      
+      order.items?.forEach((item, idx) => {
+        console.log(`  Item ${idx}: qcStatus="${item.qcStatus || 'null'}", qcPassed=${item.qcPassedCartons || 0}, allocated=${item.allocatedCartons || 0}, total=${item.cartons || 0}`);
+      });
+    });
+    
+    console.log('📈 Status breakdown:', statusBreakdown);
     
     // Build filter for QC-completed orders
     const filter = {
@@ -902,8 +999,11 @@ router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, re
       ]
     };
     
+    console.log('🎯 Filter being used:', JSON.stringify(filter, null, 2));
+    
     if (clientId) {
       filter.clientId = clientId;
+      console.log('🔒 Client filter applied:', clientId);
     }
     
     const orders = await Order.find(filter)
@@ -911,9 +1011,16 @@ router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, re
       .populate('qcInspector', 'name')
       .sort({ qcCompletedAt: -1, createdAt: -1 })
       .lean();
+      
+    console.log(`📋 ORDERS MATCHING FILTER: ${orders.length}`);
+    orders.forEach(order => {
+      console.log(`  ✅ ${order.orderNumber}: ${order.status}`);
+    });
     
     // Process orders to show available quantities for allocation
     const allocatableOrders = orders.map(order => {
+      console.log(`\n🔍 PROCESSING ORDER: ${order.orderNumber}`);
+      
       const allocatableItems = order.items.filter(item => {
         const qcPassedQty = item.qcPassedQuantity || 0;
         const qcPassedCtn = item.qcPassedCartons || 0;
@@ -923,8 +1030,22 @@ router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, re
         const availableQty = qcPassedQty - allocatedQty;
         const availableCtn = qcPassedCtn - allocatedCtn;
         
-        return (availableQty > minQty || availableCtn > 0) && 
-               (item.qcStatus === 'completed' || (includePartial === 'true' && item.qcStatus === 'partial'));
+        console.log(`  Item ${item.itemCode || 'Unknown'}:`);
+        console.log(`    QC Status: ${item.qcStatus}`);
+        console.log(`    QC Passed Qty: ${qcPassedQty}, Allocated Qty: ${allocatedQty}, Available Qty: ${availableQty}`);
+        console.log(`    QC Passed Ctn: ${qcPassedCtn}, Allocated Ctn: ${allocatedCtn}, Available Ctn: ${availableCtn}`);
+        console.log(`    Min Qty Filter: ${minQty}, Include Partial: ${includePartialBool}`);
+        
+        const meetsQuantityFilter = (availableQty > minQty || availableCtn > 0);
+        const meetsQCFilter = (item.qcStatus === 'completed' || (includePartialBool && item.qcStatus === 'partial'));
+        
+        console.log(`    Meets Quantity Filter: ${meetsQuantityFilter}`);
+        console.log(`    Meets QC Filter: ${meetsQCFilter} (qcStatus: '${item.qcStatus}', includePartial: ${includePartialBool})`);
+        
+        const includeItem = meetsQuantityFilter && meetsQCFilter;
+        console.log(`    ➡️ INCLUDE ITEM: ${includeItem}`);
+        
+        return includeItem;
       }).map(item => {
         const qcPassedQty = item.qcPassedQuantity || 0;
         const qcPassedCtn = item.qcPassedCartons || 0;
@@ -933,21 +1054,33 @@ router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, re
         
         return {
           ...item,
-          availableQuantity: qcPassedQty - allocatedQty,
-          availableCartons: qcPassedCtn - allocatedCtn,
-          totalAvailableCbm: (qcPassedCtn - allocatedCtn) * (item.unitCbm || 0),
-          totalAvailableWeight: (qcPassedQty - allocatedQty) * (item.unitWeight || 0),
+          availableQuantity: Math.max(0, qcPassedQty - allocatedQty),
+          availableCartons: Math.max(0, qcPassedCtn - allocatedCtn),
+          totalAvailableCbm: Math.max(0, qcPassedCtn - allocatedCtn) * Math.max(0, item.unitCbm || 0),
+          totalAvailableWeight: Math.max(0, qcPassedQty - allocatedQty) * Math.max(0, item.unitWeight || 0),
           allocationStatus: {
             canAllocate: (qcPassedQty - allocatedQty) > 0 || (qcPassedCtn - allocatedCtn) > 0,
             isPartiallyAllocated: allocatedQty > 0 || allocatedCtn > 0,
-            percentageAvailable: qcPassedQty > 0 ? ((qcPassedQty - allocatedQty) / qcPassedQty * 100).toFixed(1) : 0
+            percentageAvailable: qcPassedQty > 0 ? ((Math.max(0, qcPassedQty - allocatedQty)) / qcPassedQty * 100).toFixed(1) : 0,
+            hasNegativeQuantity: (qcPassedQty - allocatedQty) < 0,
+            hasNegativeCartons: (qcPassedCtn - allocatedCtn) < 0,
+            dataIntegrityWarning: (qcPassedQty - allocatedQty) < 0 || (qcPassedCtn - allocatedCtn) < 0,
+            // Debug info
+            debug: {
+              unitCbm: item.unitCbm,
+              unitWeight: item.unitWeight,
+              cbmCalculation: `${Math.max(0, qcPassedCtn - allocatedCtn)} cartons × ${item.unitCbm || 0} CBM = ${Math.max(0, qcPassedCtn - allocatedCtn) * Math.max(0, item.unitCbm || 0)} CBM`
+            }
           }
         };
       });
       
       if (allocatableItems.length === 0) {
+        console.log(`❌ ORDER ${order.orderNumber} EXCLUDED: No allocatable items found`);
         return null; // Skip orders with no allocatable items
       }
+      
+      console.log(`✅ ORDER ${order.orderNumber} INCLUDED: ${allocatableItems.length} allocatable items`);
       
       // Calculate order-level totals for available items
       const orderTotals = {
@@ -1019,10 +1152,13 @@ router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, re
       client.totalCarryingCharges += order.allocationSummary.totalCarryingCharges;
     });
     
+    console.log('\n🎆 QC READY ORDERS VALIDATION COMPLETE');
+    console.log(`Final Results: ${allocatableOrders.length} orders available for allocation`);
     console.log('QC ready orders fetched:', {
       totalOrders: summary.totalOrders,
       totalCbm: summary.totalCbm.toFixed(2),
-      clientCount: Object.keys(summary.clientBreakdown).length
+      clientCount: Object.keys(summary.clientBreakdown).length,
+      totalAvailableCartons: summary.totalCartons
     });
     
     res.json({
@@ -1037,8 +1173,419 @@ router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, re
   }
 });
 
+// @route   GET /api/warehouse/debug-qc-validation
+// @desc    Debug QC validation logic without auth (development only)
+// @access  Public (for debugging)
+router.get('/debug-qc-validation', async (req, res) => {
+  try {
+    console.log('🛮 [DEBUG] QC Validation Test Endpoint Called');
+    
+    const { includePartial = true } = req.query;
+    const includePartialBool = includePartial === true || includePartial === 'true';
+    
+    // Test the QC logic with sample data matching your real data
+    const testItems = [
+      { itemCode: 'sadasd', qcStatus: 'partial', qcPassedCartons: 42, allocatedCartons: 0 },
+      { itemCode: 'dfsadasasda', qcStatus: 'partial', qcPassedCartons: 200, allocatedCartons: 0 },
+      { itemCode: 'completed-item', qcStatus: 'completed', qcPassedCartons: 50, allocatedCartons: 0 }
+    ];
+    
+    console.log(`Testing with includePartial: ${includePartial} (type: ${typeof includePartial}) -> ${includePartialBool}`);
+    
+    const results = testItems.map((item, index) => {
+      const availableCtn = (item.qcPassedCartons || 0) - (item.allocatedCartons || 0);
+      const meetsQuantityFilter = availableCtn > 0;
+      const meetsQCFilter = (item.qcStatus === 'completed' || (includePartialBool && item.qcStatus === 'partial'));
+      const includeItem = meetsQuantityFilter && meetsQCFilter;
+      
+      console.log(`Test Item ${index} (${item.itemCode}): qcStatus='${item.qcStatus}', available=${availableCtn}, meetsQC=${meetsQCFilter}, include=${includeItem}`);
+      
+      return {
+        itemCode: item.itemCode,
+        qcStatus: item.qcStatus,
+        availableCartons: availableCtn,
+        meetsQuantityFilter,
+        meetsQCFilter,
+        includeItem
+      };
+    });
+    
+    res.json({
+      message: 'QC Validation Logic Test',
+      includePartialParam: includePartial,
+      includePartialBool,
+      testResults: results,
+      summary: {
+        totalItems: results.length,
+        includedItems: results.filter(r => r.includeItem).length,
+        partialItemsIncluded: results.filter(r => r.qcStatus === 'partial' && r.includeItem).length
+      }
+    });
+    
+  } catch (error) {
+    console.error('Debug validation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// @route   POST /api/warehouse/simple-allocation
+// @desc    Simplified container allocation with enhanced validation
+// @access  Private (Admin/Staff only)
+router.post('/simple-allocation', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { orderIds, containerType } = req.body;
+    
+    // Enhanced input validation
+    const validationErrors = [];
+    
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      validationErrors.push({
+        field: 'orderIds',
+        code: 'REQUIRED_FIELD_MISSING',
+        message: 'Order IDs are required',
+        details: 'Please select at least one QC-ready order for allocation'
+      });
+    }
+    
+    if (!containerType) {
+      validationErrors.push({
+        field: 'containerType',
+        code: 'REQUIRED_FIELD_MISSING',
+        message: 'Container type is required',
+        details: 'Please select a valid container type (20ft, 40ft, 40ft_hc)'
+      });
+    }
+    
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors,
+        errorCount: validationErrors.length
+      });
+    }
+    
+    // Validate container type
+    const containerCapacities = {
+      '20ft': { maxCbm: 33, maxWeight: 28000 },
+      '40ft': { maxCbm: 67, maxWeight: 30000 },
+      '40ft_hc': { maxCbm: 76, maxWeight: 30000 }
+    };
+    
+    const capacity = containerCapacities[containerType];
+    if (!capacity) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid container type',
+        details: `Container type '${containerType}' is not supported. Valid types: ${Object.keys(containerCapacities).join(', ')}`,
+        supportedTypes: Object.keys(containerCapacities)
+      });
+    }
+    
+    // Get and validate orders
+    const orders = await Order.find({ 
+      _id: { $in: orderIds },
+      status: { $in: ['ready', 'partial_ready'] }
+    });
+    
+    // Check for missing or invalid orders
+    const foundOrderIds = orders.map(o => o._id.toString());
+    const missingOrderIds = orderIds.filter(id => !foundOrderIds.includes(id));
+    
+    if (missingOrderIds.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Some orders are not found or not QC ready',
+        details: `${missingOrderIds.length} orders are missing or have invalid status`,
+        missingOrders: missingOrderIds,
+        foundOrders: foundOrderIds.length,
+        expectedOrders: orderIds.length
+      });
+    }
+    
+    if (orders.length !== orderIds.length) {
+      const invalidOrders = orders.filter(order => !['ready', 'partial_ready'].includes(order.status));
+      return res.status(400).json({ 
+        success: false,
+        message: 'Some orders are not QC ready',
+        details: `${invalidOrders.length} orders have invalid status for allocation`,
+        invalidOrders: invalidOrders.map(o => ({
+          orderId: o._id,
+          orderNumber: o.orderNumber,
+          currentStatus: o.status,
+          requiredStatus: 'ready or partial_ready'
+        })),
+        suggestion: 'Complete QC inspection for these orders before allocation'
+      });
+    }
+    
+    // Calculate totals with enhanced validation
+    const orderTotals = orders.reduce((acc, order) => {
+      const orderCbm = order.totalCbm || 0;
+      const orderWeight = order.totalWeight || 0;
+      const orderCartons = order.totalCartons || 0;
+      const orderCarrying = order.totalCarryingCharges || 0;
+      
+      // Validate individual order data integrity
+      if (orderCbm < 0 || orderWeight < 0 || orderCartons < 0) {
+        validationErrors.push({
+          field: `order_${order._id}`,
+          code: 'INVALID_ORDER_DATA',
+          message: `Order ${order.orderNumber} has invalid measurements`,
+          details: `CBM: ${orderCbm}, Weight: ${orderWeight}, Cartons: ${orderCartons}`,
+          orderId: order._id,
+          orderNumber: order.orderNumber
+        });
+      }
+      
+      acc.totalCbm += orderCbm;
+      acc.totalWeight += orderWeight;
+      acc.totalCartons += orderCartons;
+      acc.totalCarryingCharges += orderCarrying;
+      return acc;
+    }, { totalCbm: 0, totalWeight: 0, totalCartons: 0, totalCarryingCharges: 0 });
+    
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Order data validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Enhanced capacity validation with detailed breakdown
+    const capacityValidation = {
+      cbm: {
+        used: orderTotals.totalCbm,
+        capacity: capacity.maxCbm,
+        utilization: (orderTotals.totalCbm / capacity.maxCbm * 100),
+        isValid: orderTotals.totalCbm <= capacity.maxCbm,
+        margin: capacity.maxCbm - orderTotals.totalCbm
+      },
+      weight: {
+        used: orderTotals.totalWeight,
+        capacity: capacity.maxWeight,
+        utilization: (orderTotals.totalWeight / capacity.maxWeight * 100),
+        isValid: orderTotals.totalWeight <= capacity.maxWeight,
+        margin: capacity.maxWeight - orderTotals.totalWeight
+      }
+    };
+    
+    // Check CBM capacity
+    if (!capacityValidation.cbm.isValid) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Orders exceed container CBM capacity',
+        errorCode: 'CBM_CAPACITY_EXCEEDED',
+        details: {
+          required: orderTotals.totalCbm.toFixed(2),
+          available: capacity.maxCbm,
+          shortage: (orderTotals.totalCbm - capacity.maxCbm).toFixed(2),
+          utilizationPercentage: capacityValidation.cbm.utilization.toFixed(1)
+        },
+        validation: capacityValidation,
+        suggestions: [
+          capacity.maxCbm < 67 ? 'Try a 40ft container for more CBM capacity' : null,
+          capacity.maxCbm < 76 ? 'Try a 40ft High Cube container for maximum CBM capacity' : null,
+          'Remove some orders to fit within container limits',
+          'Split allocation across multiple containers'
+        ].filter(Boolean)
+      });
+    }
+    
+    // Check weight capacity
+    if (!capacityValidation.weight.isValid) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Orders exceed container weight capacity',
+        errorCode: 'WEIGHT_CAPACITY_EXCEEDED',
+        details: {
+          required: orderTotals.totalWeight.toFixed(0),
+          available: capacity.maxWeight,
+          shortage: (orderTotals.totalWeight - capacity.maxWeight).toFixed(0),
+          utilizationPercentage: capacityValidation.weight.utilization.toFixed(1)
+        },
+        validation: capacityValidation,
+        suggestions: [
+          'Remove heavy items to reduce weight',
+          'Split allocation across multiple containers',
+          'Verify item weight measurements are accurate'
+        ]
+      });
+    }
+    
+    // Create container and update orders (non-transaction for MongoDB standalone compatibility)
+    console.log('🏗️ [SIMPLE ALLOCATION] Starting non-transaction allocation...');
+    
+    let container;
+    let allocationResult;
+    
+    try {
+      // Create container (non-transaction)
+      container = new Container({
+        realContainerId: `CONT-${Date.now()}`,
+        type: containerType,
+        maxWeight: capacity.maxWeight,
+        maxCbm: capacity.maxCbm,
+        currentWeight: orderTotals.totalWeight,
+        currentCbm: orderTotals.totalCbm,
+        status: 'planning',
+        orders: orders.map(order => ({
+          orderId: order._id,
+          clientId: order.clientId,
+          clientName: order.clientName,
+          cbmShare: order.totalCbm || 0,
+          weightShare: order.totalWeight || 0,
+          cartonShare: order.totalCartons || 0,
+          paymentType: order.items[0]?.paymentType || 'THROUGH_ME'
+        })),
+        createdBy: req.user.id
+      });
+      
+      // Save container
+      await container.save();
+      console.log('✅ [SIMPLE ALLOCATION] Container created:', container.realContainerId);
+      
+      // Update order statuses (non-transaction)
+      console.log('📝 [SIMPLE ALLOCATION] Updating order statuses...');
+      const orderUpdateResult = await Order.updateMany(
+        { _id: { $in: orderIds } },
+        { 
+          status: 'allocated',
+          containerId: container._id,
+          updatedBy: req.user.id,
+          updatedAt: new Date()
+        }
+      );
+      
+      // Verify all orders were updated
+      if (orderUpdateResult.modifiedCount !== orders.length) {
+        console.warn(`Expected to update ${orders.length} orders, but updated ${orderUpdateResult.modifiedCount}`);
+      } else {
+        console.log(`✅ [SIMPLE ALLOCATION] Updated ${orderUpdateResult.modifiedCount} orders`);
+      }
+      
+      // Update individual items' allocation status
+      console.log('📝 [SIMPLE ALLOCATION] Updating item allocations...');
+      for (const order of orders) {
+        try {
+          const itemUpdates = order.items.map((item, index) => ({
+            updateOne: {
+              filter: { 
+                _id: order._id,
+                [`items.${index}.itemCode`]: item.itemCode
+              },
+              update: {
+                [`items.${index}.allocatedCartons`]: item.qcPassedCartons || 0,
+                [`items.${index}.allocatedQuantity`]: item.qcPassedQuantity || 0,
+                [`items.${index}.containerId`]: container._id
+              }
+            }
+          }));
+          
+          if (itemUpdates.length > 0) {
+            const bulkResult = await Order.bulkWrite(itemUpdates);
+            console.log(`✅ [SIMPLE ALLOCATION] Updated ${bulkResult.modifiedCount} items for order ${order.orderNumber}`);
+          }
+        } catch (itemUpdateError) {
+          console.error(`❌ [SIMPLE ALLOCATION] Failed to update items for order ${order.orderNumber}:`, itemUpdateError.message);
+          // Continue with other orders
+        }
+      }
+      
+      allocationResult = {
+        success: true,
+        nonTransactionCompleted: true
+      };
+      
+      console.log('🎉 [SIMPLE ALLOCATION] Non-transaction allocation completed successfully:', {
+        containerId: container._id,
+        realContainerId: container.realContainerId,
+        ordersUpdated: orderUpdateResult.modifiedCount,
+        cbmUtilization: capacityValidation.cbm.utilization.toFixed(1) + '%',
+        weightUtilization: capacityValidation.weight.utilization.toFixed(1) + '%'
+      });
+      
+    } catch (error) {
+      console.error('❌ [SIMPLE ALLOCATION] Non-transaction allocation failed:', error);
+      
+      allocationResult = {
+        success: false,
+        error: error.message,
+        nonTransactionFailed: true
+      };
+      
+      // Re-throw error to be handled by outer catch
+      throw error;
+    }
+    
+    res.json({
+      success: true,
+      message: 'Container allocation completed successfully',
+      container: {
+        id: container._id,
+        realContainerId: container.realContainerId,
+        clientFacingId: container.clientFacingId,
+        type: container.type,
+        utilization: {
+          cbm: capacityValidation.cbm.utilization.toFixed(1),
+          weight: capacityValidation.weight.utilization.toFixed(1)
+        },
+        capacity: {
+          maxCbm: capacity.maxCbm,
+          maxWeight: capacity.maxWeight,
+          usedCbm: orderTotals.totalCbm.toFixed(2),
+          usedWeight: orderTotals.totalWeight.toFixed(0)
+        }
+      },
+      allocation: {
+        ordersAllocated: orders.length,
+        totalCbm: orderTotals.totalCbm.toFixed(2),
+        totalWeight: orderTotals.totalWeight.toFixed(0),
+        totalCartons: orderTotals.totalCartons,
+        totalCarryingCharges: orderTotals.totalCarryingCharges.toFixed(2)
+      },
+      validation: capacityValidation
+    });
+  } catch (error) {
+    console.error('Simple allocation error:', error);
+    
+    // Handle specific error types with structured responses
+    if (error.name === 'CapacityValidationError') {
+      throw AllocationErrors.capacityExceeded({
+        type: error.code === 'CBM_CAPACITY_EXCEEDED' ? 'CBM' : 'Weight',
+        ...error.details
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      throw AllocationErrors.invalidOrderSelection([
+        { message: error.message, details: error.errors }
+      ]);
+    }
+    
+    // Handle transaction/database errors
+    if (error.message.includes('Transaction') || error.message.includes('session')) {
+      throw AllocationErrors.transactionFailed(error, {
+        operation: 'simple-container-allocation',
+        orderIds,
+        containerType,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Generic allocation failure
+    throw AllocationErrors.allocationFailed(error.message, {
+      operation: 'simple-allocation',
+      orderIds,
+      containerType,
+      errorType: error.name || 'UnknownError'
+    });
+  }
+});
+
 // @route   POST /api/warehouse/allocation-wizard
-// @desc    Multi-step container allocation wizard
+// @desc    Multi-step container allocation wizard (DEPRECATED - use simple-allocation)
 // @access  Private (Admin/Staff only)
 router.post('/allocation-wizard', auth, authorize('admin', 'staff'), async (req, res) => {
   try {
@@ -1065,128 +1612,443 @@ router.post('/allocation-wizard', auth, authorize('admin', 'staff'), async (req,
   }
 });
 
-// Helper function: Validate order selection
+// OPTIMIZED Helper function: Validate order selection with pagination support
 async function validateOrderSelection(req, res, data) {
-  const { selectedOrders } = data; // [{ orderId, items: [{ itemIndex, allocateQuantity, allocateCartons }] }]
+  const { selectedOrders, batchSize = 10, enablePagination = false } = data;
   
-  if (!selectedOrders || !Array.isArray(selectedOrders)) {
-    return res.status(400).json({ message: 'Selected orders array is required' });
+  // Input validation
+  const inputValidation = validateSelectionInput(selectedOrders);
+  if (!inputValidation.isValid) {
+    return res.status(400).json(inputValidation.error);
   }
   
-  const validationResults = [];
-  let totalCbm = 0;
-  let totalWeight = 0;
-  let totalCartons = 0;
-  let totalCarryingCharges = 0;
-  
-  for (const selection of selectedOrders) {
-    const order = await Order.findById(selection.orderId).lean();
-    if (!order) {
-      return res.status(404).json({ message: `Order not found: ${selection.orderId}` });
-    }
+  try {
+    // Process orders in batches for better performance
+    const validationResults = [];
+    const validationErrors = [];
+    let totalStats = { totalCbm: 0, totalWeight: 0, totalCartons: 0, totalCarryingCharges: 0 };
     
-    const itemValidations = [];
+    const batchProcessor = enablePagination ? 
+      processBatchesPaginated : processBatchesSimple;
+      
+    const result = await batchProcessor(
+      selectedOrders, 
+      batchSize, 
+      validationResults, 
+      validationErrors, 
+      totalStats
+    );
     
-    for (const itemSelection of selection.items) {
-      const item = order.items[itemSelection.itemIndex];
-      if (!item) {
-        return res.status(400).json({ 
-          message: `Item not found at index ${itemSelection.itemIndex} in order ${order.orderNumber}` 
-        });
-      }
-      
-      const availableQty = (item.qcPassedQuantity || 0) - (item.allocatedQuantity || 0);
-      const availableCtn = (item.qcPassedCartons || 0) - (item.allocatedCartons || 0);
-      
-      const requestedQty = itemSelection.allocateQuantity || 0;
-      const requestedCtn = itemSelection.allocateCartons || 0;
-      
-      if (requestedQty > availableQty || requestedCtn > availableCtn) {
-        return res.status(400).json({
-          message: 'Requested allocation exceeds available quantity',
-          orderNumber: order.orderNumber,
-          itemCode: item.itemCode,
-          available: { quantity: availableQty, cartons: availableCtn },
-          requested: { quantity: requestedQty, cartons: requestedCtn }
-        });
-      }
-      
-      const itemCbm = requestedCtn * (item.unitCbm || 0);
-      const itemWeight = requestedQty * (item.unitWeight || 0);
-      
-      // Calculate carrying charges for allocated quantity
-      let itemCarryingCharges = 0;
-      const carryingCharge = item.carryingCharge || {};
-      switch (carryingCharge.basis) {
-        case 'carton':
-          itemCarryingCharges = requestedCtn * (carryingCharge.rate || 0);
-          break;
-        case 'cbm':
-          itemCarryingCharges = itemCbm * (carryingCharge.rate || 0);
-          break;
-        case 'weight':
-          itemCarryingCharges = itemWeight * (carryingCharge.rate || 0);
-          break;
-        default:
-          itemCarryingCharges = (carryingCharge.amount || 0) * (requestedQty / item.quantity);
-      }
-      
-      totalCbm += itemCbm;
-      totalWeight += itemWeight;
-      totalCartons += requestedCtn;
-      totalCarryingCharges += itemCarryingCharges;
-      
-      itemValidations.push({
-        itemIndex: itemSelection.itemIndex,
-        itemCode: item.itemCode,
-        description: item.description,
-        allocation: {
-          quantity: requestedQty,
-          cartons: requestedCtn,
-          cbm: itemCbm,
-          weight: itemWeight,
-          carryingCharges: itemCarryingCharges,
-          paymentType: item.paymentType
-        },
-        validation: {
-          isValid: true,
-          availableAfterAllocation: {
-            quantity: availableQty - requestedQty,
-            cartons: availableCtn - requestedCtn
-          }
-        }
+    if (!result.success) {
+      return res.status(400).json({
+        message: 'Order selection validation failed',
+        validationErrors: result.errors,
+        summary: generateErrorSummary(result.errors)
       });
     }
     
-    validationResults.push({
+    return res.json({
+      status: 'validated',
+      validationResults: result.validationResults,
+      allocationTotals: formatTotals(result.totalStats),
+      recommendations: generateRecommendations(result.totalStats, result.validationResults),
+      summary: generateSummary(result.validationResults, selectedOrders.length),
+      performance: result.performance
+    });
+    
+  } catch (error) {
+    console.error('Order validation error:', error);
+    return res.status(500).json({
+      message: 'Server error during validation',
+      error: error.message
+    });
+  }
+}
+  
+// Input validation helper
+function validateSelectionInput(selectedOrders) {
+  if (!selectedOrders || !Array.isArray(selectedOrders)) {
+    return {
+      isValid: false,
+      error: {
+        message: 'Selected orders array is required',
+        details: 'Please provide an array of selected orders with allocation data'
+      }
+    };
+  }
+  
+  if (selectedOrders.length === 0) {
+    return {
+      isValid: false,
+      error: {
+        message: 'No orders selected for allocation',
+        details: 'Please select at least one order before proceeding'
+      }
+    };
+  }
+  
+  return { isValid: true };
+}
+
+// Simple batch processing (existing behavior)
+async function processBatchesSimple(selectedOrders, batchSize, validationResults, validationErrors, totalStats) {
+  const startTime = Date.now();
+  
+  // Pre-fetch all orders in one query for better performance
+  const orderIds = selectedOrders.map(s => s.orderId);
+  const orders = await Order.find({ _id: { $in: orderIds } }).lean();
+  const orderMap = new Map(orders.map(order => [order._id.toString(), order]));
+  
+  for (const selection of selectedOrders) {
+    const order = orderMap.get(selection.orderId);
+    
+    if (!order) {
+      validationErrors.push({
+        orderId: selection.orderId,
+        error: 'Order not found',
+        details: `Order with ID ${selection.orderId} does not exist`
+      });
+      continue;
+    }
+    
+    const orderResult = await validateSingleOrder(order, selection);
+    
+    if (orderResult.errors.length > 0) {
+      validationErrors.push(...orderResult.errors);
+    }
+    
+    if (orderResult.validation) {
+      validationResults.push(orderResult.validation);
+      updateTotalStats(totalStats, orderResult.stats);
+    }
+  }
+  
+  return {
+    success: validationErrors.length === 0,
+    validationResults,
+    errors: validationErrors,
+    totalStats,
+    performance: {
+      processingTime: Date.now() - startTime,
+      ordersProcessed: selectedOrders.length,
+      batchProcessing: false
+    }
+  };
+}
+
+// Update total statistics
+function updateTotalStats(totalStats, stats) {
+  totalStats.totalCbm += stats.totalCbm;
+  totalStats.totalWeight += stats.totalWeight;
+  totalStats.totalCartons += stats.totalCartons;
+  totalStats.totalCarryingCharges += stats.totalCarryingCharges;
+}
+// Validate single order (extracted logic)
+async function validateSingleOrder(order, selection) {
+  const errors = [];
+  
+  // Order status validation
+  if (!['ready', 'partial_ready'].includes(order.status)) {
+    errors.push({
+      orderId: selection.orderId,
+      orderNumber: order.orderNumber,
+      error: 'Order not QC ready',
+      details: `Order status is '${order.status}', expected 'ready' or 'partial_ready'`
+    });
+    return { errors, validation: null, stats: null };
+  }
+  
+  // Items validation
+  if (!selection.items || !Array.isArray(selection.items) || selection.items.length === 0) {
+    errors.push({
+      orderId: selection.orderId,
+      orderNumber: order.orderNumber,
+      error: 'No items selected',
+      details: 'Please select at least one item for allocation'
+    });
+    return { errors, validation: null, stats: null };
+  }
+  
+  const itemValidations = [];
+  const stats = { totalCbm: 0, totalWeight: 0, totalCartons: 0, totalCarryingCharges: 0 };
+  
+  for (const itemSelection of selection.items) {
+    const itemResult = validateSingleItem(order, itemSelection, errors);
+    
+    if (itemResult.validation) {
+      itemValidations.push(itemResult.validation);
+      updateTotalStats(stats, itemResult.stats);
+    }
+  }
+  
+  if (itemValidations.length === 0) {
+    return { errors, validation: null, stats: null };
+  }
+  
+  return {
+    errors,
+    validation: {
       orderId: order._id,
       orderNumber: order.orderNumber,
       clientId: order.clientId,
       clientName: order.clientName,
       items: itemValidations,
       orderTotals: {
-        cbm: itemValidations.reduce((sum, item) => sum + item.allocation.cbm, 0),
-        weight: itemValidations.reduce((sum, item) => sum + item.allocation.weight, 0),
-        cartons: itemValidations.reduce((sum, item) => sum + item.allocation.cartons, 0),
-        carryingCharges: itemValidations.reduce((sum, item) => sum + item.allocation.carryingCharges, 0)
+        cbm: parseFloat(stats.totalCbm.toFixed(3)),
+        weight: parseFloat(stats.totalWeight.toFixed(2)),
+        cartons: stats.totalCartons,
+        carryingCharges: parseFloat(stats.totalCarryingCharges.toFixed(2))
       }
+    },
+    stats
+  };
+}
+// Validate single item with enhanced error reporting and carton-based tracking
+function validateSingleItem(order, itemSelection, errors) {
+  const { itemIndex, allocateQuantity, allocateCartons } = itemSelection;
+  
+  // Item index validation
+  if (itemIndex < 0 || itemIndex >= order.items.length) {
+    errors.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      error: 'Invalid item index',
+      errorCode: 'INVALID_ITEM_INDEX',
+      details: `Item index ${itemIndex} is out of range (0-${order.items.length - 1})`,
+      severity: 'error'
+    });
+    return { validation: null, stats: null };
+  }
+  
+  const item = order.items[itemIndex];
+  
+  // QC status validation with clear messaging
+  if (!item.qcStatus || !['completed', 'partial'].includes(item.qcStatus)) {
+    errors.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemCode: item.itemCode,
+      error: 'Item not QC ready',
+      errorCode: 'ITEM_NOT_QC_READY',
+      details: `Item QC status is '${item.qcStatus || 'none'}', expected 'completed' or 'partial'`,
+      severity: 'error',
+      suggestion: 'Complete QC inspection for this item before allocation'
+    });
+    return { validation: null, stats: null };
+  }
+  
+  // Calculate available quantities using carton-based tracking as primary
+  const qcPassedCtn = Math.max(0, item.qcPassedCartons || 0);
+  const qcPassedQty = Math.max(0, item.qcPassedQuantity || 0);
+  const allocatedCtn = Math.max(0, item.allocatedCartons || 0);
+  const allocatedQty = Math.max(0, item.allocatedQuantity || 0);
+  
+  const availableCartons = qcPassedCtn - allocatedCtn;
+  const availableQuantity = qcPassedQty - allocatedQty;
+  
+  // Input validation with enhanced error details
+  const requestedCtn = Math.max(0, parseInt(allocateCartons) || 0);
+  const requestedQty = Math.max(0, parseInt(allocateQuantity) || 0);
+  
+  // Data integrity checks
+  if (availableCartons < 0 || availableQuantity < 0) {
+    errors.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemCode: item.itemCode,
+      error: 'Data integrity issue',
+      errorCode: 'NEGATIVE_AVAILABLE_QUANTITY',
+      details: `Negative available quantities detected. Available cartons: ${availableCartons}, Available quantity: ${availableQuantity}`,
+      severity: 'critical',
+      suggestion: 'Contact system administrator to resolve data inconsistency'
+    });
+    return { validation: null, stats: null };
+  }
+  
+  // Zero allocation validation
+  if (requestedCtn === 0 && requestedQty === 0) {
+    errors.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemCode: item.itemCode,
+      error: 'No allocation requested',
+      errorCode: 'ZERO_ALLOCATION',
+      details: 'Both carton and quantity allocations are zero',
+      severity: 'warning',
+      suggestion: 'Specify allocation amounts for cartons or quantities'
+    });
+    return { validation: null, stats: null };
+  }
+  
+  // Over-allocation validation with detailed breakdown
+  const cartonOverAllocation = requestedCtn > availableCartons;
+  const quantityOverAllocation = requestedQty > availableQuantity;
+  
+  if (cartonOverAllocation) {
+    errors.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemCode: item.itemCode,
+      error: 'Carton allocation exceeds available',
+      errorCode: 'CARTON_OVER_ALLOCATION',
+      details: `Requested: ${requestedCtn} cartons, Available: ${availableCartons} cartons`,
+      severity: 'error',
+      breakdown: {
+        qcPassed: qcPassedCtn,
+        alreadyAllocated: allocatedCtn,
+        available: availableCartons,
+        requested: requestedCtn,
+        excess: requestedCtn - availableCartons
+      },
+      suggestion: `Reduce allocation to ${availableCartons} cartons or less`
     });
   }
   
-  res.json({
-    status: 'validated',
-    validationResults,
-    allocationTotals: {
-      totalCbm,
-      totalWeight,
-      totalCartons,
-      totalCarryingCharges
+  if (quantityOverAllocation) {
+    errors.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemCode: item.itemCode,
+      error: 'Quantity allocation exceeds available',
+      errorCode: 'QUANTITY_OVER_ALLOCATION',
+      details: `Requested: ${requestedQty} units, Available: ${availableQuantity} units`,
+      severity: 'error',
+      breakdown: {
+        qcPassed: qcPassedQty,
+        alreadyAllocated: allocatedQty,
+        available: availableQuantity,
+        requested: requestedQty,
+        excess: requestedQty - availableQuantity
+      },
+      suggestion: `Reduce allocation to ${availableQuantity} units or less`
+    });
+  }
+  
+  if (cartonOverAllocation || quantityOverAllocation) {
+    return { validation: null, stats: null };
+  }
+  
+  // Measurement validation
+  const unitCbm = parseFloat(item.unitCbm) || 0;
+  const unitWeight = parseFloat(item.unitWeight) || 0;
+  
+  if (unitCbm === 0 || unitWeight === 0) {
+    errors.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemCode: item.itemCode,
+      error: 'Missing unit measurements',
+      errorCode: 'MISSING_UNIT_MEASUREMENTS',
+      details: `Unit CBM: ${unitCbm}, Unit Weight: ${unitWeight}`,
+      severity: 'error',
+      suggestion: 'Update item master data with unit CBM and weight measurements'
+    });
+    return { validation: null, stats: null };
+  }
+  
+  // Calculate allocation values using carton-based as primary
+  const itemCbm = requestedCtn * unitCbm;
+  const itemWeight = requestedQty * unitWeight;
+  const itemCarryingCharges = calculateCarryingCharges(item, requestedQty, requestedCtn, itemCbm, itemWeight);
+  
+  return {
+    validation: {
+      itemIndex,
+      itemCode: item.itemCode,
+      description: item.description,
+      allocation: {
+        quantity: requestedQty,
+        cartons: requestedCtn,
+        cbm: parseFloat(itemCbm.toFixed(3)),
+        weight: parseFloat(itemWeight.toFixed(2)),
+        carryingCharges: parseFloat(itemCarryingCharges.toFixed(2)),
+        paymentType: item.paymentType
+      },
+      availability: {
+        availableQuantity,
+        availableCartons,
+        qcPassedQuantity: qcPassedQty,
+        qcPassedCartons: qcPassedCtn,
+        allocatedQuantity: allocatedQty,
+        allocatedCartons: allocatedCtn
+      },
+      validation: {
+        isValid: true,
+        availableAfterAllocation: {
+          quantity: availableQuantity - requestedQty,
+          cartons: availableCartons - requestedCtn
+        },
+        utilizationRate: {
+          cartons: availableCartons > 0 ? (requestedCtn / availableCartons * 100).toFixed(1) : 0,
+          quantity: availableQuantity > 0 ? (requestedQty / availableQuantity * 100).toFixed(1) : 0
+        }
+      }
     },
-    recommendations: {
-      suggestedContainerType: totalCbm <= 33 ? '20ft' : totalCbm <= 67 ? '40ft' : '40ft_hc',
-      utilizationWarnings: totalCbm > 76 ? ['Allocation exceeds 40ft HC container capacity'] : []
+    stats: {
+      totalCbm: itemCbm,
+      totalWeight: itemWeight,
+      totalCartons: requestedCtn,
+      totalCarryingCharges: itemCarryingCharges
     }
-  });
+  };
+}
+// Helper function to calculate carrying charges
+function calculateCarryingCharges(item, requestedQty, requestedCtn, itemCbm, itemWeight) {
+  const carryingCharge = item.carryingCharge || {};
+  
+  switch (carryingCharge.basis) {
+    case 'carton':
+      return requestedCtn * (carryingCharge.rate || 0);
+    case 'cbm':
+      return itemCbm * (carryingCharge.rate || 0);
+    case 'weight':
+      return itemWeight * (carryingCharge.rate || 0);
+    default:
+      return (carryingCharge.amount || 0) * (requestedQty / (item.quantity || 1));
+  }
+}
+
+// Generate error summary
+function generateErrorSummary(errors) {
+  return {
+    totalErrors: errors.length,
+    errorTypes: [...new Set(errors.map(e => e.error))],
+    affectedOrders: [...new Set(errors.map(e => e.orderNumber).filter(Boolean))]
+  };
+}
+
+// Format totals
+function formatTotals(totalStats) {
+  return {
+    totalCbm: parseFloat(totalStats.totalCbm.toFixed(3)),
+    totalWeight: parseFloat(totalStats.totalWeight.toFixed(2)),
+    totalCartons: totalStats.totalCartons,
+    totalCarryingCharges: parseFloat(totalStats.totalCarryingCharges.toFixed(2))
+  };
+}
+
+// Generate recommendations
+function generateRecommendations(totalStats, validationResults) {
+  const totalCbm = totalStats.totalCbm;
+  return {
+    suggestedContainerType: totalCbm <= 33 ? '20ft' : totalCbm <= 67 ? '40ft' : '40ft_hc',
+    utilizationWarnings: totalCbm > 76 ? ['Allocation exceeds 40ft HC container capacity'] : [],
+    efficiency: {
+      averageUtilization: validationResults.length > 0 ? 
+        (totalCbm / validationResults.length).toFixed(2) + ' CBM per order' : '0',
+      containerEfficiency: totalCbm > 0 ? 
+        `${((totalCbm / (totalCbm <= 33 ? 33 : totalCbm <= 67 ? 67 : 76)) * 100).toFixed(1)}% container utilization` : '0%'
+    }
+  };
+}
+
+// Generate summary
+function generateSummary(validationResults, totalOrdersRequested) {
+  return {
+    ordersValidated: validationResults.length,
+    itemsAllocated: validationResults.reduce((sum, order) => sum + order.items.length, 0),
+    totalOrdersRequested
+  };
 }
 
 // Helper function: Optimize container allocation
@@ -1371,39 +2233,56 @@ async function previewAllocation(req, res, data) {
   });
 }
 
-// Helper function: Confirm allocation
+// Helper function: Confirm allocation without transactions (MongoDB standalone compatibility)
 async function confirmAllocation(req, res, data) {
   const { validationResults, optimizationResults, shippingCompanyId, baseCharges } = data;
   
-  const session = await mongoose.startSession();
+  console.log('🏗️ [CONFIRM ALLOCATION] Starting non-transaction allocation process...');
+  
+  let transactionResult = {
+    success: false,
+    containersCreated: 0,
+    containersUpdated: 0,
+    ordersAllocated: 0,
+    totalCbmAllocated: 0,
+    totalCarryingCharges: 0,
+    containers: [],
+    errors: []
+  };
   
   try {
-    await session.withTransaction(async () => {
-      const createdContainers = [];
+    const createdContainers = [];
+    
+    // Create or update containers (non-transaction)
+    for (const optimization of optimizationResults) {
+      let container;
       
-      // Create or update containers
-      for (const optimization of optimizationResults) {
-        let container;
-        
-        if (optimization.type === 'existing') {
-          container = await Container.findById(optimization.containerId).session(session);
-        } else {
-          // Create new container
-          const capacity = Container.getCapacityInfo(optimization.containerType);
-          container = new Container({
-            realContainerId: `CONT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-            type: optimization.containerType,
-            maxWeight: capacity.maxWeight,
-            maxCbm: capacity.maxCbm,
-            status: 'planning',
-            charges: [],
-            baseCharges: baseCharges || { gst: 0, duty: 0, misc: 0, extraCharge: 0, currency: 'INR' },
-            createdBy: req.user.id
-          });
+      if (optimization.type === 'existing') {
+        // Update existing container
+        container = await Container.findById(optimization.containerId);
+        if (!container) {
+          throw new Error(`Existing container ${optimization.containerId} not found`);
         }
-        
-        // Add shipping company if provided
-        if (shippingCompanyId) {
+        transactionResult.containersUpdated++;
+      } else {
+        // Create new container
+        const capacity = Container.getCapacityInfo(optimization.containerType);
+        container = new Container({
+          realContainerId: `CONT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+          type: optimization.containerType,
+          maxWeight: capacity.maxWeight,
+          maxCbm: capacity.maxCbm,
+          status: 'planning',
+          charges: [],
+          baseCharges: baseCharges || { gst: 0, duty: 0, misc: 0, extraCharge: 0, currency: 'INR' },
+          createdBy: req.user.id
+        });
+        transactionResult.containersCreated++;
+      }
+      
+      // Add shipping company if provided
+      if (shippingCompanyId) {
+        try {
           const shippingCompany = await ShippingCompany.findOne({ companyId: shippingCompanyId });
           if (shippingCompany) {
             container.shippingCompany = {
@@ -1413,16 +2292,25 @@ async function confirmAllocation(req, res, data) {
               rates: shippingCompany.getRateForContainer(container.type)
             };
           }
+        } catch (shippingError) {
+          console.warn('Warning: Failed to load shipping company:', shippingError.message);
         }
-        
-        createdContainers.push(container);
       }
       
-      // Allocate orders to containers (simple round-robin for now)
-      let containerIndex = 0;
-      
-      for (const orderValidation of validationResults) {
-        const order = await Order.findById(orderValidation.orderId).session(session);
+      createdContainers.push(container);
+    }
+    
+    // Allocate orders to containers using round-robin with enhanced validation
+    let containerIndex = 0;
+    const orderAllocationResults = [];
+    
+    for (const orderValidation of validationResults) {
+      try {
+        const order = await Order.findById(orderValidation.orderId);
+        if (!order) {
+          throw new Error(`Order ${orderValidation.orderId} not found`);
+        }
+        
         const container = createdContainers[containerIndex % createdContainers.length];
         
         // Calculate totals for this order allocation
@@ -1430,11 +2318,37 @@ async function confirmAllocation(req, res, data) {
         const orderWeight = orderValidation.orderTotals.weight;
         const orderCarryingCharges = orderValidation.orderTotals.carryingCharges;
         
+        // Validate container capacity BEFORE allocation with enhanced checking
+        const capacityValidation = container.canAllocateOrder(orderCbm, orderWeight, orderValidation.orderTotals.cartons, {
+          strictValidation: true,
+          allowPartialFit: false
+        });
+        
+        if (!capacityValidation.canAllocate) {
+          const errorMsg = `Container capacity validation failed for ${container.realContainerId}: ${capacityValidation.errors.map(e => e.message).join(', ')}`;
+          console.error(errorMsg);
+          transactionResult.errors.push({
+            type: 'CAPACITY_VALIDATION_FAILED',
+            containerId: container.realContainerId,
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            message: errorMsg,
+            validation: capacityValidation
+          });
+          throw new Error(errorMsg);
+        }
+        
+        // Log capacity warnings if any
+        if (capacityValidation.warnings.length > 0) {
+          console.warn(`Container allocation warnings for ${container.realContainerId}:`, 
+            capacityValidation.warnings.map(w => w.message));
+        }
+        
         // Determine payment type (from first item, assuming consistent per order)
         const paymentType = orderValidation.items[0]?.allocation.paymentType || 'CLIENT_DIRECT';
         
-        // Add order to container
-        container.orders.push({
+        // Create order allocation record
+        const orderAllocation = {
           orderId: order._id,
           clientId: order.clientId,
           clientName: order.clientName,
@@ -1453,11 +2367,28 @@ async function confirmAllocation(req, res, data) {
           },
           paymentType,
           carryingCharges: orderCarryingCharges
-        });
+        };
         
-        // Update container totals
-        container.currentCbm += orderCbm;
-        container.currentWeight += orderWeight;
+        // Use atomic allocation method (without session)
+        try {
+          const allocationResult = await container.allocateOrderSafely(orderAllocation);
+          orderAllocationResults.push({
+            orderId: order._id,
+            containerResult: allocationResult,
+            success: true
+          });
+        } catch (allocationError) {
+          console.error(`Failed to allocate order ${order.orderNumber}:`, allocationError);
+          transactionResult.errors.push({
+            type: 'ALLOCATION_FAILED',
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            message: allocationError.message,
+            details: allocationError.details
+          });
+          // Continue with other orders instead of throwing
+          continue;
+        }
         
         // Update order item allocations
         for (const itemValidation of orderValidation.items) {
@@ -1467,42 +2398,511 @@ async function confirmAllocation(req, res, data) {
           item.containerId = container._id;
         }
         
-        await order.save({ session });
+        // Update order status
+        order.status = 'allocated';
+        order.containerId = container._id;
+        order.updatedBy = req.user.id;
+        
+        await order.save();
+        
+        transactionResult.ordersAllocated++;
+        transactionResult.totalCbmAllocated += orderCbm;
+        transactionResult.totalCarryingCharges += orderCarryingCharges;
+        
         containerIndex++;
+      } catch (orderError) {
+        console.error(`Failed to process order ${orderValidation.orderId}:`, orderError.message);
+        transactionResult.errors.push({
+          type: 'ORDER_PROCESSING_FAILED',
+          orderId: orderValidation.orderId,
+          message: orderError.message
+        });
+        // Continue with other orders
+        continue;
       }
-      
-      // Save all containers and calculate financials
-      for (const container of createdContainers) {
-        container.updatePaymentDistribution();
-        container.allocateCharges();
-        container.calculateFinancials();
-        await container.save({ session });
+    }
+    
+    // Save all containers with recalculated financials
+    for (const container of createdContainers) {
+      try {
+        // Financial calculations are already done in allocateOrderSafely
+        await container.save();
+        
+        transactionResult.containers.push({
+          id: container._id,
+          realContainerId: container.realContainerId,
+          type: container.type,
+          utilization: {
+            cbm: (container.currentCbm / container.maxCbm * 100).toFixed(1),
+            weight: (container.currentWeight / container.maxWeight * 100).toFixed(1)
+          },
+          orders: container.orders.length
+        });
+      } catch (containerSaveError) {
+        console.error(`Failed to save container ${container.realContainerId}:`, containerSaveError.message);
+        transactionResult.errors.push({
+          type: 'CONTAINER_SAVE_FAILED',
+          containerId: container.realContainerId,
+          message: containerSaveError.message
+        });
       }
+    }
+    
+    transactionResult.success = transactionResult.ordersAllocated > 0;
+    
+    console.log('✅ [CONFIRM ALLOCATION] Non-transaction allocation completed:', {
+      containersCreated: transactionResult.containersCreated,
+      containersUpdated: transactionResult.containersUpdated,
+      ordersAllocated: transactionResult.ordersAllocated,
+      errors: transactionResult.errors.length
     });
     
-    console.log('Container allocation completed:', {
-      containersCreated: optimizationResults.filter(o => o.type === 'new').length,
-      containersUpdated: optimizationResults.filter(o => o.type === 'existing').length,
-      ordersAllocated: validationResults.length
-    });
+  } catch (error) {
+    console.error('❌ [CONFIRM ALLOCATION] Non-transaction allocation failed:', error);
+    transactionResult.success = false;
+    transactionResult.error = error.message;
     
+    throw error;
+  }
+  
+  if (transactionResult.success) {
     res.json({
       status: 'confirmed',
       message: 'Container allocation completed successfully',
       result: {
-        containersCreated: optimizationResults.filter(o => o.type === 'new').length,
-        containersUpdated: optimizationResults.filter(o => o.type === 'existing').length,
-        ordersAllocated: validationResults.length,
-        totalCbmAllocated: validationResults.reduce((sum, order) => sum + order.orderTotals.cbm, 0),
-        totalCarryingCharges: validationResults.reduce((sum, order) => sum + order.orderTotals.carryingCharges, 0)
+        containersCreated: transactionResult.containersCreated,
+        containersUpdated: transactionResult.containersUpdated,
+        ordersAllocated: transactionResult.ordersAllocated,
+        totalCbmAllocated: transactionResult.totalCbmAllocated.toFixed(2),
+        totalCarryingCharges: transactionResult.totalCarryingCharges.toFixed(2),
+        containers: transactionResult.containers,
+        errors: transactionResult.errors
+      },
+      allocation: {
+        success: true,
+        mode: 'non-transaction',
+        compatibility: 'MongoDB standalone'
       }
     });
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
-  } finally {
-    await session.endSession();
+  } else {
+    // Return partial success if some operations completed
+    res.status(500).json({
+      status: 'partial',
+      message: 'Container allocation partially completed with errors',
+      result: transactionResult
+    });
   }
+}
+
+// @route   POST /api/warehouse/cleanup-containers
+// @desc    Remove all existing containers and reset order statuses
+// @access  Private (Admin only)
+router.post('/cleanup-containers', auth, authorize('admin'), async (req, res) => {
+  try {
+    console.log('🗑️ Container cleanup requested by:', req.user.name);
+    
+    // Find all existing containers
+    const existingContainers = await Container.find({});
+    console.log(`📦 Found ${existingContainers.length} containers to remove`);
+    
+    const containerSummary = existingContainers.map(container => ({
+      id: container.realContainerId || container.clientFacingId || container._id,
+      type: container.type,
+      status: container.status,
+      orders: container.orders?.length || 0
+    }));
+    
+    if (existingContainers.length > 0) {
+      // Remove all containers
+      const deleteResult = await Container.deleteMany({});
+      console.log(`✅ Deleted ${deleteResult.deletedCount} containers`);
+      
+      // Reset orders that were allocated to containers
+      const orderUpdateResult = await Order.updateMany(
+        { containerId: { $exists: true } },
+        { 
+          $unset: { containerId: 1 },
+          $set: { 
+            status: 'ready',
+            updatedBy: req.user.id,
+            updatedAt: new Date()
+          }
+        }
+      );
+      console.log(`✅ Reset ${orderUpdateResult.modifiedCount} orders to ready status`);
+      
+      res.json({
+        success: true,
+        message: 'All containers removed successfully',
+        summary: {
+          containersRemoved: deleteResult.deletedCount,
+          ordersReset: orderUpdateResult.modifiedCount,
+          removedContainers: containerSummary
+        },
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.json({
+        success: true,
+        message: 'No containers found to remove',
+        summary: {
+          containersRemoved: 0,
+          ordersReset: 0,
+          removedContainers: []
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+  } catch (error) {
+    console.error('Container cleanup error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Container cleanup failed', 
+      error: error.message 
+    });
+  }
+});
+
+// @route   GET /api/warehouse/currency-rates
+// @desc    Get current exchange rates for financial calculations
+// @access  Private (Admin/Staff only)
+router.get('/currency-rates', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const rates = currencyService.getAllRates();
+    
+    res.json({
+      success: true,
+      rates: {
+        USD_TO_INR: rates.USD_TO_INR,
+        INR_TO_USD: rates.INR_TO_USD,
+        lastUpdated: rates.lastUpdated,
+        nextUpdate: rates.nextUpdate
+      },
+      message: 'Current exchange rates retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Currency rates fetch error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch currency rates', 
+      error: error.message 
+    });
+  }
+});
+
+// @route   POST /api/warehouse/new-container-allocation
+// @desc    New simplified container allocation system
+// @access  Private (Admin/Staff only)
+router.post('/new-container-allocation', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    console.log('📦 [NEW ALLOCATION] Received request:', JSON.stringify(req.body, null, 2));
+    
+    const { containerType, containerSpecs, allocations, financials } = req.body;
+
+    // Validate input
+    if (!containerType || !allocations || allocations.length === 0) {
+      return res.status(400).json({ 
+        message: 'Container type and allocations are required',
+        error: { type: 'VALIDATION_ERROR' }
+      });
+    }
+
+    if (!financials?.shippingCompany) {
+      return res.status(400).json({ 
+        message: 'Shipping company selection is required',
+        error: { type: 'VALIDATION_ERROR' }
+      });
+    }
+
+    // Get container capacity info - handle custom containers
+    let capacityInfo;
+    let actualContainerType = containerType;
+    
+    if (containerType === 'custom' && containerSpecs) {
+      console.log('📏 [NEW ALLOCATION] Using custom container specs:', containerSpecs);
+      capacityInfo = {
+        maxCbm: parseFloat(containerSpecs.cbm) || 67,
+        maxWeight: parseFloat(containerSpecs.weight) || 30000
+      };
+      
+      // Map custom container to closest standard type for database storage
+      const cbm = capacityInfo.maxCbm;
+      if (cbm <= 33) {
+        actualContainerType = '20ft';
+      } else if (cbm <= 67) {
+        actualContainerType = '40ft';
+      } else if (cbm <= 76) {
+        actualContainerType = '40ft_hc';
+      } else {
+        actualContainerType = '45ft';
+      }
+      
+      console.log(`📦 [NEW ALLOCATION] Mapped custom container (${cbm} CBM) to type: ${actualContainerType}`);
+    } else {
+      capacityInfo = Container.getCapacityInfo(containerType);
+    }
+    
+    console.log('🏗️ [NEW ALLOCATION] Container capacity:', capacityInfo);
+    
+    // Calculate totals from allocations
+    let totalCbm = 0;
+    let totalWeight = 0;
+    let totalCarryingCharges = 0;
+    const orderAllocations = [];
+
+    // Validate each allocation and calculate totals
+    console.log(`🔍 [NEW ALLOCATION] Processing ${allocations.length} allocations...`);
+    
+    for (const allocation of allocations) {
+      const { orderId, itemId, allocatedCartons, cbmShare, weightShare, carryingCharges } = allocation;
+      
+      console.log(`Processing allocation:`, {
+        orderId: orderId.substring(0, 8) + '...',
+        itemId: itemId.substring(0, 8) + '...',
+        allocatedCartons,
+        cbmShare,
+        weightShare
+      });
+      
+      // Verify order and item exist
+      const order = await Order.findById(orderId);
+      if (!order) {
+        console.log(`❌ [NEW ALLOCATION] Order not found: ${orderId}`);
+        return res.status(404).json({ 
+          message: `Order ${orderId} not found`,
+          error: { type: 'ORDER_NOT_FOUND' }
+        });
+      }
+
+      const item = order.items.find(i => i._id.toString() === itemId);
+      if (!item) {
+        console.log(`❌ [NEW ALLOCATION] Item not found: ${itemId} in order ${order.orderNumber}`);
+        return res.status(404).json({ 
+          message: `Item ${itemId} not found in order ${order.orderNumber}`,
+          error: { type: 'ITEM_NOT_FOUND' }
+        });
+      }
+
+      // Validate allocation doesn't exceed available cartons
+      const qcPassed = item.qcPassedCartons || 0;
+      const alreadyAllocated = item.allocatedCartons || 0;
+      const maxAvailable = qcPassed - alreadyAllocated;
+      
+      console.log(`Item ${item.itemCode} availability:`, {
+        qcPassedCartons: qcPassed,
+        allocatedCartons: alreadyAllocated,
+        maxAvailable,
+        requestedAllocation: allocatedCartons
+      });
+      
+      if (allocatedCartons > maxAvailable) {
+        console.log(`❌ [NEW ALLOCATION] Allocation exceeds available: ${allocatedCartons} > ${maxAvailable}`);
+        return res.status(400).json({ 
+          message: `Cannot allocate ${allocatedCartons} cartons. Maximum available: ${maxAvailable}`,
+          error: { 
+            type: 'CAPACITY_ERROR',
+            details: {
+              itemCode: item.itemCode,
+              orderNumber: order.orderNumber,
+              requested: allocatedCartons,
+              available: maxAvailable
+            }
+          }
+        });
+      }
+
+      totalCbm += parseFloat(cbmShare) || 0;
+      totalWeight += parseFloat(weightShare) || 0;
+      totalCarryingCharges += parseFloat(carryingCharges) || 0;
+
+      orderAllocations.push({
+        orderId: order._id,
+        clientId: order.clientId,
+        clientName: order.clientName,
+        cbmShare: parseFloat(cbmShare) || 0,
+        weightShare: parseFloat(weightShare) || 0,
+        cartonShare: parseInt(allocatedCartons) || 0,
+        paymentType: order.paymentType || 'CLIENT_DIRECT',
+        carryingCharges: parseFloat(carryingCharges) || 0,
+        partialAllocation: {
+          isPartial: allocatedCartons < (item.cartons || 0),
+          allocatedQuantity: (parseInt(allocatedCartons) || 0) * (parseInt(item.quantity) || 0) / (parseInt(item.cartons) || 1),
+          totalQuantity: parseInt(item.quantity) || 0,
+          allocatedCartons: parseInt(allocatedCartons) || 0,
+          totalCartons: parseInt(item.cartons) || 0
+        },
+        itemAllocations: [{
+          itemId: item._id,
+          itemCode: item.itemCode,
+          allocatedCartons: parseInt(allocatedCartons) || 0,
+          cbmShare: parseFloat(cbmShare) || 0,
+          weightShare: parseFloat(weightShare) || 0,
+          carryingCharges: parseFloat(carryingCharges) || 0
+        }]
+      });
+    }
+
+    // Validate container capacity
+    if (totalCbm > capacityInfo.maxCbm) {
+      return res.status(400).json({ 
+        message: `Total CBM ${totalCbm.toFixed(2)} exceeds container capacity ${capacityInfo.maxCbm}`,
+        error: { 
+          type: 'CAPACITY_ERROR',
+          details: {
+            totalCbm,
+            maxCbm: capacityInfo.maxCbm,
+            excess: totalCbm - capacityInfo.maxCbm
+          }
+        }
+      });
+    }
+
+    if (totalWeight > capacityInfo.maxWeight) {
+      return res.status(400).json({ 
+        message: `Total weight ${totalWeight.toFixed(0)}kg exceeds container capacity ${capacityInfo.maxWeight}kg`,
+        error: { 
+          type: 'CAPACITY_ERROR',
+          details: {
+            totalWeight,
+            maxWeight: capacityInfo.maxWeight,
+            excess: totalWeight - capacityInfo.maxWeight
+          }
+        }
+      });
+    }
+
+    // Create container without transactions (MongoDB standalone compatibility)
+    console.log('🏗️ [NEW ALLOCATION] Starting container creation (non-transaction mode)...');
+    
+    let container;
+    
+    try {
+      // Create container data
+      const containerData = {
+        realContainerId: `CONT-${Date.now()}`,
+        type: actualContainerType, // Use mapped type instead of 'custom'
+        maxWeight: parseFloat(capacityInfo.maxWeight) || 30000,
+        maxCbm: parseFloat(capacityInfo.maxCbm) || 67,
+        currentWeight: parseFloat(totalWeight) || 0,
+        currentCbm: parseFloat(totalCbm) || 0,
+        status: 'planning',
+        orders: orderAllocations,
+        shippingCompany: {
+          id: financials.shippingCompany,
+          name: getShippingCompanyName(financials.shippingCompany)
+        },
+        baseCharges: {
+          gst: parseFloat(financials.baseCharges?.gst) || 0,
+          duty: parseFloat(financials.baseCharges?.duty) || 0,
+          misc: parseFloat(financials.baseCharges?.misc) || 0,
+          extraCharge: parseFloat(financials.baseCharges?.extraCharge) || 0,
+          currency: 'INR'
+        },
+        createdBy: req.user.id
+      };
+      
+      console.log('🏗️ [NEW ALLOCATION] Container data to save:', {
+        type: containerData.type,
+        maxCbm: containerData.maxCbm,
+        maxWeight: containerData.maxWeight,
+        currentCbm: containerData.currentCbm,
+        currentWeight: containerData.currentWeight,
+        ordersCount: containerData.orders.length
+      });
+
+      // Create and save container
+      container = new Container(containerData);
+      
+      // Calculate financials
+      container.calculateFinancials();
+      
+      await container.save();
+      console.log('✅ [NEW ALLOCATION] Container created successfully:', container.realContainerId);
+
+      // Update order items with allocation data (non-transaction)
+      console.log('📝 [NEW ALLOCATION] Updating order allocations...');
+      for (const allocation of allocations) {
+        const { orderId, itemId, allocatedCartons } = allocation;
+        
+        try {
+          const updateResult = await Order.updateOne(
+            { _id: orderId, 'items._id': itemId },
+            { 
+              $inc: { 'items.$.allocatedCartons': allocatedCartons },
+              $set: { 'items.$.lastAllocatedAt': new Date() }
+            }
+          );
+          
+          console.log(`✅ [NEW ALLOCATION] Updated order ${orderId}, item ${itemId}: +${allocatedCartons} cartons`);
+        } catch (updateError) {
+          console.error(`❌ [NEW ALLOCATION] Failed to update order ${orderId}:`, updateError.message);
+          // Continue with other updates even if one fails
+        }
+      }
+
+      console.log(`🎉 [NEW ALLOCATION] Container allocation completed: ${container.realContainerId}`, {
+        totalCbm: totalCbm.toFixed(2),
+        totalWeight: totalWeight.toFixed(0),
+        utilization: {
+          cbm: ((totalCbm / capacityInfo.maxCbm) * 100).toFixed(1) + '%',
+          weight: ((totalWeight / capacityInfo.maxWeight) * 100).toFixed(1) + '%'
+        },
+        itemsAllocated: allocations.length,
+        profit: container.grossProfit
+      });
+
+    } catch (error) {
+      console.error('❌ [NEW ALLOCATION] Container creation failed:', error);
+      
+      // If container was created but updates failed, we still return success
+      // since the container exists and can be manually corrected
+      if (container && container._id) {
+        console.log('⚠️ [NEW ALLOCATION] Container created but some updates failed. Container ID:', container.realContainerId);
+      } else {
+        throw error;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Container allocation completed successfully',
+      container: {
+        id: container._id,
+        realContainerId: container.realContainerId,
+        type: container.type,
+        utilization: {
+          cbm: ((totalCbm / capacityInfo.maxCbm) * 100).toFixed(1),
+          weight: ((totalWeight / capacityInfo.maxWeight) * 100).toFixed(1)
+        },
+        financials: {
+          totalRevenue: container.totalRevenue,
+          totalCosts: container.totalCosts,
+          grossProfit: container.grossProfit,
+          profitMargin: container.profitMargin
+        }
+      },
+      allocatedItems: allocations.length,
+      totalCartons: allocations.reduce((sum, a) => sum + a.allocatedCartons, 0)
+    });
+
+  } catch (error) {
+    console.error('New container allocation error:', error);
+    res.status(500).json({ 
+      message: 'Server error during allocation',
+      error: { type: 'SERVER_ERROR' }
+    });
+  }
+});
+
+// Helper function to get shipping company name
+function getShippingCompanyName(companyId) {
+  const companies = {
+    'maersk': 'Maersk Line',
+    'msc': 'Mediterranean Shipping Company',
+    'cosco': 'COSCO Shipping'
+  };
+  return companies[companyId] || companyId;
 }
 
 module.exports = router;

@@ -1,4 +1,5 @@
 @tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -59,10 +60,10 @@
     --secondary: 28 25% 15%; /* stone-700 */
     --secondary-foreground: 28 25% 95%; /* stone-50 */
     --muted: 28 25% 15%; /* stone-700 */
-    --muted-foreground: 28 10% 53%; /* stone-500 */
+    --muted-foreground: 28 25% 53%; /* stone-400 */
     --accent: 45 93% 47%; /* amber-500 */
     --accent-foreground: 28 25% 9%; /* stone-900 */
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 62.8% 50.6%; /* red-600 */
     --destructive-foreground: 210 40% 98%;
     --border: 28 25% 15%; /* stone-700 */
     --input: 28 25% 15%; /* stone-700 */
@@ -75,7 +76,7 @@
     --sidebar-hover: 28 25% 15%; /* stone-700 */
     --sidebar-active: 45 93% 47%; /* amber-500 */
     --sidebar-active-foreground: 28 25% 9%; /* stone-900 */
-    --sidebar-muted: 28 10% 53%; /* stone-500 */
+    --sidebar-muted: 28 25% 53%; /* stone-400 */
     --sidebar-accent: 45 93% 47%; /* amber-500 */
 
     /* Dark Glassmorphism Variables */
@@ -122,81 +123,79 @@
 
   /* Amber & Stone Theme Components */
   .kpi-card {
-    @apply bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1;
+    @apply bg-card rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1;
   }
 
   .amber-gradient {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
   }
 
-
-
   .spinner {
     width: 24px;
     height: 24px;
-    border: 3px solid rgba(245, 158, 11, 0.3);
+    border: 3px solid hsl(var(--muted));
     border-radius: 50%;
-    border-top-color: #f59e0b; /* amber-500 */
+    border-top-color: hsl(var(--primary));
     animation: spin 1s ease-in-out infinite;
   }
 
   .excel-grid {
-    @apply border-collapse border-0 bg-white shadow-sm;
+    @apply border-collapse border-0 bg-card shadow-sm;
   }
 
   .excel-cell {
-    @apply border border-stone-200 px-2 py-2 text-sm bg-white hover:bg-amber-50 transition-colors min-h-[40px];
+    @apply border border-border px-2 py-2 text-sm bg-card hover:bg-muted/50 transition-colors min-h-[40px];
   }
 
   .excel-header {
-    @apply bg-gradient-to-b from-stone-50 to-stone-100 font-semibold text-stone-700 border border-stone-200 px-3 py-3 text-sm sticky top-0 z-10 text-center;
+    @apply bg-muted font-semibold text-foreground border border-border px-3 py-3 text-sm sticky top-0 z-10 text-center;
   }
 
   .excel-input {
-    @apply w-full h-full bg-transparent border-none outline-none px-2 py-2 text-sm focus:bg-white focus:ring-0 focus:border-transparent min-h-[36px];
+    @apply w-full h-full bg-transparent border-none outline-none px-2 py-2 text-sm focus:bg-card focus:ring-0 focus:border-transparent min-h-[36px];
   }
 
   .excel-row {
-    @apply hover:bg-amber-50 transition-colors;
+    @apply hover:bg-muted/50 transition-colors;
   }
 
   .excel-row:nth-child(even) {
-    @apply bg-stone-50;
+    @apply bg-muted/30;
   }
 
   .excel-row:nth-child(even):hover {
-    @apply bg-amber-50;
+    @apply bg-muted/50;
   }
 
   .excel-autocomplete {
-    @apply absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-y-auto;
+    @apply absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto;
   }
 
   .excel-suggestion {
-    @apply px-3 py-2 hover:bg-amber-50 cursor-pointer border-b border-stone-100 last:border-b-0 text-sm;
+    @apply px-3 py-2 hover:bg-muted/50 cursor-pointer border-b border-border last:border-b-0 text-sm;
   }
 
   .excel-suggestion.selected {
-    @apply bg-amber-100 text-amber-900;
+    @apply bg-primary/10 text-primary;
   }
 
   .excel-suggestion-ai {
-    @apply bg-gradient-to-r from-amber-50 to-amber-100 border-l-4 border-amber-400;
+    @apply bg-primary/5 border-l-4 border-primary;
   }
 
   .excel-suggestion-popular {
-    @apply bg-gradient-to-r from-stone-50 to-stone-100 border-l-4 border-stone-400;
+    @apply bg-muted/50 border-l-4 border-muted-foreground;
   }
 
   /* Better table styling */
   .excel-grid th:first-child,
   .excel-grid td:first-child {
-    @apply bg-stone-50 font-medium text-stone-600;
+    @apply bg-muted font-medium text-muted-foreground;
   }
 
   .excel-grid input:focus,
   .excel-grid select:focus {
-    @apply ring-2 ring-amber-500 ring-opacity-50;
+    @apply ring-2 ring-primary ring-opacity-50;
   }
 
   /* Horizontal scroll improvements */
@@ -204,7 +203,7 @@
     overflow-x: auto;
     overflow-y: visible;
     scrollbar-width: thin;
-    scrollbar-color: #a8a29e #f5f5f4; /* stone-400 stone-100 */
+    scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
   }
 
   .horizontal-scroll::-webkit-scrollbar {
@@ -212,17 +211,17 @@
   }
 
   .horizontal-scroll::-webkit-scrollbar-track {
-    background: #f5f5f4; /* stone-100 */
+    background: hsl(var(--muted));
     border-radius: 4px;
   }
 
   .horizontal-scroll::-webkit-scrollbar-thumb {
-    background: #a8a29e; /* stone-400 */
+    background: hsl(var(--muted-foreground));
     border-radius: 4px;
   }
 
   .horizontal-scroll::-webkit-scrollbar-thumb:hover {
-    background: #78716c; /* stone-500 */
+    background: hsl(var(--primary));
   }
 
   /* Enable horizontal scroll with mouse wheel */
@@ -458,35 +457,35 @@
   }
 
   .status-pending {
-    @apply bg-amber-100 text-amber-800;
+    @apply bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20;
   }
 
   .status-confirmed {
-    @apply bg-amber-100 text-amber-800;
+    @apply bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20;
   }
 
   .status-in-progress {
-    @apply bg-stone-100 text-stone-800;
+    @apply bg-primary/10 text-primary border-primary/20;
   }
 
   .status-completed {
-    @apply bg-green-100 text-green-800;
+    @apply bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20;
   }
 
   .status-cancelled {
-    @apply bg-red-100 text-red-800;
+    @apply bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20;
   }
 
   .metric-card {
-    @apply bg-white rounded-lg shadow-sm border p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer;
+    @apply bg-card rounded-lg shadow-sm border p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer;
   }
 
   .metric-value {
-    @apply text-2xl font-bold text-stone-900 transition-colors duration-200;
+    @apply text-2xl font-bold text-foreground transition-colors duration-200;
   }
 
   .metric-label {
-    @apply text-sm font-medium text-stone-500 transition-colors duration-200;
+    @apply text-sm font-medium text-muted-foreground transition-colors duration-200;
   }
 
   .metric-change {
@@ -494,73 +493,56 @@
   }
 
   .metric-change-positive {
-    @apply text-green-600;
+    @apply text-green-600 dark:text-green-400;
   }
 
   .metric-change-negative {
-    @apply text-red-600;
+    @apply text-red-600 dark:text-red-400;
   }
 }
 
-/* Custom scrollbar - Amber & Stone Theme */
+/* Custom scrollbar - Theme aware */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #e7e5e4; /* stone-200 */
+  background: hsl(var(--muted));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #a8a29e; /* stone-400 */
+  background: hsl(var(--muted-foreground));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #78716c; /* stone-500 */
+  background: hsl(var(--primary));
 }
 
 /* Scrollbar utilities for sidebar */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #a8a29e #e7e5e4;
+  scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
 }
 
 .scrollbar-thumb-stone-400::-webkit-scrollbar-thumb {
-  background: #a8a29e;
+  background: hsl(var(--muted-foreground));
 }
 
 .scrollbar-track-stone-100::-webkit-scrollbar-track {
-  background: #f5f5f4;
+  background: hsl(var(--muted));
 }
 
 .hover\:scrollbar-thumb-stone-500:hover::-webkit-scrollbar-thumb {
-  background: #78716c;
+  background: hsl(var(--primary));
 }
 
-/* Dark mode scrollbar */
-.dark .scrollbar-thin {
-  scrollbar-color: #57534e #292524; /* stone-600 stone-800 */
-}
-
-.dark .scrollbar-thumb-stone-400::-webkit-scrollbar-thumb {
-  background: #57534e; /* stone-600 */
-}
-
-.dark .scrollbar-track-stone-100::-webkit-scrollbar-track {
-  background: #292524; /* stone-800 */
-}
-
-.dark .hover\:scrollbar-thumb-stone-500:hover::-webkit-scrollbar-thumb {
-  background: #44403c; /* stone-700 */
-}
-
-/* Loading animation - Amber & Stone Theme */
+/* Loading animation - Theme aware */
 .loading-spinner {
-  border: 2px solid #f5f5f4; /* stone-100 */
-  border-top: 2px solid #f59e0b; /* amber-500 */
+  border: 2px solid hsl(var(--muted));
+  border-top: 2px solid hsl(var(--primary));
   border-radius: 50%;
   width: 20px;
   height: 20px;
@@ -570,4 +552,76 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Additional Dark Mode Utilities */
+@layer utilities {
+  .dark-mode-text {
+    @apply text-foreground;
+  }
+  
+  .dark-mode-bg {
+    @apply bg-background;
+  }
+  
+  .dark-mode-border {
+    @apply border-border;
+  }
+  
+  .dark-mode-muted {
+    @apply text-muted-foreground;
+  }
+  
+  .dark-mode-card {
+    @apply bg-card;
+  }
+  
+  .dark-mode-input {
+    @apply bg-input border-border text-foreground placeholder:text-muted-foreground;
+  }
+  
+  .dark-mode-button-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+  
+  .dark-mode-button-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+  
+  .dark-mode-button-ghost {
+    @apply hover:bg-accent hover:text-accent-foreground;
+  }
+  
+  /* Status badge utilities with dark mode support */
+  .status-active {
+    @apply bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20;
+  }
+  
+  .status-inactive {
+    @apply bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20;
+  }
+  
+  .status-pending {
+    @apply bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20;
+  }
+  
+  .status-error {
+    @apply bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20;
+  }
+  
+  .status-success {
+    @apply bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20;
+  }
+  
+  .status-warning {
+    @apply bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20;
+  }
+  
+  .status-info {
+    @apply bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20;
+  }
+  
+  .status-neutral {
+    @apply bg-muted text-muted-foreground border-border;
+  }
 }

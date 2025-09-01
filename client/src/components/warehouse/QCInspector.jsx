@@ -57,6 +57,10 @@ const QCInspector = ({ order, onResult, onClose }) => {
         expectedQuantity: expectedQty,
         qcPassedQuantity: qcPassed,
         loopBackQuantity: loopBack,
+        // Container allocation data
+        allocatedCartons: item.allocatedCartons || 0,
+        allocatedQuantity: item.allocatedQuantity || 0,
+        containerId: item.containerId || null,
         // Use carton-based calculation for status (primary)
         status: qcPassedCtn === expectedCtn ? 'approved' : 
                qcPassedCtn > 0 ? 'partial' : 'pending',
@@ -347,6 +351,14 @@ const QCInspector = ({ order, onResult, onClose }) => {
                          (item.qcPassedCartons || 0) > 0 || (item.loopBackCartons || 0) > 0 ? 'Partial' : 'Pending'}
                       </Badge>
                     </div>
+                    
+                    {/* Container Allocation Indicator */}
+                    {(item.allocatedCartons > 0 || item.allocatedQuantity > 0 || item.containerId) && (
+                      <div className="mt-2 flex items-center text-xs text-blue-700 bg-blue-50 rounded px-2 py-1">
+                        <Container className="h-3 w-3 mr-1" />
+                        <span className="font-medium">Allocated: {item.allocatedCartons || 0} cartons</span>
+                      </div>
+                    )}
                     {index === currentItemIndex && (
                       <div className="mt-2 text-xs text-amber-700 font-medium">
                         ← Currently Inspecting
@@ -406,6 +418,34 @@ const QCInspector = ({ order, onResult, onClose }) => {
                         <CardDescription className="text-base text-stone-600">
                           {currentItem?.description}
                         </CardDescription>
+                        
+                        {/* Container Allocation Status */}
+                        {(currentItem?.allocatedCartons > 0 || currentItem?.allocatedQuantity > 0 || currentItem?.containerId) && (
+                          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-3">
+                            <div className="flex items-start">
+                              <Container className="h-5 w-5 text-blue-500 mr-2 flex-shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <h4 className="font-medium text-blue-800 mb-1">⚠️ Allocated to Container</h4>
+                                <div className="text-sm text-blue-700 space-y-1">
+                                  <p>
+                                    <strong>Allocated:</strong> {currentItem?.allocatedCartons || 0} cartons, {currentItem?.allocatedQuantity || 0} quantity
+                                  </p>
+                                  <p>
+                                    <strong>Available for Edit:</strong> {Math.max(0, (currentItem?.qcPassedCartons || 0) - (currentItem?.allocatedCartons || 0))} cartons
+                                  </p>
+                                  {currentItem?.containerId && (
+                                    <p>
+                                      <strong>Container ID:</strong> {currentItem.containerId}
+                                    </p>
+                                  )}
+                                  <p className="text-blue-600 font-medium">
+                                    🔒 Cannot reduce QC passed quantity below allocated amount. Remove from container first to edit.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </CardHeader>
                       <CardContent className="space-y-6 flex-1 p-6">
                         {/* CARTON-BASED QC SYSTEM (PRIMARY) */}
@@ -432,29 +472,57 @@ const QCInspector = ({ order, onResult, onClose }) => {
                                 <CheckCircle className="inline h-4 w-4 mr-1" />
                                 QC Passed Cartons
                               </label>
-                              <Input
-                                type="number"
-                                min="0"
-                                max={currentItem?.expectedCartons || 0}
-                                value={currentItem?.qcPassedCartons || 0}
-                                onChange={(e) => {
-                                  const qcPassedCtn = parseInt(e.target.value) || 0
-                                  const expectedCtn = currentItem?.expectedCartons || 0
-                                  const loopBackCtn = Math.max(0, expectedCtn - qcPassedCtn)
-                                  
-                                  // Calculate equivalent quantities based on carton inputs
-                                  const totalQty = currentItem?.expectedQuantity || 0
-                                  const totalCtn = currentItem?.expectedCartons || 0
-                                  const qtyPerCarton = totalCtn > 0 ? totalQty / totalCtn : 1
-                                  
-                                  const qcPassedQty = Math.round(qcPassedCtn * qtyPerCarton)
-                                  const loopBackQty = Math.round(loopBackCtn * qtyPerCarton)
-                                  
-                                  handleQuantityChange(currentItemIndex, qcPassedQty, loopBackQty, qcPassedCtn, loopBackCtn)
-                                }}
-                                className="font-medium text-lg text-center border-green-300 focus:border-green-500"
-                                placeholder="Enter cartons passed"
-                              />
+                              {/* Check if item is allocated to container */}
+                              {(() => {
+                                const allocatedCartons = currentItem?.allocatedCartons || 0
+                                const currentQcPassed = currentItem?.qcPassedCartons || 0
+                                const minAllowedValue = Math.max(allocatedCartons, 0)
+                                const isAllocated = allocatedCartons > 0
+                                
+                                return (
+                                  <div className="space-y-2">
+                                    <Input
+                                      type="number"
+                                      min={minAllowedValue}
+                                      max={currentItem?.expectedCartons || 0}
+                                      value={currentQcPassed}
+                                      onChange={(e) => {
+                                        const newValue = parseInt(e.target.value) || 0
+                                        
+                                        // Prevent reducing below allocated amount
+                                        if (newValue < minAllowedValue) {
+                                          toast.error(`Cannot reduce QC passed cartons below ${minAllowedValue} (allocated to container)`)
+                                          return
+                                        }
+                                        
+                                        const qcPassedCtn = newValue
+                                        const expectedCtn = currentItem?.expectedCartons || 0
+                                        const loopBackCtn = Math.max(0, expectedCtn - qcPassedCtn)
+                                        
+                                        // Calculate equivalent quantities based on carton inputs
+                                        const totalQty = currentItem?.expectedQuantity || 0
+                                        const totalCtn = currentItem?.expectedCartons || 0
+                                        const qtyPerCarton = totalCtn > 0 ? totalQty / totalCtn : 1
+                                        
+                                        const qcPassedQty = Math.round(qcPassedCtn * qtyPerCarton)
+                                        const loopBackQty = Math.round(loopBackCtn * qtyPerCarton)
+                                        
+                                        handleQuantityChange(currentItemIndex, qcPassedQty, loopBackQty, qcPassedCtn, loopBackCtn)
+                                      }}
+                                      className={`font-medium text-lg text-center border-green-300 focus:border-green-500 ${
+                                        isAllocated ? 'bg-yellow-50 border-yellow-300' : ''
+                                      }`}
+                                      placeholder="Enter cartons passed"
+                                    />
+                                    {isAllocated && (
+                                      <div className="flex items-center text-xs text-yellow-700">
+                                        <Container className="h-3 w-3 mr-1" />
+                                        <span>Min: {minAllowedValue} (allocated)</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </div>
                             <div className="space-y-2">
                               <label className="block text-sm font-semibold text-orange-700">

@@ -99,7 +99,7 @@ router.get('/', auth, async (req, res) => {
     const containerUpdates = await Container.find(containerQuery)
       .sort({ updatedAt: -1 })
       .limit(5)
-      .select('clientFacingId status location estimatedArrival');
+      .select('clientFacingId realContainerId status location estimatedArrival type');
 
     // Build metrics response
     const metrics = [
@@ -145,14 +145,94 @@ router.get('/', auth, async (req, res) => {
         date: order.createdAt.toISOString().split('T')[0]
       })),
       containerUpdates: containerUpdates.map(container => ({
-        id: container.clientFacingId,
-        status: container.status,
-        location: container.location?.current || 'Unknown',
-        eta: container.estimatedArrival?.toISOString().split('T')[0] || 'TBD'
+        id: container.clientFacingId || container.realContainerId || `CONT-${container._id.toString().slice(-6).toUpperCase()}`,
+        realId: container.realContainerId,
+        clientId: container.clientFacingId,
+        status: container.status || 'unknown',
+        location: container.location?.current || 'Location pending',
+        eta: container.estimatedArrival?.toISOString().split('T')[0] || null,
+        type: container.type || 'unknown'
       }))
     });
   } catch (error) {
     console.error('Dashboard error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/dashboard/shipments
+// @desc    Get real-time shipment data for dashboard
+// @access  Private
+router.get('/shipments', auth, async (req, res) => {
+  try {
+    const { user } = req;
+    const { client, supplier } = req.query;
+    
+    // Build query based on user role
+    let orderQuery = { isLoopBack: { $ne: true } };
+    
+    if (user.role === 'client') {
+      orderQuery.clientId = user.clientId;
+    }
+    
+    // Apply filters if provided
+    if (client && client !== 'All') {
+      orderQuery.clientName = client;
+    }
+    
+    // Get orders with populated items
+    const orders = await Order.find(orderQuery)
+      .populate('containerId', 'clientFacingId status')
+      .select('orderNumber clientName items totalAmount totalWeight totalCbm createdAt');
+    
+    // Transform orders into shipment data format similar to sample data
+    const shipmentData = [];
+    
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        // Apply supplier filter if specified
+        if (supplier && supplier !== 'All' && item.supplier?.name !== supplier) {
+          return;
+        }
+        
+        const shipmentItem = {
+          "ITEM NO.": item.itemCode,
+          "DESCRIPTION": item.description,
+          "PRICE": item.unitPrice || 0,
+          "QTY": item.quantity,
+          "CTNS": item.cartons,
+          "T.QTY": item.quantity * item.cartons,
+          "AMOUNT": item.totalPrice || (item.unitPrice * item.quantity),
+          "CBM": item.unitCbm || 0,
+          "T.CBM": (item.unitCbm || 0) * item.cartons,
+          "WT": item.unitWeight || 0,
+          "T.WT": (item.unitWeight || 0) * item.cartons,
+          "SUPPLIER": item.supplier?.name || 'Unknown',
+          "CLIENT": order.clientName,
+          "CARRYING": item.carryingCharge?.amount || 0,
+          "ORDER_NUMBER": order.orderNumber,
+          "CONTAINER_ID": order.containerId?.clientFacingId || 'Unassigned',
+          "STATUS": item.status || 'pending',
+          "CREATED_AT": order.createdAt
+        };
+        
+        shipmentData.push(shipmentItem);
+      });
+    });
+    
+    // Get unique clients and suppliers for filters
+    const clients = [...new Set(shipmentData.map(item => item.CLIENT).filter(Boolean))].sort();
+    const suppliers = [...new Set(shipmentData.map(item => item.SUPPLIER).filter(Boolean))].sort();
+    
+    res.json({
+      shipmentData,
+      filters: {
+        clients,
+        suppliers
+      }
+    });
+  } catch (error) {
+    console.error('Shipment data error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

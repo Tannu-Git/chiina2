@@ -22,14 +22,16 @@ import {
   Anchor,
   Zap,
   DollarSign,
-  TrendingUp
+  TrendingUp,
+  CreditCard,
+  Users,
+  Building2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, MetricCard } from '@/components/ui/card'
 import { SearchInput } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import ContainerAllocationWizard from '@/components/warehouse/ContainerAllocationWizard'
+import { useNavigate } from 'react-router-dom'
 import FinancialDashboard from '@/components/financials/FinancialDashboard'
 
 import { useAuthStore } from '@/stores/authStore'
@@ -39,12 +41,12 @@ import toast from 'react-hot-toast'
 
 const Containers = () => {
   const { user } = useAuthStore()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [containers, setContainers] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeTab, setActiveTab] = useState('containers')
-  const [showAllocationWizard, setShowAllocationWizard] = useState(false)
 
 
 
@@ -67,23 +69,29 @@ const Containers = () => {
     fetchContainers()
   }, [])
 
-  // Handle allocation wizard completion
-  const handleAllocationComplete = () => {
-    setShowAllocationWizard(false)
-    fetchContainers() // Refresh container data
-    toast.success('Container allocation completed successfully!')
+  // Handle navigation to new allocation system
+  const handleStartAllocation = () => {
+    navigate('/warehouse/allocation')
+  }
+
+  const handleMoreFilters = () => {
+    toast.info('Advanced filters coming soon! For now, you can filter by status using the dropdown.')
   }
 
 
 
   const displayContainers = containers // Remove mock data fallback
 
-  // Filter containers
+  // Filter containers with null safety
   const filteredContainers = displayContainers.filter(container => {
-    const matchesSearch = container.clientFacingId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         container.realContainerId?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || container.status === statusFilter
-    return matchesSearch && matchesStatus
+    // Use optional chaining and provide fallback empty strings to prevent undefined errors
+    const clientId = container.clientFacingId?.toLowerCase() || '';
+    const realId = container.realContainerId?.toLowerCase() || '';
+    const searchLower = searchTerm.toLowerCase();
+    
+    const matchesSearch = clientId.includes(searchLower) || realId.includes(searchLower);
+    const matchesStatus = statusFilter === 'all' || container.status === statusFilter;
+    return matchesSearch && matchesStatus;
   })
 
   const getStatusIcon = (status) => {
@@ -107,29 +115,96 @@ const Containers = () => {
     return 'bg-green-500'
   }
 
-  // Calculate metrics
+  // Calculate metrics with safe number parsing and null safety
   const metrics = {
     totalContainers: filteredContainers.length,
-    activeContainers: filteredContainers.filter(c => ['loading', 'shipped'].includes(c.status)).length,
-    plannedContainers: filteredContainers.filter(c => c.status === 'planning').length,
-    avgUtilization: filteredContainers.reduce((acc, c) => acc + (c.currentCbm / c.maxCbm * 100), 0) / filteredContainers.length || 0,
-    totalRevenue: filteredContainers.reduce((acc, c) => acc + (c.totalRevenue || 0), 0),
-    totalProfit: filteredContainers.reduce((acc, c) => acc + (c.grossProfit || 0), 0)
+    activeContainers: filteredContainers.filter(c => c?.status && ['loading', 'shipped'].includes(c.status)).length,
+    plannedContainers: filteredContainers.filter(c => c?.status === 'planning').length,
+    avgUtilization: (() => {
+      if (filteredContainers.length === 0) return 0;
+      const totalUtilization = filteredContainers.reduce((acc, c) => {
+        const currentCbm = parseFloat(c?.currentCbm) || 0;
+        const maxCbm = parseFloat(c?.maxCbm) || 1; // Avoid division by zero
+        return acc + (currentCbm / maxCbm * 100);
+      }, 0);
+      return totalUtilization / filteredContainers.length;
+    })(),
+    totalRevenue: filteredContainers.reduce((acc, c) => acc + (parseFloat(c?.totalRevenue) || 0), 0),
+    totalProfit: filteredContainers.reduce((acc, c) => acc + (parseFloat(c?.grossProfit) || 0), 0)
+  }
+
+  // Export containers to CSV
+  const handleExportContainers = () => {
+    try {
+      // Prepare CSV data
+      const csvData = filteredContainers.map(container => ({
+        'Container ID (Client)': container.clientFacingId || 'N/A',
+        'Container ID (Real)': container.realContainerId || 'N/A',
+        'Type': container.type || 'N/A',
+        'Status': container.status?.replace('_', ' ') || 'Unknown',
+        'Current CBM': container.currentCbm || 0,
+        'Max CBM': container.maxCbm || 0,
+        'CBM Utilization %': container.maxCbm ? ((container.currentCbm / container.maxCbm) * 100).toFixed(1) : '0',
+        'Current Weight': container.currentWeight || 0,
+        'Max Weight': container.maxWeight || 0,
+        'Weight Utilization %': container.maxWeight ? ((container.currentWeight / container.maxWeight) * 100).toFixed(1) : '0',
+        'Orders Count': container.orders?.length || 0,
+        'Total Revenue': container.totalRevenue || 0,
+        'Total Costs': container.totalCosts || 0,
+        'Gross Profit': container.grossProfit || 0,
+        'Profit Margin %': container.totalRevenue ? ((container.grossProfit / container.totalRevenue) * 100).toFixed(1) : '0',
+        'Location': container.location?.current || 'N/A',
+        'Estimated Arrival': container.estimatedArrival ? new Date(container.estimatedArrival).toLocaleDateString() : 'N/A',
+        'Created Date': new Date(container.createdAt).toLocaleDateString(),
+        'Updated Date': new Date(container.updatedAt).toLocaleDateString(),
+        'Created By': container.createdBy?.name || 'N/A'
+      }))
+
+      // Convert to CSV
+      const headers = Object.keys(csvData[0] || {})
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header] || ''
+            // Escape commas and quotes in CSV
+            return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+              ? `"${value.replace(/"/g, '""')}"` 
+              : value
+          }).join(',')
+        )
+      ].join('\n')
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `containers-export-${new Date().toISOString().split('T')[0]}.csv`
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast.success(`Exported ${filteredContainers.length} containers to CSV`)
+    } catch (error) {
+      console.error('Export failed:', error)
+      toast.error('Failed to export containers')
+    }
   }
 
   if (loading && containers.length === 0) {
     return (
-      <div className="px-4 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
         <div className="flex items-center justify-center h-64">
           <div className="loading-spinner mr-2" />
-          <span>Loading containers...</span>
+          <span className="text-muted-foreground">Loading containers...</span>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
+    <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -139,34 +214,33 @@ const Containers = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-stone-900">Container Management</h1>
-            <p className="text-stone-600 mt-2">Track, manage, and allocate shipping containers</p>
+            <p className="text-muted-foreground mt-2">Track, manage, and allocate shipping containers</p>
           </div>
           <div className="flex space-x-3">
             <Button variant="outline" onClick={fetchContainers}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => navigate('/client-allocations')}>
+              <Users className="h-4 w-4 mr-2" />
+              Client Allocations
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/client-management')}>
+              <Building2 className="h-4 w-4 mr-2" />
+              Client Management
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/payment-collections')}>
+              <CreditCard className="h-4 w-4 mr-2" />
+              Payment Collections
+            </Button>
+            <Button variant="outline" onClick={handleExportContainers}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            <Dialog open={showAllocationWizard} onOpenChange={setShowAllocationWizard}>
-              <DialogTrigger asChild>
-                <Button variant="gradient">
-                  <Zap className="h-4 w-4 mr-2" />
-                  Start Allocation
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Container Allocation Wizard</DialogTitle>
-                </DialogHeader>
-                <ContainerAllocationWizard
-                  onComplete={handleAllocationComplete}
-                  onCancel={() => setShowAllocationWizard(false)}
-                />
-              </DialogContent>
-            </Dialog>
+            <Button variant="gradient" onClick={handleStartAllocation}>
+              <Zap className="h-4 w-4 mr-2" />
+              Start Allocation
+            </Button>
             <Link to="/containers/create">
               <Button variant="outline">
                 <Plus className="h-4 w-4 mr-2" />
@@ -278,7 +352,7 @@ const Containers = () => {
 
           <TabsContent value="containers" className="mt-6">
             {/* Filters */}
-            <Card className="mb-6">
+            <Card className="mb-6 bg-card">
               <CardContent className="p-6">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
@@ -292,7 +366,7 @@ const Containers = () => {
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
-                      className="px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
                     >
                       <option value="all">All Status</option>
                       <option value="planning">Planning</option>
@@ -300,7 +374,7 @@ const Containers = () => {
                       <option value="shipped">Shipped</option>
                       <option value="delivered">Delivered</option>
                     </select>
-                    <Button variant="outline">
+                    <Button variant="outline" onClick={handleMoreFilters}>
                       <Filter className="h-4 w-4 mr-2" />
                       More Filters
                     </Button>
@@ -310,9 +384,9 @@ const Containers = () => {
             </Card>
 
             {/* Containers Table */}
-            <Card>
+            <Card className="bg-card">
               <CardHeader>
-                <CardTitle className="flex items-center">
+                <CardTitle className="flex items-center text-foreground">
                   <ContainerIcon className="h-5 w-5 mr-2" />
                   Containers ({filteredContainers.length})
                 </CardTitle>
@@ -320,80 +394,87 @@ const Containers = () => {
               <CardContent>
                 {filteredContainers.length === 0 ? (
                   <div className="text-center py-8">
-                    <ContainerIcon className="h-12 w-12 mx-auto mb-4 text-stone-300" />
-                    <p className="text-stone-500">No containers found</p>
+                    <ContainerIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                    <p className="text-muted-foreground">No containers found</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-stone-200">
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Container ID</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Type</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Utilization</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Weight</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">CBM</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Revenue</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Profit</th>
-                          <th className="text-left py-3 px-4 font-medium text-stone-700">Actions</th>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Container ID</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Type</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Utilization</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Weight</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">CBM</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Revenue</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Profit</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredContainers.map((container) => (
-                          <tr key={container._id} className="border-b border-stone-100 hover:bg-stone-50">
+                        {filteredContainers.map((container) => {
+                          const currentCbm = parseFloat(container?.currentCbm) || 0;
+                          const maxCbm = parseFloat(container?.maxCbm) || 1;
+                          const currentWeight = parseFloat(container?.currentWeight) || 0;
+                          const maxWeight = parseFloat(container?.maxWeight) || 1;
+                          const utilizationPercentage = (currentCbm / maxCbm) * 100;
+                          
+                          return (
+                          <tr key={container._id} className="border-b border-border hover:bg-muted/50">
                             <td className="py-3 px-4">
                               <div className="flex items-center space-x-2">
-                                {getStatusIcon(container.status)}
+                                {getStatusIcon(container?.status)}
                                 <Link
                                   to={`/containers/${container._id}`}
-                                  className="font-medium text-amber-600 hover:text-amber-800"
+                                  className="font-medium text-primary hover:text-primary/80"
                                 >
-                                  {container.clientFacingId}
+                                  {container?.clientFacingId || container?.realContainerId || 'Unknown ID'}
                                 </Link>
                               </div>
                             </td>
                             <td className="py-3 px-4">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(container.status)}`}>
-                                {container.status}
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(container?.status || 'unknown')}`}>
+                                {container?.status || 'Unknown'}
                               </span>
                             </td>
                             <td className="py-3 px-4">
-                              <span className="font-medium">{container.type}</span>
+                              <span className="font-medium">{container?.type || 'Unknown'}</span>
                             </td>
                             <td className="py-3 px-4">
                               <div className="flex items-center space-x-2">
-                                <div className="w-16 bg-stone-200 rounded-full h-2">
+                                <div className="w-16 bg-muted rounded-full h-2">
                                   <div
-                                    className={`h-2 rounded-full ${getUtilizationColor((container.currentCbm / container.maxCbm) * 100)}`}
-                                    style={{ width: `${Math.min((container.currentCbm / container.maxCbm) * 100, 100)}%` }}
+                                    className={`h-2 rounded-full ${getUtilizationColor(utilizationPercentage)}`}
+                                    style={{ width: `${Math.min(utilizationPercentage, 100)}%` }}
                                   />
                                 </div>
                                 <span className="text-sm text-stone-600">
-                                  {((container.currentCbm / container.maxCbm) * 100).toFixed(1)}%
+                                  {utilizationPercentage.toFixed(1)}%
                                 </span>
                               </div>
                             </td>
                             <td className="py-3 px-4">
                               <span className="text-sm">
-                                {container.currentWeight?.toFixed(1)} / {container.maxWeight} kg
+                                {currentWeight.toFixed(1)} / {maxWeight} kg
                               </span>
                             </td>
                             <td className="py-3 px-4">
                               <span className="text-sm">
-                                {container.currentCbm?.toFixed(2)} / {container.maxCbm} m³
+                                {currentCbm.toFixed(2)} / {maxCbm} m³
                               </span>
                             </td>
                             <td className="py-3 px-4">
                               <span className="text-sm font-medium text-green-600">
-                                ₹{(container.totalRevenue || 0).toLocaleString()}
+                                ₹{(parseFloat(container?.totalRevenue) || 0).toLocaleString()}
                               </span>
                             </td>
                             <td className="py-3 px-4">
                               <span className={`text-sm font-medium ${
-                                (container.grossProfit || 0) > 0 ? 'text-green-600' : 'text-red-600'
+                                (parseFloat(container?.grossProfit) || 0) > 0 ? 'text-green-600' : 'text-red-600'
                               }`}>
-                                ₹{(container.grossProfit || 0).toLocaleString()}
+                                ₹{(parseFloat(container?.grossProfit) || 0).toLocaleString()}
                               </span>
                             </td>
                             <td className="py-3 px-4">
@@ -411,7 +492,7 @@ const Containers = () => {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                   </div>
@@ -428,9 +509,9 @@ const Containers = () => {
                   {searchTerm ? 'Try adjusting your search criteria' : 'Get started by creating your first container or using the allocation wizard'}
                 </p>
                 <div className="flex justify-center space-x-4">
-                  <Button onClick={() => setShowAllocationWizard(true)} variant="gradient">
+                  <Button onClick={handleStartAllocation} variant="gradient">
                     <Zap className="h-4 w-4 mr-2" />
-                    Start Allocation Wizard
+                    New Container Allocation
                   </Button>
                   <Link to="/containers/create">
                     <Button variant="outline">

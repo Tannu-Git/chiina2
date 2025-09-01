@@ -6,11 +6,11 @@ const { auth, authorize } = require('../middleware/auth');
 const router = express.Router();
 
 // @route   GET /api/users
-// @desc    Get all users
+// @desc    Get all users with enhanced data
 // @access  Private (Admin only)
 router.get('/', auth, authorize('admin'), async (req, res) => {
   try {
-    const { page = 1, limit = 10, role, search } = req.query;
+    const { page = 1, limit = 50, role, search } = req.query;
     
     const query = {};
     
@@ -22,7 +22,8 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } }
+        { company: { $regex: search, $options: 'i' } },
+        { clientId: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -30,12 +31,88 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
       .select('-password')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .skip((page - 1) * limit)
+      .lean();
+
+    // Import required models for enhanced data
+    const Order = require('../models/Order');
+    const Container = require('../models/Container');
+    const { PaymentTransaction, AccountBalance } = require('../models/Payment');
+
+    // Enhance users with computed fields
+    const enhancedUsers = await Promise.all(users.map(async (user) => {
+      const computedFields = {
+        status: user.isActive ? 'active' : 'inactive',
+        ordersCount: 0,
+        totalSpent: 0,
+        containerCount: 0,
+        lastOrderDate: null,
+        accountBalance: { INR: 0, USD: 0 },
+        paymentHistory: []
+      };
+
+      try {
+        // Get orders count and total spent for clients
+        if (user.role === 'client' && user.clientId) {
+          const orders = await Order.find({ clientId: user.clientId })
+            .select('createdAt items.totalPrice')
+            .sort({ createdAt: -1 })
+            .limit(1)
+            .lean();
+          
+          computedFields.ordersCount = await Order.countDocuments({ clientId: user.clientId });
+          
+          // Calculate total spent from all orders
+          const allOrders = await Order.find({ clientId: user.clientId })
+            .select('items.totalPrice')
+            .lean();
+          
+          computedFields.totalSpent = allOrders.reduce((total, order) => {
+            const orderTotal = order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+            return total + orderTotal;
+          }, 0);
+          
+          if (orders.length > 0) {
+            computedFields.lastOrderDate = orders[0].createdAt;
+          }
+
+          // Get container count
+          computedFields.containerCount = await Container.countDocuments({ 
+            'orders.clientId': user.clientId 
+          });
+
+          // Get account balance
+          const accountBalance = await AccountBalance.findOne({ 'party.id': user.clientId });
+          if (accountBalance) {
+            computedFields.accountBalance = {
+              INR: accountBalance.balances.INR.balance || 0,
+              USD: accountBalance.balances.USD.balance || 0
+            };
+          }
+
+          // Get recent payment history
+          computedFields.paymentHistory = await PaymentTransaction.find({ 
+            'party.id': user.clientId 
+          })
+            .select('type amount currency status paymentDate description')
+            .sort({ paymentDate: -1 })
+            .limit(5)
+            .lean();
+        }
+      } catch (computeError) {
+        console.error(`Error computing fields for user ${user._id}:`, computeError);
+      }
+
+      return {
+        ...user,
+        ...computedFields
+      };
+    }));
 
     const total = await User.countDocuments(query);
 
     res.json({
-      users,
+      users: enhancedUsers,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
       total
@@ -128,7 +205,7 @@ router.post('/', auth, authorize('admin'), [
 });
 
 // @route   PUT /api/users/:id
-// @desc    Update user
+// @desc    Update user with comprehensive fields
 // @access  Private (Admin only)
 router.put('/:id', auth, authorize('admin'), async (req, res) => {
   try {
@@ -138,8 +215,8 @@ router.put('/:id', auth, authorize('admin'), async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Update allowed fields
-    const allowedUpdates = ['name', 'email', 'role', 'company', 'phone', 'permissions', 'isActive'];
+    // Update allowed fields including address
+    const allowedUpdates = ['name', 'email', 'role', 'company', 'phone', 'permissions', 'isActive', 'address'];
     allowedUpdates.forEach(field => {
       if (req.body[field] !== undefined) {
         user[field] = req.body[field];
@@ -163,6 +240,7 @@ router.put('/:id', auth, authorize('admin'), async (req, res) => {
         clientId: user.clientId,
         company: user.company,
         phone: user.phone,
+        address: user.address,
         permissions: user.permissions,
         isActive: user.isActive
       }
@@ -198,6 +276,48 @@ router.delete('/:id', auth, authorize('admin'), async (req, res) => {
   }
 });
 
+// @route   PATCH /api/users/:id
+// @desc    Update user status
+// @access  Private (Admin only)
+router.patch('/:id', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Prevent admin from deactivating themselves
+    if (user._id.toString() === req.user.id) {
+      return res.status(400).json({ message: 'Cannot modify your own account status' });
+    }
+
+    // Map status to isActive
+    if (status === 'active') {
+      user.isActive = true;
+    } else if (status === 'inactive') {
+      user.isActive = false;
+    }
+
+    await user.save();
+
+    res.json({
+      message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        status: user.isActive ? 'active' : 'inactive',
+        isActive: user.isActive
+      }
+    });
+  } catch (error) {
+    console.error('Update user status error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   PUT /api/users/:id/toggle-status
 // @desc    Toggle user active status
 // @access  Private (Admin only)
@@ -228,6 +348,46 @@ router.put('/:id/toggle-status', auth, authorize('admin'), async (req, res) => {
     });
   } catch (error) {
     console.error('Toggle user status error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PATCH /api/users/:id/password
+// @desc    Update user password (Admin only)
+// @access  Private (Admin only)
+router.patch('/:id/password', auth, authorize('admin'), [
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { newPassword } = req.body;
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update password - the pre-save middleware will hash it
+    user.password = newPassword;
+    await user.save();
+
+    res.json({
+      message: 'Password updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Update password error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

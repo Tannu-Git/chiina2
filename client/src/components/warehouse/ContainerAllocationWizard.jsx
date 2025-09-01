@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '@/stores/authStore';
 
 // Import step components
 import OrderSelectionStep from './allocation-steps/OrderSelectionStep';
@@ -25,6 +26,7 @@ import AllocationPreviewStep from './allocation-steps/AllocationPreviewStep';
 import ConfirmationStep from './allocation-steps/ConfirmationStep';
 
 const ContainerAllocationWizard = ({ onComplete, onCancel }) => {
+  const { token, isAuthenticated } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -90,18 +92,11 @@ const ContainerAllocationWizard = ({ onComplete, onCancel }) => {
           updateWizardData(stepResult);
           setCurrentStep(prev => prev + 1);
           
-          toast({
-            title: "Step Completed",
-            description: `${steps[currentStep].title} completed successfully.`,
-          });
+          toast.success(`${steps[currentStep].title} completed successfully.`);
         }
       } catch (err) {
         setError(err.message || 'An error occurred while processing the step');
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: err.message || 'Failed to process step',
-        });
+        toast.error(err.message || 'Failed to process step');
       } finally {
         setIsLoading(false);
       }
@@ -115,15 +110,48 @@ const ContainerAllocationWizard = ({ onComplete, onCancel }) => {
     }
   };
 
+  const getAuthHeaders = () => {
+    if (!token) {
+      throw new Error('Authentication required. Please log in again.');
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  };
+
+  const handleAuthError = (error, response) => {
+    if (response?.status === 401) {
+      toast.error('Your session has expired. Please log in again.', {
+        action: {
+          label: 'Login',
+          onClick: () => window.location.href = '/login'
+        }
+      });
+      setError('Authentication expired. Please log in again.');
+    } else if (response?.status === 403) {
+      toast.error('You need admin or staff permissions to perform this action.');
+      setError('Insufficient permissions for container allocation.');
+    } else {
+      setError(error.message || 'An unexpected error occurred');
+      toast.error(error.message || 'Allocation failed');
+    }
+  };
+
   const handleComplete = async () => {
+    if (!isAuthenticated) {
+      toast.error('Authentication required. Please log in again.');
+      return;
+    }
+
     setIsLoading(true);
+    setError(null);
+    
     try {
+      const headers = getAuthHeaders();
       const response = await fetch('/api/warehouse/allocation-wizard', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
+        headers,
         body: JSON.stringify({
           step: 'confirm-allocation',
           data: {
@@ -136,25 +164,25 @@ const ContainerAllocationWizard = ({ onComplete, onCancel }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to complete allocation');
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        const error = new Error(errorData.message || 'Failed to complete allocation');
+        handleAuthError(error, response);
+        return;
       }
 
       const result = await response.json();
       
-      toast({
-        title: "Allocation Completed!",
-        description: `Successfully allocated ${result.result.ordersAllocated} orders to ${result.result.containersCreated + result.result.containersUpdated} containers.`,
-      });
+      toast.success(`Successfully allocated ${result.result.ordersAllocated} orders to ${result.result.containersCreated + result.result.containersUpdated} containers.`);
       
       onComplete?.(result);
     } catch (err) {
-      setError(err.message);
-      toast({
-        variant: "destructive",
-        title: "Allocation Failed",
-        description: err.message,
-      });
+      handleAuthError(err);
     } finally {
       setIsLoading(false);
     }
@@ -176,88 +204,133 @@ const ContainerAllocationWizard = ({ onComplete, onCancel }) => {
   };
 
   const validateOrderSelection = async (selectedOrders) => {
-    const response = await fetch('/api/warehouse/allocation-wizard', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({
-        step: 'validate-selection',
-        data: { selectedOrders }
-      })
-    });
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/warehouse/allocation-wizard', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          step: 'validate-selection',
+          data: { selectedOrders }
+        })
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to validate order selection');
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { message: `HTTP ${response.status}: Failed to validate order selection` };
+        }
+        
+        const error = new Error(errorData.message || 'Failed to validate order selection');
+        if (response.status === 401 || response.status === 403) {
+          handleAuthError(error, response);
+        }
+        throw error;
+      }
+
+      const result = await response.json();
+      return {
+        validationResults: result.validationResults,
+        allocationTotals: result.allocationTotals,
+        recommendations: result.recommendations
+      };
+    } catch (err) {
+      if (err.message.includes('Authentication required')) {
+        throw err;
+      }
+      throw new Error(`Validation failed: ${err.message}`);
     }
-
-    const result = await response.json();
-    return {
-      validationResults: result.validationResults,
-      allocationTotals: result.allocationTotals,
-      recommendations: result.recommendations
-    };
   };
 
   const optimizeContainerAllocation = async (data) => {
-    const response = await fetch('/api/warehouse/allocation-wizard', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({
-        step: 'optimize-containers',
-        data: {
-          allocationTotals: data.allocationTotals,
-          selectedContainers: data.selectedContainers
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/warehouse/allocation-wizard', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          step: 'optimize-containers',
+          data: {
+            allocationTotals: data.allocationTotals,
+            selectedContainers: data.selectedContainers
+          }
+        })
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { message: `HTTP ${response.status}: Failed to optimize containers` };
         }
-      })
-    });
+        
+        const error = new Error(errorData.message || 'Failed to optimize container allocation');
+        if (response.status === 401 || response.status === 403) {
+          handleAuthError(error, response);
+        }
+        throw error;
+      }
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to optimize container allocation');
+      const result = await response.json();
+      return {
+        optimizationResults: result.optimizationResults,
+        optimizationSummary: result.summary
+      };
+    } catch (err) {
+      if (err.message.includes('Authentication required')) {
+        throw err;
+      }
+      throw new Error(`Container optimization failed: ${err.message}`);
     }
-
-    const result = await response.json();
-    return {
-      optimizationResults: result.optimizationResults,
-      optimizationSummary: result.summary
-    };
   };
 
   const previewAllocation = async (data) => {
-    const response = await fetch('/api/warehouse/allocation-wizard', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({
-        step: 'preview-allocation',
-        data: {
-          validationResults: data.validationResults,
-          optimizationResults: data.optimizationResults,
-          shippingCompanyId: data.shippingCompanyId,
-          baseCharges: data.baseCharges
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/warehouse/allocation-wizard', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          step: 'preview-allocation',
+          data: {
+            validationResults: data.validationResults,
+            optimizationResults: data.optimizationResults,
+            shippingCompanyId: data.shippingCompanyId,
+            baseCharges: data.baseCharges
+          }
+        })
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { message: `HTTP ${response.status}: Failed to generate preview` };
         }
-      })
-    });
+        
+        const error = new Error(errorData.message || 'Failed to generate allocation preview');
+        if (response.status === 401 || response.status === 403) {
+          handleAuthError(error, response);
+        }
+        throw error;
+      }
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to generate allocation preview');
+      const result = await response.json();
+      return {
+        allocationPreview: result.allocationPreview,
+        financialPreview: result.financialPreview,
+        warnings: result.warnings
+      };
+    } catch (err) {
+      if (err.message.includes('Authentication required')) {
+        throw err;
+      }
+      throw new Error(`Preview generation failed: ${err.message}`);
     }
-
-    const result = await response.json();
-    return {
-      allocationPreview: result.allocationPreview,
-      financialPreview: result.financialPreview,
-      warnings: result.warnings
-    };
   };
 
   const getCurrentStepComponent = () => {

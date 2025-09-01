@@ -87,7 +87,9 @@ app.use('/api/auth', authLimiter, require('./routes/auth'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/warehouse', require('./routes/warehouse'));
 app.use('/api/containers', require('./routes/containers'));
+app.use('/api/companies', require('./routes/companies'));
 app.use('/api/financials', financialLimiter, auditFinancialMiddleware, require('./routes/financials'));
+app.use('/api/payments', require('./routes/payments'));
 app.use('/api/users', adminLimiter, require('./routes/users'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/clients', require('./routes/clients'));
@@ -102,6 +104,28 @@ app.get('/api/health', (_req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV
+  });
+});
+
+// JWT Debug endpoint (only in development)
+app.get('/api/debug/jwt', (_req, res) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(404).json({ message: 'Not found' });
+  }
+  
+  res.json({
+    jwtSecretExists: !!process.env.JWT_SECRET,
+    jwtSecretLength: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
+    jwtExpire: process.env.JWT_EXPIRE || 'not set',
+    mongoUri: process.env.MONGODB_URI ? 'set' : 'not set',
+    nodeEnv: process.env.NODE_ENV || 'not set',
+    instructions: {
+      clearBrowserStorage: 'Clear localStorage in browser dev tools (F12 > Application > Local Storage > Clear)',
+      loginCredentials: {
+        admin: 'admin@demo.com / password',
+        staff: 'staff@demo.com / password'
+      }
+    }
   });
 });
 

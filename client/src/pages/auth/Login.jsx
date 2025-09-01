@@ -144,12 +144,12 @@ const Login = () => {
           transition={{ duration: 0.6 }}
           className="w-full max-w-md"
         >
-          <Card className="shadow-2xl border-0">
+          <Card className="shadow-2xl border-0 bg-card">
             <CardHeader className="text-center pb-8">
-              <CardTitle className="text-2xl font-bold text-stone-900">
+              <CardTitle className="text-2xl font-bold text-foreground">
                 Welcome Back
               </CardTitle>
-              <CardDescription className="text-stone-600">
+              <CardDescription className="text-muted-foreground">
                 Sign in to your account to continue
               </CardDescription>
             </CardHeader>
@@ -157,7 +157,7 @@ const Login = () => {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-2">
                     Email Address
                   </label>
                   <Input
@@ -175,7 +175,7 @@ const Login = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-2">
+                  <label htmlFor="password" className="block text-sm font-medium text-muted-foreground mb-2">
                     Password
                   </label>
                   <div className="relative">
@@ -191,7 +191,7 @@ const Login = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-stone-500 hover:text-stone-700"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>

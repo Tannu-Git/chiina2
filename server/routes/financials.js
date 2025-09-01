@@ -137,8 +137,96 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// @route   GET /api/financials/simple-dashboard
+// @desc    Simplified financial dashboard (replaces complex financial calculations)
+// @access  Private (Admin/Staff only)
+router.get('/simple-dashboard', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { period = '30' } = req.query;
+    const daysAgo = parseInt(period);
+    
+    const dateFilter = {
+      createdAt: {
+        $gte: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+      }
+    };
+
+    // Get orders and containers in the specified period
+    const orders = await Order.find({ 
+      ...dateFilter, 
+      isLoopBack: { $ne: true },
+      status: { $ne: 'cancelled' }
+    }).sort({ createdAt: -1 }).limit(10);
+    
+    const containers = await Container.find(dateFilter)
+      .populate('orders.orderId', 'orderNumber')
+      .sort({ createdAt: -1 });
+
+    // Calculate simple totals
+    const totalRevenue = orders.reduce((sum, order) => sum + (order.totalCarryingCharges || 0), 0);
+    const totalOrderValue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+    
+    // Simple cost calculation (basic container charges only)
+    const totalContainerCosts = containers.reduce((sum, container) => {
+      const basicCosts = (container.baseCharges?.gst || 0) + 
+                        (container.baseCharges?.duty || 0) + 
+                        (container.baseCharges?.misc || 0) + 
+                        (container.baseCharges?.extraCharge || 0);
+      return sum + basicCosts;
+    }, 0);
+    
+    const grossProfit = totalRevenue - totalContainerCosts;
+    const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+    // Recent orders for display
+    const recentOrders = orders.slice(0, 5).map(order => ({
+      id: order.orderNumber,
+      client: order.clientName,
+      amount: order.totalCarryingCharges || 0,
+      status: order.status === 'delivered' || order.status === 'allocated' ? 'paid' : 'pending'
+    }));
+
+    // Container performance (simplified)
+    const containerPerformance = containers.slice(0, 5).map(container => {
+      const revenue = container.orders.reduce((sum, order) => {
+        return sum + (order.carryingCharges || 0);
+      }, 0);
+      
+      const costs = (container.baseCharges?.gst || 0) + 
+                   (container.baseCharges?.duty || 0) + 
+                   (container.baseCharges?.misc || 0) + 
+                   (container.baseCharges?.extraCharge || 0);
+      
+      return {
+        id: container.clientFacingId || container.realContainerId,
+        type: container.type,
+        revenue: revenue,
+        costs: costs,
+        profit: revenue - costs
+      };
+    });
+
+    res.json({
+      summary: {
+        totalRevenue,
+        totalCosts: totalContainerCosts,
+        grossProfit,
+        profitMargin,
+        orderCount: orders.length,
+        containerCount: containers.length
+      },
+      recentOrders,
+      containers: containerPerformance,
+      period: `${period} days`
+    });
+  } catch (error) {
+    console.error('Simple financial dashboard error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // @route   GET /api/financials/dashboard
-// @desc    Get financial dashboard data
+// @desc    Detailed financial dashboard (DEPRECATED - use simple-dashboard)
 // @access  Private (Admin only)
 router.get('/dashboard', auth, authorize('admin'), async (req, res) => {
   try {

@@ -371,58 +371,49 @@ function calculateItemCarryingCharge(basis, rate, item) {
   }
 }
 
-// Pre-save middleware to calculate totals and loop-back quantities
+// Pre-save middleware to calculate totals with carton-based tracking as primary
 orderSchema.pre('save', function(next) {
   if (this.items && this.items.length > 0) {
-    // Calculate missing item-level fields and validate loop-back quantities
-    this.items.forEach(item => {
-      // PRIMARY CARTON-BASED TRACKING (for logistics operations)
-      const qcPassedCtn = item.qcPassedCartons || 0;
-      const loopBackCtn = item.loopBackCartons || 0;
+    // CARTON-BASED TRACKING: Primary system for logistics operations
+    this.items.forEach((item, index) => {
       const expectedCtn = item.cartons || 0;
-      
-      // Ensure total allocated cartons don't exceed expected
-      const totalAllocatedCtn = qcPassedCtn + loopBackCtn;
-      if (totalAllocatedCtn > expectedCtn) {
-        // Auto-adjust loop-back cartons if total exceeds expected
-        const excess = totalAllocatedCtn - expectedCtn;
-        item.loopBackCartons = Math.max(0, loopBackCtn - excess);
-      }
-      
-      // Calculate pending cartons (what's left to receive)
-      item.pendingCartons = Math.max(0, expectedCtn - qcPassedCtn - (item.loopBackCartons || 0));
-      
-      // SECONDARY QUANTITY-BASED TRACKING (for legacy compatibility)
-      const qcPassed = item.qcPassedQuantity || 0;
-      const loopBack = item.loopBackQuantity || 0;
       const expectedQty = item.quantity || 0;
       
-      // Ensure total allocated quantities don't exceed expected
-      const totalAllocated = qcPassed + loopBack;
-      if (totalAllocated > expectedQty) {
-        // Auto-adjust loop-back if total exceeds expected
-        const excess = totalAllocated - expectedQty;
-        item.loopBackQuantity = Math.max(0, loopBack - excess);
-      }
+      // Normalize carton-based tracking (PRIMARY)
+      const qcPassedCtn = Math.max(0, Math.min(expectedCtn, item.qcPassedCartons || 0));
+      const loopBackCtn = Math.max(0, Math.min(expectedCtn - qcPassedCtn, item.loopBackCartons || 0));
+      const allocatedCtn = Math.max(0, Math.min(qcPassedCtn, item.allocatedCartons || 0));
       
-      // Calculate pending quantity (what's left to receive)
-      item.pendingQuantity = Math.max(0, expectedQty - qcPassed - (item.loopBackQuantity || 0));
+      // Update normalized values
+      item.qcPassedCartons = qcPassedCtn;
+      item.loopBackCartons = loopBackCtn;
+      item.allocatedCartons = allocatedCtn;
       
-      // Update receivedQuantity to reflect QC passed items (use carton-based as primary)
-      if (qcPassedCtn > 0) {
-        // Convert cartons to pieces for receivedQuantity (backward compatibility)
-        const piecesPerCarton = expectedQty > 0 && expectedCtn > 0 ? expectedQty / expectedCtn : 10; // Default 10 pieces per carton
-        item.receivedQuantity = qcPassedCtn * piecesPerCarton;
+      // Calculate derived quantity values for compatibility (SECONDARY)
+      if (expectedCtn > 0 && expectedQty > 0) {
+        const piecesPerCarton = expectedQty / expectedCtn;
+        item.qcPassedQuantity = Math.round(qcPassedCtn * piecesPerCarton);
+        item.loopBackQuantity = Math.round(loopBackCtn * piecesPerCarton);
+        item.allocatedQuantity = Math.round(allocatedCtn * piecesPerCarton);
       } else {
-        item.receivedQuantity = qcPassed;
+        // Fallback to direct quantity tracking if no carton data
+        item.qcPassedQuantity = Math.max(0, Math.min(expectedQty, item.qcPassedQuantity || 0));
+        item.loopBackQuantity = Math.max(0, Math.min(expectedQty - item.qcPassedQuantity, item.loopBackQuantity || 0));
+        item.allocatedQuantity = Math.max(0, Math.min(item.qcPassedQuantity, item.allocatedQuantity || 0));
       }
       
-      // Calculate totalPrice if not provided
+      // Calculate pending amounts (carton-based as primary)
+      item.pendingCartons = Math.max(0, expectedCtn - qcPassedCtn - loopBackCtn);
+      item.pendingQuantity = Math.max(0, expectedQty - (item.qcPassedQuantity || 0) - (item.loopBackQuantity || 0));
+      
+      // Update receivedQuantity for backward compatibility
+      item.receivedQuantity = item.qcPassedQuantity || 0;
+      
+      // Calculate item financials
       if (!item.totalPrice || item.totalPrice === 0) {
         item.totalPrice = expectedQty * (item.unitPrice || 0);
       }
       
-      // Calculate carrying charge amount if not provided
       if (!item.carryingCharge.amount || item.carryingCharge.amount === 0) {
         item.carryingCharge.amount = calculateItemCarryingCharge(
           item.carryingCharge.basis,
@@ -431,147 +422,85 @@ orderSchema.pre('save', function(next) {
         );
       }
       
-      // Update item QC status based on CARTON-BASED loop-back quantities (primary logic)
-      // CRITICAL: Calculate QC completion percentage to avoid false positives
-      const cartonCompletionPercentage = expectedCtn > 0 ? (qcPassedCtn / expectedCtn) * 100 : 0;
-      const quantityCompletionPercentage = expectedQty > 0 ? (qcPassed / expectedQty) * 100 : 0;
+      // Update QC status based on CARTON completion (primary)
+      const cartonCompletionRate = expectedCtn > 0 ? (qcPassedCtn / expectedCtn) : 0;
       
-      // Use carton-based calculation as primary, fall back to quantity-based for legacy compatibility
-      const primaryCompletionPercentage = expectedCtn > 0 ? cartonCompletionPercentage : quantityCompletionPercentage;
-      
-      if ((qcPassedCtn === 0 && qcPassed === 0) && ((item.loopBackCartons || 0) === 0 && (item.loopBackQuantity || 0) === 0)) {
+      if (cartonCompletionRate === 0 && loopBackCtn === 0) {
         item.qcStatus = 'pending';
-      } else if (primaryCompletionPercentage >= 100) {
-        // Only mark as completed if we truly have 100% or more QC'd
+      } else if (cartonCompletionRate >= 1.0) {
         item.qcStatus = 'completed';
-      } else if (qcPassedCtn > 0 || qcPassed > 0 || (item.loopBackCartons || 0) > 0 || (item.loopBackQuantity || 0) > 0) {
+      } else if (cartonCompletionRate > 0 || loopBackCtn > 0) {
         item.qcStatus = 'partial';
       }
       
-      console.log(`Item ${item.itemCode || 'unknown'} QC status calculation:`, {
-        expectedCtn,
-        expectedQty,
-        qcPassedCtn,
-        qcPassed,
-        cartonCompletionPercentage: cartonCompletionPercentage.toFixed(1) + '%',
-        quantityCompletionPercentage: quantityCompletionPercentage.toFixed(1) + '%',
-        primaryCompletionPercentage: primaryCompletionPercentage.toFixed(1) + '%',
-        qcStatus: item.qcStatus
-      });
-      
-      // Update loop-back status (prioritize carton-based tracking)
-      const hasCartonLoopBack = (item.loopBackCartons || 0) > 0;
-      const hasQuantityLoopBack = (item.loopBackQuantity || 0) > 0;
-      
-      if (hasCartonLoopBack || hasQuantityLoopBack) {
+      // Update loop-back status
+      if (loopBackCtn > 0) {
         if (!item.loopBackStatus || item.loopBackStatus === 'none') {
           item.loopBackStatus = 'pending';
+          item.loopBackReason = 'SHORTAGE';
           item.loopBackCreatedAt = new Date();
         }
         item.loopBackUpdatedAt = new Date();
       } else {
         item.loopBackStatus = 'none';
+        item.loopBackReason = undefined;
       }
     });
     
-    // Calculate order totals
+    // Calculate order-level totals
     this.totalAmount = this.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
     this.totalCarryingCharges = this.items.reduce((sum, item) => sum + (item.carryingCharge.amount || 0), 0);
     this.totalWeight = this.items.reduce((sum, item) => sum + ((item.unitWeight || 0) * (item.cartons || 0)), 0);
     this.totalCbm = this.items.reduce((sum, item) => sum + ((item.unitCbm || 0) * (item.cartons || 0)), 0);
+    this.totalCartons = this.items.reduce((sum, item) => sum + (item.cartons || 0), 0);
     
-    // Calculate totalCartons from items array (fixes carton update issues)
-    const calculatedCartons = this.items.reduce((sum, item) => sum + (item.cartons || 0), 0);
-    console.log(`Recalculating totalCartons: ${this.totalCartons} → ${calculatedCartons} for order ${this.orderNumber}`);
-    this.totalCartons = calculatedCartons;
-    
-    // Calculate NEW quantity tracking with loop-back support
-    const totalOrderQuantity = this.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    const totalQcPassedQuantity = this.items.reduce((sum, item) => sum + (item.qcPassedQuantity || 0), 0);
-    const totalLoopBackQuantity = this.items.reduce((sum, item) => sum + (item.loopBackQuantity || 0), 0);
-    
-    // Calculate CARTON-BASED tracking (primary for logistics)
-    const totalOrderCartons = this.items.reduce((sum, item) => sum + (item.cartons || 0), 0);
+    // CARTON-BASED ORDER TOTALS (Primary tracking)
     const totalQcPassedCartons = this.items.reduce((sum, item) => sum + (item.qcPassedCartons || 0), 0);
     const totalLoopBackCartons = this.items.reduce((sum, item) => sum + (item.loopBackCartons || 0), 0);
-    const totalPendingCartons = Math.max(0, totalOrderCartons - totalQcPassedCartons - totalLoopBackCartons);
+    const totalPendingCartons = this.items.reduce((sum, item) => sum + (item.pendingCartons || 0), 0);
     
-    // UPDATE ORDER-LEVEL CARTON TOTALS
     this.totalQcPassedCartons = totalQcPassedCartons;
     this.totalLoopBackCartons = totalLoopBackCartons;
     this.totalPendingCartons = totalPendingCartons;
     
-    // Update receivedQuantity to reflect QC passed items (use carton-based as primary)
-    if (totalQcPassedCartons > 0) {
-      // Convert total cartons to pieces for totalReceivedQuantity
-      const avgPiecesPerCarton = totalOrderQuantity > 0 && totalOrderCartons > 0 ? totalOrderQuantity / totalOrderCartons : 10;
-      this.totalReceivedQuantity = totalQcPassedCartons * avgPiecesPerCarton;
-    } else {
-      this.totalReceivedQuantity = totalQcPassedQuantity;
-    }
+    // QUANTITY-BASED ORDER TOTALS (Derived from cartons for compatibility)
+    const totalQcPassedQuantity = this.items.reduce((sum, item) => sum + (item.qcPassedQuantity || 0), 0);
+    const totalLoopBackQuantity = this.items.reduce((sum, item) => sum + (item.loopBackQuantity || 0), 0);
     
-    // Calculate pending quantity (use carton-based as primary)
-    if (totalOrderCartons > 0) {
-      // Convert carton-based pending to pieces
-      const avgPiecesPerCarton = totalOrderQuantity > 0 ? totalOrderQuantity / totalOrderCartons : 10;
-      const pendingCartonsPieces = totalPendingCartons * avgPiecesPerCarton;
-      this.totalPendingQuantity = Math.max(0, pendingCartonsPieces);
-    } else {
-      this.totalPendingQuantity = Math.max(0, totalOrderQuantity - totalQcPassedQuantity - totalLoopBackQuantity);
-    }
+    this.totalReceivedQuantity = totalQcPassedQuantity;
+    this.totalPendingQuantity = this.items.reduce((sum, item) => sum + (item.pendingQuantity || 0), 0);
     
-    // Calculate QC completion percentage based on CARTON tracking (primary) with quantity fallback
-    let primaryCompletionPercentage = 0;
-    if (totalOrderCartons > 0) {
-      primaryCompletionPercentage = Math.round((totalQcPassedCartons / totalOrderCartons) * 100);
-    } else if (totalOrderQuantity > 0) {
-      primaryCompletionPercentage = Math.round((totalQcPassedQuantity / totalOrderQuantity) * 100);
-    }
+    // Calculate QC completion percentage based on CARTON tracking (primary)
+    const totalOrderCartons = this.totalCartons;
+    const primaryCompletionPercentage = totalOrderCartons > 0 ? 
+      Math.round((totalQcPassedCartons / totalOrderCartons) * 100) : 0;
     this.qcCompletionPercentage = primaryCompletionPercentage;
     
-    // Update order QC status based on new carton-based loop-back system
-    // Use carton-based calculation as primary, fall back to quantity-based
-    const overallCartonPercentage = totalOrderCartons > 0 ? (totalQcPassedCartons / totalOrderCartons) * 100 : 0;
-    const overallQtyPercentage = totalOrderQuantity > 0 ? (totalQcPassedQuantity / totalOrderQuantity) * 100 : 0;
-    const overallQcPercentage = totalOrderCartons > 0 ? overallCartonPercentage : overallQtyPercentage;
-    
-    const hasAnyLoopBack = totalLoopBackCartons > 0 || totalLoopBackQuantity > 0;
-    const hasAnyQcPassed = totalQcPassedCartons > 0 || totalQcPassedQuantity > 0;
+    // Update order QC status based on carton-based completion
+    const hasAnyLoopBack = totalLoopBackCartons > 0;
+    const hasAnyQcPassed = totalQcPassedCartons > 0;
     
     if (!hasAnyQcPassed && !hasAnyLoopBack) {
       this.qcStatus = 'pending';
-    } else if (overallQcPercentage >= 100) {
-      // Only mark as completed if we truly have 100% or more QC'd
+    } else if (primaryCompletionPercentage >= 100) {
       this.qcStatus = 'completed';
-      // Only auto-change status if it's currently qc_partial, not if manually set to confirmed
       if (this.status === 'qc_partial') {
-        this.status = 'qc_completed';
+        this.status = 'ready';
       }
     } else {
       this.qcStatus = 'partial';
-      // DO NOT automatically change confirmed status to any other status
-      // This allows orders to maintain confirmed status during edits
-      // Only auto-change if status is draft, submitted, or in_progress
-      if (this.status === 'draft' || this.status === 'submitted' || this.status === 'in_progress') {
-        this.status = 'qc_partial';
+      if (['draft', 'submitted', 'in_progress'].includes(this.status)) {
+        this.status = 'partial_ready';
       }
     }
     
-    console.log('Order loop-back quantity tracking calculated:', {
+    console.log('Order carton-based tracking calculated:', {
       orderNumber: this.orderNumber,
-      // Carton-based tracking (primary)
       totalOrderCartons,
       totalQcPassedCartons,
       totalLoopBackCartons,
       totalPendingCartons,
-      cartonQcPercentage: totalOrderCartons > 0 ? ((totalQcPassedCartons / totalOrderCartons) * 100).toFixed(1) + '%' : '0%',
-      // Quantity-based tracking (legacy/fallback)
-      totalOrderQuantity,
-      totalQcPassedQuantity,
-      totalLoopBackQuantity,
-      totalPendingQuantity: this.totalPendingQuantity,
       qcCompletionPercentage: this.qcCompletionPercentage,
-      overallQcPercentage: totalOrderCartons > 0 ? ((totalQcPassedCartons / totalOrderCartons) * 100).toFixed(1) + '%' : ((totalQcPassedQuantity / totalOrderQuantity) * 100).toFixed(1) + '%',
       qcStatus: this.qcStatus,
       status: this.status
     });

@@ -23,50 +23,51 @@ import { formatCurrency } from '@/lib/utils'
 const CostAllocationTree = ({ containerData, showPercentages = true, expandAll = false }) => {
   const [expandedNodes, setExpandedNodes] = useState(new Set(expandAll ? ['root'] : []))
 
-  // Sample cost allocation data structure
+  // Sample cost allocation data structure with dynamic scaling
+  const totalCost = containerData?.totalCost || 125000
   const costStructure = {
     id: 'root',
     name: 'Total Container Costs',
-    amount: containerData?.totalCost || 125000,
+    amount: totalCost,
     percentage: 100,
     icon: Ship,
     children: [
       {
         id: 'shipping',
         name: 'Shipping & Logistics',
-        amount: 45000,
+        amount: Math.round(totalCost * 0.36),
         percentage: 36,
         icon: Truck,
         children: [
-          { id: 'ocean_freight', name: 'Ocean Freight', amount: 28000, percentage: 22.4, icon: Ship },
-          { id: 'port_charges', name: 'Port Charges', amount: 8500, percentage: 6.8, icon: Building },
-          { id: 'inland_transport', name: 'Inland Transport', amount: 5200, percentage: 4.2, icon: Truck },
-          { id: 'customs', name: 'Customs & Clearance', amount: 3300, percentage: 2.6, icon: Building }
+          { id: 'ocean_freight', name: 'Ocean Freight', amount: Math.round(totalCost * 0.224), percentage: 22.4, icon: Ship },
+          { id: 'port_charges', name: 'Port Charges', amount: Math.round(totalCost * 0.068), percentage: 6.8, icon: Building },
+          { id: 'inland_transport', name: 'Inland Transport', amount: Math.round(totalCost * 0.042), percentage: 4.2, icon: Truck },
+          { id: 'customs', name: 'Customs & Clearance', amount: Math.round(totalCost * 0.026), percentage: 2.6, icon: Building }
         ]
       },
       {
         id: 'goods',
         name: 'Goods & Products',
-        amount: 65000,
+        amount: Math.round(totalCost * 0.52),
         percentage: 52,
         icon: Package,
         children: [
-          { id: 'product_cost', name: 'Product Cost', amount: 58000, percentage: 46.4, icon: Package },
-          { id: 'packaging', name: 'Packaging', amount: 4200, percentage: 3.4, icon: Package },
-          { id: 'quality_control', name: 'Quality Control', amount: 2800, percentage: 2.2, icon: Zap }
+          { id: 'product_cost', name: 'Product Cost', amount: Math.round(totalCost * 0.464), percentage: 46.4, icon: Package },
+          { id: 'packaging', name: 'Packaging', amount: Math.round(totalCost * 0.034), percentage: 3.4, icon: Package },
+          { id: 'quality_control', name: 'Quality Control', amount: Math.round(totalCost * 0.022), percentage: 2.2, icon: Zap }
         ]
       },
       {
         id: 'overhead',
         name: 'Overhead & Admin',
-        amount: 15000,
+        amount: Math.round(totalCost * 0.12),
         percentage: 12,
         icon: Building,
         children: [
-          { id: 'admin_fees', name: 'Administrative Fees', amount: 6500, percentage: 5.2, icon: Users },
-          { id: 'insurance', name: 'Insurance', amount: 4200, percentage: 3.4, icon: Building },
-          { id: 'documentation', name: 'Documentation', amount: 2800, percentage: 2.2, icon: Building },
-          { id: 'handling', name: 'Handling Charges', amount: 1500, percentage: 1.2, icon: Users }
+          { id: 'admin_fees', name: 'Administrative Fees', amount: Math.round(totalCost * 0.052), percentage: 5.2, icon: Users },
+          { id: 'insurance', name: 'Insurance', amount: Math.round(totalCost * 0.034), percentage: 3.4, icon: Building },
+          { id: 'documentation', name: 'Documentation', amount: Math.round(totalCost * 0.022), percentage: 2.2, icon: Building },
+          { id: 'handling', name: 'Handling Charges', amount: Math.round(totalCost * 0.012), percentage: 1.2, icon: Users }
         ]
       }
     ]

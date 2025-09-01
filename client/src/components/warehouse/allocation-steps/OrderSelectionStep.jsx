@@ -21,7 +21,8 @@ import {
   Filter
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useToast } from '@/hooks/use-toast';
+import toast from 'react-hot-toast';
+import { useAuthStore } from '@/stores/authStore';
 
 const OrderSelectionStep = ({ data, onUpdate, isLoading }) => {
   const [qcReadyOrders, setQcReadyOrders] = useState([]);
@@ -30,7 +31,17 @@ const OrderSelectionStep = ({ data, onUpdate, isLoading }) => {
   const [clientFilter, setClientFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
-  const { toast } = useToast();
+  const { token, isAuthenticated, user } = useAuthStore();
+
+  const getAuthHeaders = () => {
+    if (!token) {
+      throw new Error('Authentication required. Please log in again.');
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  };
 
   useEffect(() => {
     fetchQcReadyOrders();
@@ -42,25 +53,71 @@ const OrderSelectionStep = ({ data, onUpdate, isLoading }) => {
 
   const fetchQcReadyOrders = async () => {
     try {
+      if (!isAuthenticated) {
+        toast.error('Please log in to access QC ready orders.');
+        return;
+      }
+
+      const headers = getAuthHeaders();
       const response = await fetch('/api/warehouse/qc-ready-orders?includePartial=true', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch QC ready orders');
+        if (response.status === 401) {
+          toast.error('Your session has expired. Please log in again.');
+          return;
+        }
+        if (response.status === 403) {
+          toast.error('You need admin or staff permissions to access this feature.');
+          return;
+        }
+        
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        throw new Error(errorData.message || `Failed to fetch QC ready orders: ${response.status}`);
       }
 
       const result = await response.json();
       setQcReadyOrders(result.orders);
       setSummary(result.summary);
+      
+      // Validate carton availability and provide detailed feedback
+      if (result.orders && result.orders.length > 0) {
+        let totalAvailable = 0;
+        let ordersWithZeroCartons = 0;
+        
+        result.orders.forEach(order => {
+          let orderHasAvailableCartons = false;
+          order.items?.forEach(item => {
+            const available = item.availableCartons || 0;
+            totalAvailable += available;
+            if (available > 0) orderHasAvailableCartons = true;
+          });
+          if (!orderHasAvailableCartons) ordersWithZeroCartons++;
+        });
+        
+        if (totalAvailable === 0) {
+          toast.error(`Found ${result.orders.length} QC ready orders but 0 cartons available for allocation`, {
+            duration: 8000
+          });
+          setTimeout(() => {
+            toast.info('This happens when: 1) Orders haven\'t completed QC inspection, 2) All cartons are already allocated, or 3) Database needs initialization', {
+              duration: 6000
+            });
+          }, 2000);
+        } else if (ordersWithZeroCartons > 0) {
+          toast.warning(`${ordersWithZeroCartons} orders have no available cartons. Total available: ${totalAvailable} cartons`);
+        }
+      }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message,
-      });
+      console.error('QC ready orders fetch error:', error);
+      toast.error(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -87,13 +144,45 @@ const OrderSelectionStep = ({ data, onUpdate, isLoading }) => {
   };
 
   const handleItemAllocationChange = (orderId, itemIndex, field, value) => {
+    const numValue = parseInt(value) || 0;
+    
     setSelectedOrders(prev => prev.map(order => {
       if (order.orderId === orderId) {
         return {
           ...order,
           items: order.items.map((item, idx) => {
             if (idx === itemIndex) {
-              return { ...item, [field]: Math.max(0, parseInt(value) || 0) };
+              // Get the corresponding order item to check available quantities
+              const qcOrder = qcReadyOrders.find(o => o._id === orderId);
+              const qcItem = qcOrder?.items[itemIndex];
+              
+              if (qcItem) {
+                const maxQuantity = qcItem.availableQuantity || 0;
+                const maxCartons = qcItem.availableCartons || 0;
+                
+                let validatedValue = Math.max(0, numValue);
+                
+                // Enforce maximum limits based on field type
+                if (field === 'allocateQuantity') {
+                  validatedValue = Math.min(validatedValue, maxQuantity);
+                  
+                  // Show warning if user tried to exceed limit
+                  if (numValue > maxQuantity) {
+                    toast.error(`Cannot allocate ${numValue} units. Maximum available: ${maxQuantity}`);
+                  }
+                } else if (field === 'allocateCartons') {
+                  validatedValue = Math.min(validatedValue, maxCartons);
+                  
+                  // Show warning if user tried to exceed limit
+                  if (numValue > maxCartons) {
+                    toast.error(`Cannot allocate ${numValue} cartons. Maximum available: ${maxCartons}`);
+                  }
+                }
+                
+                return { ...item, [field]: validatedValue };
+              }
+              
+              return { ...item, [field]: Math.max(0, numValue) };
             }
             return item;
           })
@@ -358,47 +447,81 @@ const OrderSelectionStep = ({ data, onUpdate, isLoading }) => {
                                     </Badge>
                                   </div>
                                   
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 gap-3">
+                                    {/* Primary Carton-Based Allocation */}
                                     <div>
-                                      <Label className="text-xs text-gray-600">Allocate Quantity</Label>
-                                      <div className="flex items-center space-x-2">
-                                        <Input
-                                          type="number"
-                                          value={itemSelection?.allocateQuantity || 0}
-                                          onChange={(e) => handleItemAllocationChange(
-                                            order._id, itemIndex, 'allocateQuantity', e.target.value
-                                          )}
-                                          max={item.availableQuantity}
-                                          min={0}
-                                          className="text-sm"
-                                        />
-                                        <span className="text-xs text-gray-500">/ {item.availableQuantity}</span>
-                                      </div>
-                                    </div>
-                                    
-                                    <div>
-                                      <Label className="text-xs text-gray-600">Allocate Cartons</Label>
+                                      <Label className="text-xs text-gray-600 font-medium">Allocate Cartons (Primary)</Label>
                                       <div className="flex items-center space-x-2">
                                         <Input
                                           type="number"
                                           value={itemSelection?.allocateCartons || 0}
-                                          onChange={(e) => handleItemAllocationChange(
-                                            order._id, itemIndex, 'allocateCartons', e.target.value
-                                          )}
+                                          onChange={(e) => {
+                                            const cartonValue = e.target.value;
+                                            handleItemAllocationChange(order._id, itemIndex, 'allocateCartons', cartonValue);
+                                            
+                                            // Auto-calculate quantity based on cartons (carton-based primary)
+                                            const qtyPerCarton = item.quantity && item.cartons ? item.quantity / item.cartons : 1;
+                                            const calculatedQty = Math.round((parseInt(cartonValue) || 0) * qtyPerCarton);
+                                            handleItemAllocationChange(order._id, itemIndex, 'allocateQuantity', calculatedQty);
+                                          }}
                                           max={item.availableCartons}
                                           min={0}
-                                          className="text-sm"
+                                          step={1}
+                                          className={`text-sm font-medium ${
+                                            (itemSelection?.allocateCartons || 0) > item.availableCartons 
+                                              ? 'border-red-500 focus:border-red-500' 
+                                              : 'border-green-300 focus:border-green-500'
+                                          }`}
+                                          onBlur={(e) => {
+                                            const value = parseInt(e.target.value) || 0;
+                                            if (value > item.availableCartons) {
+                                              handleItemAllocationChange(
+                                                order._id, itemIndex, 'allocateCartons', item.availableCartons
+                                              );
+                                            }
+                                          }}
                                         />
-                                        <span className="text-xs text-gray-500">/ {item.availableCartons}</span>
+                                        <span className={`text-sm font-medium ${
+                                          (itemSelection?.allocateCartons || 0) > item.availableCartons 
+                                            ? 'text-red-500' 
+                                            : 'text-green-600'
+                                        }`}>
+                                          / {item.availableCartons} cartons
+                                        </span>
+                                      </div>
+                                      {(itemSelection?.allocateCartons || 0) > item.availableCartons && (
+                                        <p className="text-xs text-red-500 mt-1 font-medium">
+                                          ⚠️ Exceeds available cartons
+                                        </p>
+                                      )}
+                                      
+                                      {/* Show calculated quantity for reference only */}
+                                      <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded p-2">
+                                        <div className="flex justify-between">
+                                          <span>Auto-calculated quantity:</span>
+                                          <span className="font-medium">{itemSelection?.allocateQuantity || 0} units</span>
+                                        </div>
+                                        <div className="text-gray-400 text-xs mt-1">
+                                          Based on carton allocation (carton-based tracking)
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
                                   
-                                  {/* Item totals */}
-                                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-gray-600">
-                                    <span>CBM: {((itemSelection?.allocateCartons || 0) * (item.unitCbm || 0)).toFixed(2)}</span>
-                                    <span>Weight: {((itemSelection?.allocateQuantity || 0) * (item.unitWeight || 0)).toFixed(1)}</span>
-                                    <span>Payment: {item.paymentType === 'THROUGH_ME' ? 'Through Me' : 'Direct'}</span>
+                                  {/* Item totals - Carton-focused */}
+                                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                                    <div className="bg-blue-50 rounded p-2">
+                                      <div className="text-blue-700 font-medium">CBM (Primary)</div>
+                                      <div className="text-blue-900 font-bold">
+                                        {((itemSelection?.allocateCartons || 0) * (item.unitCbm || 0)).toFixed(2)} m³
+                                      </div>
+                                    </div>
+                                    <div className="bg-green-50 rounded p-2">
+                                      <div className="text-green-700 font-medium">Payment Type</div>
+                                      <div className="text-green-900 font-bold text-xs">
+                                        {item.paymentType === 'THROUGH_ME' ? 'Through Me' : 'Direct'}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               );
@@ -428,20 +551,27 @@ const OrderSelectionStep = ({ data, onUpdate, isLoading }) => {
             </CardHeader>
             
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{selectionTotals.totalCbm}</p>
-                  <p className="text-xs text-blue-600">Total CBM</p>
+              <div className="grid grid-cols-1 gap-4">
+                {/* Primary Carton Metrics */}
+                <div className="text-center p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-center mb-2">
+                    <Boxes className="h-6 w-6 text-blue-600 mr-2" />
+                    <p className="text-lg font-bold text-blue-800">{selectionTotals.totalCartons} Cartons</p>
+                  </div>
+                  <p className="text-xs text-blue-600 font-medium">Primary tracking unit</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{selectionTotals.totalCartons}</p>
-                  <p className="text-xs text-green-600">Total Cartons</p>
+                
+                {/* CBM and Charges */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <p className="text-xl font-bold text-green-600">{selectionTotals.totalCbm}</p>
+                    <p className="text-xs text-green-600">CBM</p>
+                  </div>
+                  <div className="text-center p-3 bg-purple-50 rounded-lg">
+                    <p className="text-xl font-bold text-purple-600">₹{parseInt(selectionTotals.totalCarryingCharges).toLocaleString()}</p>
+                    <p className="text-xs text-purple-600">Charges</p>
+                  </div>
                 </div>
-              </div>
-              
-              <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <p className="text-2xl font-bold text-purple-600">₹{parseInt(selectionTotals.totalCarryingCharges).toLocaleString()}</p>
-                <p className="text-xs text-purple-600">Carrying Charges</p>
               </div>
               
               <Separator />

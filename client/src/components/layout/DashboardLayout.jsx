@@ -8,6 +8,7 @@ import {
   Container,
   DollarSign,
   Users,
+  Building2,
   Settings,
   LogOut,
   Menu,
@@ -80,6 +81,12 @@ const DashboardLayout = ({ children }) => {
       href: '/containers',
       icon: Container,
       current: location.pathname.startsWith('/containers')
+    },
+    {
+      name: 'Companies',
+      href: '/companies-management',
+      icon: Building2,
+      current: location.pathname.startsWith('/companies-management')
     },
     {
       name: 'Financials',

@@ -97,7 +97,7 @@ const EnhancedSidebar = ({ navigation, onLogout }) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-400 scrollbar-track-stone-100 hover:scrollbar-thumb-stone-500">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
         {updatedNavigation.map((item) => (
           <Link
             key={item.name}
@@ -129,7 +129,7 @@ const EnhancedSidebar = ({ navigation, onLogout }) => {
       </nav>
 
       {/* Theme & Settings Section */}
-      <div className="px-3 py-2 border-t border-sidebar-border">
+      <div className="px-3 py-2 border-t">
         <div className={cn(
           "flex gap-1",
           isCollapsed ? "flex-col" : "flex-row"
@@ -167,10 +167,10 @@ const EnhancedSidebar = ({ navigation, onLogout }) => {
 
           {!isCollapsed && (
             <div className="ml-3 flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
+              <p className="text-sm font-medium truncate text-foreground">
                 {user?.name || 'User'}
               </p>
-              <p className="text-xs text-sidebar-muted capitalize truncate">
+              <p className="text-xs text-muted-foreground capitalize truncate">
                 {user?.role || 'Role'}
               </p>
             </div>
@@ -202,7 +202,7 @@ const EnhancedSidebar = ({ navigation, onLogout }) => {
             size="sm"
             onClick={onLogout}
             className={cn(
-              "sidebar-nav-item text-red-600 hover:text-red-700 hover:bg-red-50",
+              "sidebar-nav-item text-red-600 hover:text-red-700 hover:bg-red-500/10 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10",
               isCollapsed ? "w-auto px-2" : "w-full justify-start"
             )}
             title={isCollapsed ? "Logout" : ''}

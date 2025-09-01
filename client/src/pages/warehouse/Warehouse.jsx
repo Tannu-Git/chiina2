@@ -12,7 +12,8 @@ import {
   Container,
   Search,
   Filter,
-  XCircle
+  XCircle,
+  Ship
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -274,7 +275,7 @@ const Warehouse = () => {
 
   if (loading) {
     return (
-      <div className="px-4 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mr-3"></div>
           <span>Loading warehouse data...</span>
@@ -284,14 +285,24 @@ const Warehouse = () => {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
+    <div className="px-4 sm:px-6 lg:px-8 bg-background min-h-screen">
       {/* Simple Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-stone-900">Warehouse</h1>
-          <p className="text-stone-600">Quality control and order processing</p>
+          <h1 className="text-3xl font-bold text-foreground">Warehouse</h1>
+          <p className="text-muted-foreground">Quality control and order processing</p>
         </div>
         <div className="flex items-center space-x-2">
+          {/* Container Allocation Quick Access */}
+          <Button 
+            onClick={() => window.location.href = '/warehouse/allocation'}
+            disabled={qcCompletedOrders.length === 0}
+            className="bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md transition-all duration-200"
+          >
+            <Ship className="h-4 w-4 mr-2" />
+            Container Allocation
+          </Button>
+          
           {/* Auto-refresh toggle */}
           <Button 
             variant={autoRefresh ? "default" : "outline"}
@@ -388,7 +399,7 @@ const Warehouse = () => {
         {/* Search */}
         <div className="flex items-center space-x-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search..."
               value={searchTerm}
@@ -404,15 +415,15 @@ const Warehouse = () => {
         <CardContent className="p-6">
           {selectedView === 'orders' ? (
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg text-stone-800 mb-4">Orders Pending QC Inspection</h3>
+              <h3 className="font-semibold text-lg text-foreground mb-4">Orders Pending QC Inspection</h3>
               {filteredData.map((order) => (
-                <div key={order._id} className="border border-stone-200 rounded-lg p-4 hover:border-amber-300 hover:shadow-lg hover:bg-amber-50/30 transition-all duration-300 cursor-pointer group">
+                <div key={order._id} className="border border-border rounded-lg p-4 hover:border-amber-300 hover:shadow-lg hover:bg-amber-50/30 transition-all duration-300 cursor-pointer group">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       {getStatusIcon(order.status)}
                       <div>
                         <div className="flex items-center space-x-2">
-                          <h3 className="font-semibold text-stone-900 group-hover:text-amber-700 transition-colors duration-200">{order.orderNumber}</h3>
+                          <h3 className="font-semibold text-foreground group-hover:text-amber-700 transition-colors duration-200">{order.orderNumber}</h3>
                           {order.isLoopBack && (
                             <Badge variant="outline" className="text-xs px-2 py-0 bg-orange-50 text-orange-600 border-orange-300">
                               <RotateCcw className="h-3 w-3 mr-1" />
@@ -420,7 +431,7 @@ const Warehouse = () => {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-stone-500 group-hover:text-stone-600 transition-colors duration-200">{order.clientName}</p>
+                        <p className="text-sm text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">{order.clientName}</p>
                         {order.isLoopBack && order.parentOrderId && (
                           <p className="text-xs text-orange-600">↳ From original order</p>
                         )}
@@ -428,7 +439,7 @@ const Warehouse = () => {
                       <Badge variant="secondary" className="group-hover:bg-amber-100 group-hover:text-amber-800 transition-colors duration-200">
                         {order.items?.length || 0} items
                       </Badge>
-                      <span className="text-sm text-stone-600 group-hover:text-stone-700 transition-colors duration-200">
+                      <span className="text-sm text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">
                         {order.totalCbm} m³ • {order.totalCartons} cartons
                       </span>
                     </div>
@@ -460,17 +471,17 @@ const Warehouse = () => {
               ))}
               
               {filteredData.length === 0 && (
-                <div className="text-center py-8 text-stone-500">
-                  <Package className="h-12 w-12 mx-auto mb-2 text-stone-400" />
-                  <p className="text-stone-600">No pending orders found</p>
-                  <p className="text-sm text-stone-500 mt-1">All orders have been processed or try adjusting your search</p>
+                <div className="text-center py-8 text-muted-foreground">
+                  <Package className="h-12 w-12 mx-auto mb-2 text-muted-foreground/50" />
+                  <p className="text-foreground">No pending orders found</p>
+                  <p className="text-sm text-muted-foreground mt-1">All orders have been processed or try adjusting your search</p>
                 </div>
               )}
             </div>
           ) : selectedView === 'completed' ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-lg text-stone-800">QC Completed Orders</h3>
+                <h3 className="font-semibold text-lg text-foreground">QC Completed Orders</h3>
                 {/* QC Progress Summary */}
                 <div className="flex items-center space-x-4 text-sm">
                   <div className="bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
@@ -524,19 +535,19 @@ const Warehouse = () => {
                 ).length || 0
                 
                 return (
-                  <div key={order._id} className="border border-stone-200 rounded-lg p-4 hover:border-green-300 hover:shadow-lg hover:bg-green-50/30 transition-all duration-300 cursor-pointer group">
+                  <div key={order._id} className="border border-border rounded-lg p-4 hover:border-green-300 hover:shadow-lg hover:bg-green-50/30 transition-all duration-300 cursor-pointer group">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         {getStatusIcon(order.status)}
                         <div>
                           <div className="flex items-center space-x-2">
-                            <h3 className="font-semibold text-stone-900 group-hover:text-green-700 transition-colors duration-200">{order.orderNumber}</h3>
+                            <h3 className="font-semibold text-foreground group-hover:text-green-700 transition-colors duration-200">{order.orderNumber}</h3>
                             {/* QC Progress Indicator */}
                             <Badge variant="outline" className="text-xs px-2 py-0 bg-blue-50 text-blue-600 border-blue-300">
                               QC: {processedItems}/{totalItems} items
                             </Badge>
                           </div>
-                          <p className="text-sm text-stone-500 group-hover:text-stone-600 transition-colors duration-200">{order.clientName}</p>
+                          <p className="text-sm text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">{order.clientName}</p>
                           <div className="flex items-center space-x-2 mt-1">
                             {order.qcCompletedAt && (
                               <p className="text-xs text-stone-400">QC: {new Date(order.qcCompletedAt).toLocaleDateString()}</p>
@@ -576,7 +587,7 @@ const Warehouse = () => {
                         <Badge className={`${qcBadge.color} transition-colors duration-200`}>
                           {qcBadge.text}
                         </Badge>
-                        <span className="text-sm text-stone-600 group-hover:text-stone-700 transition-colors duration-200">
+                        <span className="text-sm text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">
                           {order.totalCbm} m³ • {order.totalCartons} cartons
                         </span>
                       </div>
@@ -605,10 +616,10 @@ const Warehouse = () => {
                         {order.status === 'ready' && (
                           <Button 
                             size="sm"
-                            onClick={() => {/* Handle container allocation */}}
+                            onClick={() => window.location.href = '/warehouse/allocation'}
                             className="bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:shadow-md"
                           >
-                            <Container className="h-4 w-4 mr-1" />
+                            <Ship className="h-4 w-4 mr-1" />
                             Allocate Container
                           </Button>
                         )}
@@ -619,17 +630,17 @@ const Warehouse = () => {
               })}
               
               {filteredData.length === 0 && (
-                <div className="text-center py-8 text-stone-500">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-2 text-stone-400" />
-                  <p className="text-stone-600">No completed QC orders found</p>
-                  <p className="text-sm text-stone-500 mt-1">Complete some QC inspections to see them here</p>
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-2 text-muted-foreground/50" />
+                  <p className="text-foreground">No completed QC orders found</p>
+                  <p className="text-sm text-muted-foreground mt-1">Complete some QC inspections to see them here</p>
                 </div>
               )}
             </div>
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-lg text-stone-800">Loop-back Orders</h3>
+                <h3 className="font-semibold text-lg text-foreground">Loop-back Orders</h3>
                 {/* Enhanced Loop-back Summary with Real-time Quantities */}
                 <div className="flex items-center space-x-4 text-sm">
                   <div className="bg-orange-50 px-3 py-1 rounded-lg border border-orange-200">
@@ -678,7 +689,7 @@ const Warehouse = () => {
                 const isEditingThis = editingLoopBack?.orderId === loopBack._id
                 
                 return (
-                  <div key={loopBack._id} className="border border-stone-200 rounded-lg hover:border-orange-300 hover:shadow-lg transition-all duration-300">
+                  <div key={loopBack._id} className="border border-border rounded-lg hover:border-orange-300 hover:shadow-lg transition-all duration-300">
                     {/* Main Loop-back Info */}
                     <div className="p-4 hover:bg-orange-50/30 cursor-pointer group">
                       <div className="flex items-center justify-between">
@@ -686,7 +697,7 @@ const Warehouse = () => {
                           <RotateCcw className="h-4 w-4 text-orange-500 group-hover:text-orange-600 transition-colors duration-200" />
                           <div>
                             <div className="flex items-center space-x-2">
-                              <h3 className="font-semibold text-stone-900 group-hover:text-orange-700 transition-colors duration-200">{loopBack.orderNumber}</h3>
+                              <h3 className="font-semibold text-foreground group-hover:text-orange-700 transition-colors duration-200">{loopBack.orderNumber}</h3>
                               <Badge variant="outline" className="text-xs px-2 py-0 bg-orange-50 text-orange-600 border-orange-300">
                                 Loop-back ({loopBack.loopBackReason})
                               </Badge>
@@ -705,7 +716,7 @@ const Warehouse = () => {
                                 </div>
                               )}
                             </div>
-                            <p className="text-sm text-stone-500 group-hover:text-stone-600 transition-colors duration-200">{loopBack.clientName}</p>
+                            <p className="text-sm text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">{loopBack.clientName}</p>
                             {loopBack.parentOrderId && (
                               <p className="text-xs text-orange-600">
                                 ↳ Replacement order
@@ -735,7 +746,7 @@ const Warehouse = () => {
                               {qcBadge.text}
                             </Badge>
                           )}
-                          <span className="text-sm text-stone-600 group-hover:text-stone-700 transition-colors duration-200">
+                          <span className="text-sm text-muted-foreground group-hover:text-muted-foreground transition-colors duration-200">
                             {loopBack.totalCbm || 0} m³ • {loopBack.totalCartons || 0} cartons
                           </span>
                         </div>
@@ -839,7 +850,7 @@ const Warehouse = () => {
                                       type="number"
                                       value={expectedQty}
                                       disabled
-                                      className="bg-stone-100 font-medium text-center"
+                                      className="bg-muted font-medium text-center"
                                     />
                                   </div>
                                   <div>
@@ -878,11 +889,11 @@ const Warehouse = () => {
                                 
                                 {/* Progress Visualization */}
                                 <div className="mb-3">
-                                  <div className="flex justify-between text-sm text-stone-600 mb-1">
+                                  <div className="flex justify-between text-sm text-muted-foreground mb-1">
                                     <span>Progress: {Math.round(((qcPassedQty + loopBackQty) / expectedQty) * 100)}%</span>
                                     <span>{qcPassedQty + loopBackQty} / {expectedQty}</span>
                                   </div>
-                                  <div className="w-full bg-stone-200 rounded-full h-3 overflow-hidden">
+                                  <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
                                     <div className="h-full flex">
                                       <div 
                                         className="bg-green-500 transition-all duration-300"
@@ -942,10 +953,10 @@ const Warehouse = () => {
               })}
               
               {filteredData.length === 0 && (
-                <div className="text-center py-8 text-stone-500">
-                  <RotateCcw className="h-12 w-12 mx-auto mb-2 text-stone-400" />
-                  <p className="text-stone-600">No loop-back orders found</p>
-                  <p className="text-sm text-stone-500 mt-1">Loop-back orders will appear here when created</p>
+                <div className="text-center py-8 text-muted-foreground">
+                  <RotateCcw className="h-12 w-12 mx-auto mb-2 text-muted-foreground/50" />
+                  <p className="text-foreground">No loop-back orders found</p>
+                  <p className="text-sm text-muted-foreground mt-1">Loop-back orders will appear here when created</p>
                 </div>
               )}
             </div>

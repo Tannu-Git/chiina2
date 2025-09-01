@@ -24,7 +24,7 @@ import {
   FileText
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useToast } from '@/hooks/use-toast';
+import toast from 'react-hot-toast';
 
 const AllocationPreviewStep = ({ data, onUpdate, isLoading }) => {
   const [shippingCompanies, setShippingCompanies] = useState([]);
@@ -38,7 +38,7 @@ const AllocationPreviewStep = ({ data, onUpdate, isLoading }) => {
   });
   const [allocationPreview, setAllocationPreview] = useState(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { token, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     fetchShippingCompanies();
@@ -60,9 +60,15 @@ const AllocationPreviewStep = ({ data, onUpdate, isLoading }) => {
 
   const fetchShippingCompanies = async () => {
     try {
+      if (!isAuthenticated || !token) {
+        console.warn('No authentication token available for shipping companies');
+        return;
+      }
+
       const response = await fetch('/api/financials/shipping-companies', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -78,13 +84,18 @@ const AllocationPreviewStep = ({ data, onUpdate, isLoading }) => {
   const generateAllocationPreview = async () => {
     if (!data.validationResults || !data.optimizationResults) return;
 
+    if (!isAuthenticated || !token) {
+      toast.error('Please log in to generate allocation preview.');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch('/api/warehouse/allocation-wizard', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           step: 'preview-allocation',
@@ -104,11 +115,7 @@ const AllocationPreviewStep = ({ data, onUpdate, isLoading }) => {
       const result = await response.json();
       setAllocationPreview(result);
     } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Preview Error',
-        description: error.message,
-      });
+      toast.error(`Preview Error: ${error.message}`);
     } finally {
       setLoading(false);
     }

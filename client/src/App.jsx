@@ -19,9 +19,17 @@ import OrderDetails from './pages/orders/OrderDetails'
 import Warehouse from './pages/warehouse/Warehouse'
 import Containers from './pages/containers/Containers'
 import ContainerDetails from './pages/containers/ContainerDetails'
+import ContainerEdit from './pages/containers/ContainerEdit'
+import ClientAllocations from './pages/containers/ClientAllocations'
 import Financials from './pages/financials/Financials'
+import PaymentCollections from './pages/financials/PaymentCollections'
+import ClientManagement from './pages/clients/ClientManagement'
+import CompaniesManagement from './pages/companies/CompaniesManagement'
 import Users from './pages/admin/Users'
 import Profile from './pages/Profile'
+import AuthDebugPanel from './components/debug/AuthDebugPanel'
+import ContainerCleanup from './components/warehouse/ContainerCleanup'
+import NewContainerAllocation from './components/warehouse/NewContainerAllocation'
 
 // Hooks and Stores
 import { useAuthStore } from './stores/authStore'
@@ -144,6 +152,20 @@ function App() {
               </ProtectedRoute>
             } />
 
+            <Route path="/warehouse/allocation" element={
+              <ProtectedRoute requiredRole="staff">
+                <NewContainerAllocation 
+                  onComplete={(result) => {
+                    console.log('Allocation completed:', result);
+                    window.location.href = '/containers';
+                  }}
+                  onCancel={() => {
+                    window.location.href = '/warehouse';
+                  }}
+                />
+              </ProtectedRoute>
+            } />
+
             {/* Container Routes */}
             <Route path="/containers" element={
               <ProtectedRoute>
@@ -172,7 +194,15 @@ function App() {
             <Route path="/containers/:id/edit" element={
               <ProtectedRoute requiredRole="staff">
                 <DashboardLayout>
-                  <ContainerDetails />
+                  <ContainerEdit />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/client-allocations" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ClientAllocations />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
@@ -182,6 +212,30 @@ function App() {
               <ProtectedRoute requiredRole="admin">
                 <DashboardLayout>
                   <Financials />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/payment-collections" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <PaymentCollections />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/client-management" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ClientManagement />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/companies-management" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CompaniesManagement />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
@@ -200,6 +254,24 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <Profile />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Debug Routes */}
+            <Route path="/debug/auth" element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AuthDebugPanel />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Cleanup Routes */}
+            <Route path="/cleanup/containers" element={
+              <ProtectedRoute requiredRole="admin">
+                <DashboardLayout>
+                  <ContainerCleanup />
                 </DashboardLayout>
               </ProtectedRoute>
             } />

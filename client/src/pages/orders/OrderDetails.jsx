@@ -152,7 +152,91 @@ const OrderDetails = () => {
   }
 
   const handleExportOrder = () => {
-    toast.success('Export functionality will be implemented')
+    try {
+      // Prepare order data for export
+      const orderData = {
+        'Order Number': displayOrder.orderNumber,
+        'Client Name': displayOrder.clientName,
+        'Status': displayOrder.status?.replace('_', ' '),
+        'Priority': displayOrder.priority,
+        'Total Amount': displayOrder.totalAmount || 0,
+        'Total CBM': displayOrder.totalCbm || 0,
+        'Total Weight': displayOrder.totalWeight || 0,
+        'Total Cartons': displayOrder.totalCartons || 0,
+        'Container ID': displayOrder.containerId?.clientFacingId || displayOrder.containerId?.realContainerId || 'Unassigned',
+        'Payment Type': displayOrder.paymentType || 'N/A',
+        'Created Date': new Date(displayOrder.createdAt).toLocaleDateString(),
+        'Updated Date': new Date(displayOrder.updatedAt).toLocaleDateString(),
+        'Deadline': displayOrder.deadline ? new Date(displayOrder.deadline).toLocaleDateString() : 'N/A',
+        'Notes': displayOrder.notes || ''
+      }
+
+      // Prepare items data
+      const itemsData = displayOrder.items?.map((item, index) => ({
+        'Item #': index + 1,
+        'Item Code': item.itemCode || 'N/A',
+        'Description': item.description || 'N/A',
+        'Quantity': item.quantity || 0,
+        'Unit Price': item.unitPrice || 0,
+        'Total Price': item.totalPrice || (item.quantity * item.unitPrice) || 0,
+        'Cartons': item.cartons || 0,
+        'Unit CBM': item.unitCbm || 0,
+        'Total CBM': (item.unitCbm * item.cartons) || 0,
+        'Unit Weight': item.unitWeight || 0,
+        'Total Weight': (item.unitWeight * item.cartons) || 0,
+        'Supplier': item.supplier?.name || 'N/A',
+        'HSN Code': item.hsnCode || 'N/A',
+        'Status': item.status || 'N/A',
+        'QC Status': item.qcStatus || 'N/A',
+        'Allocated Cartons': item.allocatedCartons || 0,
+        'Allocated Quantity': item.allocatedQuantity || 0
+      })) || []
+
+      // Combine order and items data
+      const csvData = [
+        // Order header
+        { Type: 'ORDER_HEADER', ...orderData },
+        // Empty row for separation
+        {},
+        // Items header
+        { Type: 'ITEMS' },
+        // Items data
+        ...itemsData.map(item => ({ Type: 'ITEM', ...item }))
+      ]
+
+      // Convert to CSV
+      const allKeys = new Set()
+      csvData.forEach(row => Object.keys(row).forEach(key => allKeys.add(key)))
+      const headers = Array.from(allKeys)
+      
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header] || ''
+            // Escape commas and quotes in CSV
+            return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+              ? `"${value.replace(/"/g, '""')}"` 
+              : value
+          }).join(',')
+        )
+      ].join('\n')
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `order-${displayOrder.orderNumber}-export-${new Date().toISOString().split('T')[0]}.csv`
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast.success(`Exported order ${displayOrder.orderNumber} to CSV`)
+    } catch (error) {
+      console.error('Export failed:', error)
+      toast.error('Failed to export order')
+    }
   }
 
   if (loading) {

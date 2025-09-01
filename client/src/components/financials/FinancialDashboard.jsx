@@ -17,6 +17,9 @@ import {
   Eye
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/stores/authStore';
+import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const FinancialDashboard = () => {
   const [containers, setContainers] = useState([]);
@@ -24,6 +27,7 @@ const FinancialDashboard = () => {
   const [financialSummary, setFinancialSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { isAuthenticated, token } = useAuthStore();
 
   useEffect(() => {
     fetchFinancialData();
@@ -31,17 +35,27 @@ const FinancialDashboard = () => {
 
   const fetchFinancialData = async () => {
     try {
-      const response = await fetch('/api/containers?includeFinancials=true', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
+      console.log('📊 [FINANCIAL DASHBOARD] Fetching financial data');
       
-      if (response.ok) {
-        const data = await response.json();
-        setContainers(data.containers || []);
-        calculateFinancialSummary(data.containers || []);
+      if (!isAuthenticated || !token) {
+        toast({ variant: "destructive", title: "Authentication Required", description: "Please log in to view financial data" });
+        return;
+      }
+      
+      const response = await axios.get('/api/containers?includeFinancials=true');
+      
+      if (response.data) {
+        setContainers(response.data.containers || []);
+        calculateFinancialSummary(response.data.containers || []);
+        console.log('✅ [FINANCIAL DASHBOARD] Data loaded successfully');
       }
     } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to fetch financial data" });
+      console.error('❌ [FINANCIAL DASHBOARD] Error:', error);
+      if (error.response?.status === 401) {
+        toast({ variant: "destructive", title: "Session Expired", description: "Please log in again" });
+      } else {
+        toast({ variant: "destructive", title: "Error", description: "Failed to fetch financial data" });
+      }
     } finally {
       setLoading(false);
     }
@@ -60,86 +74,92 @@ const FinancialDashboard = () => {
 
   const updateContainerCharges = async (containerId, charges) => {
     try {
-      const response = await fetch(`/api/financials/container-charges/${containerId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(charges)
-      });
+      console.log('💰 [FINANCIAL DASHBOARD] Updating charges for container:', containerId);
+      
+      if (!isAuthenticated || !token) {
+        toast({ variant: "destructive", title: "Authentication Required", description: "Please log in to update charges" });
+        return;
+      }
+      
+      const response = await axios.post(`/api/financials/container-charges/${containerId}`, charges);
 
-      if (response.ok) {
+      if (response.data) {
         toast({ title: "Success", description: "Container charges updated successfully" });
         fetchFinancialData();
         setSelectedContainer(null);
+        console.log('✅ [FINANCIAL DASHBOARD] Charges updated successfully');
       }
     } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      console.error('❌ [FINANCIAL DASHBOARD] Update error:', error);
+      if (error.response?.status === 401) {
+        toast({ variant: "destructive", title: "Session Expired", description: "Please log in again" });
+      } else {
+        toast({ variant: "destructive", title: "Error", description: error.response?.data?.message || "Failed to update charges" });
+      }
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-96">
+      <div className="flex items-center justify-center min-h-96 bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Loading financial data...</span>
+        <span className="ml-2 text-muted-foreground">Loading financial data...</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Financial Management</h1>
+          <h1 className="text-3xl font-bold text-foreground">Financial Management</h1>
         </div>
 
         {/* Summary Cards */}
         {financialSummary && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="bg-green-50">
+            <Card className="bg-green-500/10 border-green-500/20">
               <CardContent className="p-4">
                 <div className="flex items-center">
                   <TrendingUp className="h-8 w-8 text-green-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-green-600">Total Revenue</p>
+                    <p className="text-sm font-medium text-green-600 dark:text-green-400">Total Revenue</p>
                     <p className="text-2xl font-bold">₹{financialSummary.totalRevenue.toLocaleString()}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-blue-50">
+            <Card className="bg-blue-500/10 border-blue-500/20">
               <CardContent className="p-4">
                 <div className="flex items-center">
                   <DollarSign className="h-8 w-8 text-blue-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-blue-600">Net Profit</p>
+                    <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Net Profit</p>
                     <p className="text-2xl font-bold">₹{financialSummary.totalProfit.toLocaleString()}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-purple-50">
+            <Card className="bg-purple-500/10 border-purple-500/20">
               <CardContent className="p-4">
                 <div className="flex items-center">
                   <Ship className="h-8 w-8 text-purple-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-purple-600">Active Containers</p>
+                    <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Active Containers</p>
                     <p className="text-2xl font-bold">{financialSummary.activeContainers}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-orange-50">
+            <Card className="bg-orange-500/10 border-orange-500/20">
               <CardContent className="p-4">
                 <div className="flex items-center">
                   <Calculator className="h-8 w-8 text-orange-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-orange-600">Avg Margin</p>
+                    <p className="text-sm font-medium text-orange-600 dark:text-orange-400">Avg Margin</p>
                     <p className="text-2xl font-bold">{financialSummary.averageMargin}%</p>
                   </div>
                 </div>
@@ -149,7 +169,7 @@ const FinancialDashboard = () => {
         )}
 
         {/* Container Management */}
-        <Card>
+        <Card className="bg-card">
           <CardHeader>
             <CardTitle>Container Financial Management</CardTitle>
             <CardDescription>Manage base charges and view profit analysis</CardDescription>

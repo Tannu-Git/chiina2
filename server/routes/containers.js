@@ -1,5 +1,6 @@
 const express = require('express');
 const Container = require('../models/Container');
+const Order = require('../models/Order');
 const { auth, authorize, maskContainerIds, maskFinancialData } = require('../middleware/auth');
 
 const router = express.Router();
@@ -122,22 +123,56 @@ router.put('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
       return res.status(404).json({ message: 'Container not found' });
     }
 
+    console.log(`📝 [UPDATE CONTAINER] Updating container: ${container.realContainerId}`);
+    console.log(`📦 [UPDATE CONTAINER] Request data:`, req.body);
+
     // Update allowed fields
-    const allowedUpdates = ['status', 'billNo', 'sealNo', 'charges', 'milestones', 'location', 'estimatedArrival'];
+    const allowedUpdates = ['realContainerId', 'status', 'billNo', 'sealNo', 'charges', 'milestones', 'location', 'estimatedArrival', 'notes', 'orders', 'type', 'maxCbm', 'maxWeight'];
     allowedUpdates.forEach(field => {
       if (req.body[field] !== undefined) {
         container[field] = req.body[field];
       }
     });
 
-    // Recalculate financials if charges were updated
-    if (req.body.charges) {
-      container.allocateCharges();
-      container.calculateFinancials();
+    // If orders were updated, recalculate container utilization
+    if (req.body.orders) {
+      console.log(`📊 [UPDATE CONTAINER] Updating ${req.body.orders.length} order allocations`);
+      
+      // Calculate current utilization
+      container.currentCbm = req.body.orders.reduce((sum, order) => sum + (order.cbmShare || 0), 0);
+      container.currentWeight = req.body.orders.reduce((sum, order) => sum + (order.weightShare || 0), 0);
+      container.currentCartons = req.body.orders.reduce((sum, order) => sum + (order.cartonShare || 0), 0);
+      
+      console.log(`📊 [UPDATE CONTAINER] New utilization - CBM: ${container.currentCbm}/${container.maxCbm}, Weight: ${container.currentWeight}/${container.maxWeight}`);
+      
+      // Validate capacity
+      if (container.currentCbm > container.maxCbm) {
+        return res.status(400).json({ 
+          message: `CBM allocation (${container.currentCbm}) exceeds container capacity (${container.maxCbm})` 
+        });
+      }
+      
+      if (container.currentWeight > container.maxWeight) {
+        return res.status(400).json({ 
+          message: `Weight allocation (${container.currentWeight}kg) exceeds container capacity (${container.maxWeight}kg)` 
+        });
+      }
+    }
+
+    // Recalculate financials if charges or orders were updated
+    if (req.body.charges || req.body.orders) {
+      if (container.allocateCharges) {
+        container.allocateCharges();
+      }
+      if (container.calculateFinancials) {
+        container.calculateFinancials();
+      }
     }
 
     container.updatedBy = req.user.id;
     await container.save();
+
+    console.log(`✅ [UPDATE CONTAINER] Container updated successfully`);
 
     res.json({
       message: 'Container updated successfully',
@@ -213,6 +248,57 @@ router.post('/:id/allocate', auth, authorize('admin', 'staff'), async (req, res)
     });
   } catch (error) {
     console.error('Allocate orders error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/containers/:id
+// @desc    Delete container and reset associated orders
+// @access  Private (Admin/Staff only)
+router.delete('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const container = await Container.findById(req.params.id)
+      .populate('orders.orderId', 'orderNumber');
+
+    if (!container) {
+      return res.status(404).json({ message: 'Container not found' });
+    }
+
+    console.log(`🗑️ [DELETE CONTAINER] Deleting container: ${container.realContainerId}`);
+    console.log(`📦 [DELETE CONTAINER] Container has ${container.orders?.length || 0} allocated orders`);
+
+    // Reset all allocated orders to ready status
+    if (container.orders && container.orders.length > 0) {
+      const orderIds = container.orders.map(order => order.orderId).filter(Boolean);
+      
+      if (orderIds.length > 0) {
+        const updateResult = await Order.updateMany(
+          { _id: { $in: orderIds } },
+          { 
+            $unset: { containerId: 1 },
+            $set: { 
+              status: 'ready',
+              updatedBy: req.user.id,
+              updatedAt: new Date()
+            }
+          }
+        );
+        
+        console.log(`✅ [DELETE CONTAINER] Reset ${updateResult.modifiedCount} orders to ready status`);
+      }
+    }
+
+    // Delete the container
+    await Container.findByIdAndDelete(req.params.id);
+
+    console.log(`✅ [DELETE CONTAINER] Container ${container.realContainerId} deleted successfully`);
+
+    res.json({
+      message: 'Container deleted successfully',
+      ordersReset: container.orders?.length || 0
+    });
+  } catch (error) {
+    console.error('Delete container error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
