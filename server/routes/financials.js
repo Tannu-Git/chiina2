@@ -1,6 +1,7 @@
 const express = require('express');
 const Order = require('../models/Order');
 const Container = require('../models/Container');
+const ShippingCompany = require('../models/ShippingCompany');
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -350,6 +351,452 @@ router.get('/charge-allocation/:containerId', auth, authorize('admin'), async (r
   } catch (error) {
     console.error('Charge allocation error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/financials/container-charges/:containerId
+// @desc    Setup/Update container base charges (GST, Duty, Misc, Extra Charge)
+// @access  Private (Admin/Staff only)
+router.post('/container-charges/:containerId', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { containerId } = req.params;
+    const { gst, duty, misc, extraCharge, currency = 'INR' } = req.body;
+    
+    const container = await Container.findById(containerId);
+    if (!container) {
+      return res.status(404).json({ message: 'Container not found' });
+    }
+    
+    // Validate charge amounts
+    const charges = { gst, duty, misc, extraCharge };
+    for (const [key, value] of Object.entries(charges)) {
+      if (value !== undefined && (typeof value !== 'number' || value < 0)) {
+        return res.status(400).json({ 
+          message: `${key.toUpperCase()} must be a non-negative number`,
+          received: value
+        });
+      }
+    }
+    
+    // Update base charges
+    container.baseCharges = {
+      gst: gst || 0,
+      duty: duty || 0,
+      misc: misc || 0,
+      extraCharge: extraCharge || 0,
+      currency
+    };
+    
+    // Recalculate financials and allocations
+    container.updatePaymentDistribution();
+    container.allocateCharges();
+    container.calculateFinancials();
+    
+    container.updatedBy = req.user.id;
+    await container.save();
+    
+    console.log('Container base charges updated:', {
+      containerId: container.realContainerId,
+      charges: container.baseCharges,
+      grossProfit: container.grossProfit,
+      profitMargin: container.profitMargin
+    });
+    
+    res.json({
+      message: 'Container base charges updated successfully',
+      container: {
+        id: container._id,
+        realContainerId: container.realContainerId,
+        clientFacingId: container.clientFacingId,
+        baseCharges: container.baseCharges,
+        profitBreakdown: container.getProfitBreakdown()
+      }
+    });
+  } catch (error) {
+    console.error('Container charges setup error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/financials/profit-report/:containerId
+// @desc    Get detailed profit report for a container (Carrying Charges - Base Charges)
+// @access  Private (Admin/Staff only)
+router.get('/profit-report/:containerId', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { containerId } = req.params;
+    
+    const container = await Container.findById(containerId)
+      .populate('orders.orderId', 'orderNumber clientName totalCarryingCharges items')
+      .populate('shippingCompany');
+      
+    if (!container) {
+      return res.status(404).json({ message: 'Container not found' });
+    }
+    
+    // Ensure latest financial calculations
+    container.updatePaymentDistribution();
+    container.calculateFinancials();
+    
+    const profitBreakdown = container.getProfitBreakdown();
+    
+    // Build detailed order breakdown
+    const orderBreakdown = container.orders.map(order => {
+      const orderData = order.orderId;
+      return {
+        orderId: orderData._id,
+        orderNumber: orderData.orderNumber,
+        clientName: order.clientName,
+        paymentType: order.paymentType,
+        carryingCharges: order.carryingCharges,
+        cbmShare: order.cbmShare,
+        weightShare: order.weightShare,
+        partialAllocation: order.partialAllocation,
+        allocatedCharges: order.allocatedCharges,
+        profitContribution: {
+          isCountedInProfit: order.paymentType === 'THROUGH_ME' ? 'No (Through Me payment)' : 'Yes (Direct payment)',
+          explanation: order.paymentType === 'THROUGH_ME' 
+            ? 'Through Me payments come to me but not counted in profit calculation'
+            : 'Direct payments go to factory and are counted in profit calculation'
+        }
+      };
+    });
+    
+    // Client-wise allocation summary
+    const clientSummary = {};
+    container.orders.forEach(order => {
+      const clientId = order.clientId;
+      if (!clientSummary[clientId]) {
+        clientSummary[clientId] = {
+          clientName: order.clientName,
+          totalCbm: 0,
+          totalWeight: 0,
+          totalCarryingCharges: 0,
+          orders: [],
+          paymentBreakdown: {
+            throughMe: 0,
+            direct: 0
+          }
+        };
+      }
+      
+      clientSummary[clientId].totalCbm += order.cbmShare;
+      clientSummary[clientId].totalWeight += order.weightShare;
+      clientSummary[clientId].totalCarryingCharges += order.carryingCharges;
+      clientSummary[clientId].orders.push(order.orderId.orderNumber);
+      
+      if (order.paymentType === 'THROUGH_ME') {
+        clientSummary[clientId].paymentBreakdown.throughMe += order.carryingCharges;
+      } else {
+        clientSummary[clientId].paymentBreakdown.direct += order.carryingCharges;
+      }
+    });
+    
+    res.json({
+      container: {
+        id: container._id,
+        realContainerId: container.realContainerId,
+        clientFacingId: container.clientFacingId,
+        type: container.type,
+        status: container.status,
+        capacity: {
+          maxCbm: container.maxCbm,
+          currentCbm: container.currentCbm,
+          utilization: ((container.currentCbm / container.maxCbm) * 100).toFixed(1) + '%'
+        }
+      },
+      shippingCompany: container.shippingCompany,
+      profitBreakdown,
+      orderBreakdown,
+      clientSummary: Object.values(clientSummary),
+      calculations: {
+        formula: 'Profit = Total Carrying Charges - Base Charges (GST + Duty + Misc + Extra Charge)',
+        note: 'Through Me payments are not counted in profit as they come to us but are not profit-generating'
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Profit report error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/financials/payment-classification
+// @desc    Classify and track payment types (Through Me vs Direct)
+// @access  Private (Admin/Staff only)
+router.post('/payment-classification', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { containerId, orderAllocations } = req.body;
+    // orderAllocations: [{ orderId, paymentType, carryingCharges }]
+    
+    if (!containerId || !orderAllocations || !Array.isArray(orderAllocations)) {
+      return res.status(400).json({ 
+        message: 'Container ID and order allocations array are required',
+        format: 'orderAllocations: [{ orderId, paymentType, carryingCharges }]'
+      });
+    }
+    
+    const container = await Container.findById(containerId);
+    if (!container) {
+      return res.status(404).json({ message: 'Container not found' });
+    }
+    
+    // Update payment types for allocated orders
+    let updatedCount = 0;
+    for (const allocation of orderAllocations) {
+      const { orderId, paymentType, carryingCharges } = allocation;
+      
+      if (!['CLIENT_DIRECT', 'THROUGH_ME'].includes(paymentType)) {
+        return res.status(400).json({ 
+          message: 'Invalid payment type',
+          orderId,
+          validTypes: ['CLIENT_DIRECT', 'THROUGH_ME']
+        });
+      }
+      
+      const orderInContainer = container.orders.find(o => o.orderId.toString() === orderId);
+      if (orderInContainer) {
+        orderInContainer.paymentType = paymentType;
+        if (carryingCharges !== undefined) {
+          orderInContainer.carryingCharges = carryingCharges;
+        }
+        updatedCount++;
+      }
+    }
+    
+    if (updatedCount === 0) {
+      return res.status(400).json({ message: 'No orders found in container to update' });
+    }
+    
+    // Recalculate payment distribution and financials
+    container.updatePaymentDistribution();
+    container.calculateFinancials();
+    
+    container.updatedBy = req.user.id;
+    await container.save();
+    
+    console.log('Payment classification updated:', {
+      containerId: container.realContainerId,
+      updatedOrders: updatedCount,
+      paymentDistribution: container.paymentDistribution
+    });
+    
+    res.json({
+      message: `Payment classification updated for ${updatedCount} orders`,
+      container: {
+        id: container._id,
+        realContainerId: container.realContainerId,
+        paymentDistribution: container.paymentDistribution,
+        profitBreakdown: container.getProfitBreakdown()
+      }
+    });
+  } catch (error) {
+    console.error('Payment classification error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/financials/client-financial/:clientId
+// @desc    Get client financial summary across all containers
+// @access  Private (Admin/Staff/Client - client can only see their own data)
+router.get('/client-financial/:clientId', auth, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { period = '30', startDate, endDate } = req.query;
+    
+    // Authorization check
+    if (req.user.role === 'client' && req.user.clientId !== clientId) {
+      return res.status(403).json({ message: 'Access denied. You can only view your own financial data.' });
+    }
+    
+    // Build date filter
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    } else {
+      const daysAgo = parseInt(period);
+      dateFilter.createdAt = {
+        $gte: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+      };
+    }
+    
+    // Find containers with orders from this client
+    const containers = await Container.find({
+      'orders.clientId': clientId,
+      ...dateFilter
+    })
+    .populate('orders.orderId', 'orderNumber totalCarryingCharges items')
+    .populate('shippingCompany', 'companyName shortName')
+    .sort({ createdAt: -1 });
+    
+    let clientFinancialSummary = {
+      clientId,
+      clientName: '',
+      totalContainers: containers.length,
+      paymentBreakdown: {
+        throughMe: { amount: 0, orders: 0 },
+        direct: { amount: 0, orders: 0 }
+      },
+      containerAllocations: [],
+      totalCbm: 0,
+      totalWeight: 0,
+      averageUtilization: 0
+    };
+    
+    containers.forEach(container => {
+      const clientOrders = container.orders.filter(order => order.clientId === clientId);
+      
+      if (clientOrders.length > 0) {
+        clientFinancialSummary.clientName = clientOrders[0].clientName;
+        
+        const containerAllocation = {
+          containerId: container._id,
+          realContainerId: container.realContainerId,
+          clientFacingId: container.clientFacingId,
+          status: container.status,
+          shippingCompany: container.shippingCompany?.shortName,
+          orders: clientOrders.map(order => ({
+            orderId: order.orderId._id,
+            orderNumber: order.orderId.orderNumber,
+            cbmShare: order.cbmShare,
+            weightShare: order.weightShare,
+            paymentType: order.paymentType,
+            carryingCharges: order.carryingCharges,
+            partialAllocation: order.partialAllocation
+          })),
+          totals: {
+            cbm: clientOrders.reduce((sum, order) => sum + order.cbmShare, 0),
+            weight: clientOrders.reduce((sum, order) => sum + order.weightShare, 0),
+            carryingCharges: clientOrders.reduce((sum, order) => sum + order.carryingCharges, 0)
+          }
+        };
+        
+        // Update payment breakdown
+        clientOrders.forEach(order => {
+          if (order.paymentType === 'THROUGH_ME') {
+            clientFinancialSummary.paymentBreakdown.throughMe.amount += order.carryingCharges;
+            clientFinancialSummary.paymentBreakdown.throughMe.orders++;
+          } else {
+            clientFinancialSummary.paymentBreakdown.direct.amount += order.carryingCharges;
+            clientFinancialSummary.paymentBreakdown.direct.orders++;
+          }
+        });
+        
+        clientFinancialSummary.totalCbm += containerAllocation.totals.cbm;
+        clientFinancialSummary.totalWeight += containerAllocation.totals.weight;
+        clientFinancialSummary.containerAllocations.push(containerAllocation);
+      }
+    });
+    
+    // Calculate average utilization
+    if (containers.length > 0) {
+      const totalUtilization = containers.reduce((sum, container) => {
+        const utilization = container.maxCbm > 0 ? (container.currentCbm / container.maxCbm) * 100 : 0;
+        return sum + utilization;
+      }, 0);
+      clientFinancialSummary.averageUtilization = (totalUtilization / containers.length).toFixed(1);
+    }
+    
+    res.json({
+      clientFinancialSummary,
+      period: { days: period, startDate, endDate },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Client financial summary error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/financials/shipping-companies
+// @desc    Get shipping companies with rates for container allocation
+// @access  Private (Admin/Staff only)
+router.get('/shipping-companies', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { containerType, includeRates = true } = req.query;
+    
+    let companies;
+    if (containerType && includeRates === 'true') {
+      // Get companies with rates for specific container type
+      companies = await ShippingCompany.compareRates(containerType);
+    } else {
+      // Get all active companies
+      companies = await ShippingCompany.getActiveCompanies()
+        .select('companyId companyName shortName contactInfo performanceMetrics contractDetails');
+    }
+    
+    res.json({
+      companies,
+      containerType: containerType || 'all',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Shipping companies fetch error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/financials/assign-shipping-company/:containerId
+// @desc    Assign shipping company to container
+// @access  Private (Admin/Staff only)
+router.post('/assign-shipping-company/:containerId', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { containerId } = req.params;
+    const { companyId, rateOverrides } = req.body;
+    
+    const container = await Container.findById(containerId);
+    if (!container) {
+      return res.status(404).json({ message: 'Container not found' });
+    }
+    
+    const shippingCompany = await ShippingCompany.findOne({ companyId, isActive: true });
+    if (!shippingCompany) {
+      return res.status(404).json({ message: 'Shipping company not found or inactive' });
+    }
+    
+    // Get rate for container type
+    const rate = shippingCompany.getRateForContainer(container.type);
+    if (!rate && !rateOverrides) {
+      return res.status(400).json({ 
+        message: `No rate found for container type ${container.type}. Please provide rate overrides.`,
+        availableTypes: shippingCompany.rates.map(r => r.containerType)
+      });
+    }
+    
+    // Assign shipping company
+    container.shippingCompany = {
+      id: shippingCompany.companyId,
+      name: shippingCompany.companyName,
+      contactInfo: shippingCompany.contactInfo,
+      rates: rateOverrides || {
+        oceanFreight: rate.oceanFreight,
+        localCharges: rate.localCharges,
+        currency: rate.currency
+      }
+    };
+    
+    container.updatedBy = req.user.id;
+    await container.save();
+    
+    console.log('Shipping company assigned:', {
+      containerId: container.realContainerId,
+      companyName: shippingCompany.companyName,
+      rates: container.shippingCompany.rates
+    });
+    
+    res.json({
+      message: 'Shipping company assigned successfully',
+      container: {
+        id: container._id,
+        realContainerId: container.realContainerId,
+        shippingCompany: container.shippingCompany
+      }
+    });
+  } catch (error) {
+    console.error('Assign shipping company error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

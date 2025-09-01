@@ -6,6 +6,8 @@ require('dotenv').config();
 const User = require('../models/User');
 const Order = require('../models/Order');
 const Container = require('../models/Container');
+const ShippingCompany = require('../models/ShippingCompany');
+const { seedShippingCompanies } = require('./seedShippingCompanies');
 
 // Connect to MongoDB
 const connectDB = async () => {
@@ -482,6 +484,9 @@ const seedDatabase = async () => {
     // Seed users
     const users = await seedUsers();
 
+    // Seed shipping companies
+    const shippingCompanies = await seedShippingCompanies(users);
+
     // Seed orders
     const orders = await seedOrders(users);
 
@@ -491,8 +496,9 @@ const seedDatabase = async () => {
     console.log('🎉 Database seeding completed successfully!');
     console.log('\n📊 Summary:');
     console.log(`   👥 Users: ${users.length}`);
+    console.log(`   🚢 Shipping Companies: ${shippingCompanies.length}`);
     console.log(`   📦 Orders: ${orders.length}`);
-    console.log(`   🚢 Containers: ${containers.length}`);
+    console.log(`   📦 Containers: ${containers.length}`);
 
     console.log('\n📧 Demo Login Credentials:');
     console.log('👑 Admin: admin@demo.com / password');
@@ -503,6 +509,11 @@ const seedDatabase = async () => {
     const clientUsers = users.filter(u => u.role === 'client');
     clientUsers.forEach(user => {
       console.log(`   ${user.name} (${user.company}): ${user.email} / password`);
+    });
+
+    console.log('\n🚢 Shipping Companies:');
+    shippingCompanies.forEach(company => {
+      console.log(`   ${company.companyName} (${company.shortName}) - Preferred: ${company.contractDetails.preferredPartner ? 'Yes' : 'No'}`);
     });
 
     process.exit(0);

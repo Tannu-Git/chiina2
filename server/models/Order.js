@@ -108,6 +108,21 @@ const orderItemSchema = new mongoose.Schema({
     min: [0, 'Loop-back cartons cannot be negative'],
     default: 0
   },
+  // CONTAINER ALLOCATION TRACKING
+  allocatedQuantity: {
+    type: Number,
+    min: [0, 'Allocated quantity cannot be negative'],
+    default: 0
+  },
+  allocatedCartons: {
+    type: Number,
+    min: [0, 'Allocated cartons cannot be negative'],
+    default: 0
+  },
+  containerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Container'
+  },
   // Calculated field: pendingCartons = cartons - (qcPassedCartons + loopBackCartons)
   pendingCartons: {
     type: Number,

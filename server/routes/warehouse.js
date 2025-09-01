@@ -1,6 +1,8 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Container = require('../models/Container');
+const ShippingCompany = require('../models/ShippingCompany');
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -882,5 +884,625 @@ router.post('/allocate-container', auth, authorize('admin', 'staff'), async (req
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// @route   GET /api/warehouse/qc-ready-orders
+// @desc    Get orders that have completed QC and are ready for container allocation
+// @access  Private (Admin/Staff only)
+router.get('/qc-ready-orders', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { clientId, minQty = 0, includePartial = true } = req.query;
+    
+    // Build filter for QC-completed orders
+    const filter = {
+      status: { $in: ['ready', 'partial_ready'] },
+      isLoopBack: { $ne: true },
+      $or: [
+        { 'items.qcStatus': 'completed' },
+        { 'items.qcStatus': 'partial' }
+      ]
+    };
+    
+    if (clientId) {
+      filter.clientId = clientId;
+    }
+    
+    const orders = await Order.find(filter)
+      .populate('createdBy', 'name')
+      .populate('qcInspector', 'name')
+      .sort({ qcCompletedAt: -1, createdAt: -1 })
+      .lean();
+    
+    // Process orders to show available quantities for allocation
+    const allocatableOrders = orders.map(order => {
+      const allocatableItems = order.items.filter(item => {
+        const qcPassedQty = item.qcPassedQuantity || 0;
+        const qcPassedCtn = item.qcPassedCartons || 0;
+        const allocatedQty = item.allocatedQuantity || 0;
+        const allocatedCtn = item.allocatedCartons || 0;
+        
+        const availableQty = qcPassedQty - allocatedQty;
+        const availableCtn = qcPassedCtn - allocatedCtn;
+        
+        return (availableQty > minQty || availableCtn > 0) && 
+               (item.qcStatus === 'completed' || (includePartial === 'true' && item.qcStatus === 'partial'));
+      }).map(item => {
+        const qcPassedQty = item.qcPassedQuantity || 0;
+        const qcPassedCtn = item.qcPassedCartons || 0;
+        const allocatedQty = item.allocatedQuantity || 0;
+        const allocatedCtn = item.allocatedCartons || 0;
+        
+        return {
+          ...item,
+          availableQuantity: qcPassedQty - allocatedQty,
+          availableCartons: qcPassedCtn - allocatedCtn,
+          totalAvailableCbm: (qcPassedCtn - allocatedCtn) * (item.unitCbm || 0),
+          totalAvailableWeight: (qcPassedQty - allocatedQty) * (item.unitWeight || 0),
+          allocationStatus: {
+            canAllocate: (qcPassedQty - allocatedQty) > 0 || (qcPassedCtn - allocatedCtn) > 0,
+            isPartiallyAllocated: allocatedQty > 0 || allocatedCtn > 0,
+            percentageAvailable: qcPassedQty > 0 ? ((qcPassedQty - allocatedQty) / qcPassedQty * 100).toFixed(1) : 0
+          }
+        };
+      });
+      
+      if (allocatableItems.length === 0) {
+        return null; // Skip orders with no allocatable items
+      }
+      
+      // Calculate order-level totals for available items
+      const orderTotals = {
+        totalAvailableCbm: allocatableItems.reduce((sum, item) => sum + item.totalAvailableCbm, 0),
+        totalAvailableWeight: allocatableItems.reduce((sum, item) => sum + item.totalAvailableWeight, 0),
+        totalAvailableCartons: allocatableItems.reduce((sum, item) => sum + item.availableCartons, 0),
+        totalCarryingCharges: allocatableItems.reduce((sum, item) => {
+          const carryingCharge = item.carryingCharge || {};
+          let chargeAmount = 0;
+          
+          switch (carryingCharge.basis) {
+            case 'carton':
+              chargeAmount = item.availableCartons * (carryingCharge.rate || 0);
+              break;
+            case 'cbm':
+              chargeAmount = item.totalAvailableCbm * (carryingCharge.rate || 0);
+              break;
+            case 'weight':
+              chargeAmount = item.totalAvailableWeight * (carryingCharge.rate || 0);
+              break;
+            default:
+              chargeAmount = carryingCharge.amount || 0;
+          }
+          
+          return sum + chargeAmount;
+        }, 0)
+      };
+      
+      return {
+        ...order,
+        items: allocatableItems,
+        allocationSummary: {
+          totalItems: allocatableItems.length,
+          canFullyAllocate: allocatableItems.every(item => item.allocationStatus.percentageAvailable === '100.0'),
+          partialAllocationRequired: allocatableItems.some(item => parseFloat(item.allocationStatus.percentageAvailable) < 100),
+          ...orderTotals
+        }
+      };
+    }).filter(order => order !== null);
+    
+    // Calculate summary statistics
+    const summary = {
+      totalOrders: allocatableOrders.length,
+      totalCbm: allocatableOrders.reduce((sum, order) => sum + order.allocationSummary.totalAvailableCbm, 0),
+      totalWeight: allocatableOrders.reduce((sum, order) => sum + order.allocationSummary.totalAvailableWeight, 0),
+      totalCartons: allocatableOrders.reduce((sum, order) => sum + order.allocationSummary.totalAvailableCartons, 0),
+      totalCarryingCharges: allocatableOrders.reduce((sum, order) => sum + order.allocationSummary.totalCarryingCharges, 0),
+      clientBreakdown: {}
+    };
+    
+    // Group by client for summary
+    allocatableOrders.forEach(order => {
+      if (!summary.clientBreakdown[order.clientId]) {
+        summary.clientBreakdown[order.clientId] = {
+          clientName: order.clientName,
+          orders: 0,
+          totalCbm: 0,
+          totalWeight: 0,
+          totalCartons: 0,
+          totalCarryingCharges: 0
+        };
+      }
+      
+      const client = summary.clientBreakdown[order.clientId];
+      client.orders++;
+      client.totalCbm += order.allocationSummary.totalAvailableCbm;
+      client.totalWeight += order.allocationSummary.totalAvailableWeight;
+      client.totalCartons += order.allocationSummary.totalAvailableCartons;
+      client.totalCarryingCharges += order.allocationSummary.totalCarryingCharges;
+    });
+    
+    console.log('QC ready orders fetched:', {
+      totalOrders: summary.totalOrders,
+      totalCbm: summary.totalCbm.toFixed(2),
+      clientCount: Object.keys(summary.clientBreakdown).length
+    });
+    
+    res.json({
+      orders: allocatableOrders,
+      summary,
+      filters: { clientId, minQty, includePartial },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('QC ready orders fetch error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/warehouse/allocation-wizard
+// @desc    Multi-step container allocation wizard
+// @access  Private (Admin/Staff only)
+router.post('/allocation-wizard', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { step, data } = req.body;
+    
+    switch (step) {
+      case 'validate-selection':
+        return await validateOrderSelection(req, res, data);
+      case 'optimize-containers':
+        return await optimizeContainerAllocation(req, res, data);
+      case 'preview-allocation':
+        return await previewAllocation(req, res, data);
+      case 'confirm-allocation':
+        return await confirmAllocation(req, res, data);
+      default:
+        return res.status(400).json({ 
+          message: 'Invalid step',
+          validSteps: ['validate-selection', 'optimize-containers', 'preview-allocation', 'confirm-allocation']
+        });
+    }
+  } catch (error) {
+    console.error('Allocation wizard error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Helper function: Validate order selection
+async function validateOrderSelection(req, res, data) {
+  const { selectedOrders } = data; // [{ orderId, items: [{ itemIndex, allocateQuantity, allocateCartons }] }]
+  
+  if (!selectedOrders || !Array.isArray(selectedOrders)) {
+    return res.status(400).json({ message: 'Selected orders array is required' });
+  }
+  
+  const validationResults = [];
+  let totalCbm = 0;
+  let totalWeight = 0;
+  let totalCartons = 0;
+  let totalCarryingCharges = 0;
+  
+  for (const selection of selectedOrders) {
+    const order = await Order.findById(selection.orderId).lean();
+    if (!order) {
+      return res.status(404).json({ message: `Order not found: ${selection.orderId}` });
+    }
+    
+    const itemValidations = [];
+    
+    for (const itemSelection of selection.items) {
+      const item = order.items[itemSelection.itemIndex];
+      if (!item) {
+        return res.status(400).json({ 
+          message: `Item not found at index ${itemSelection.itemIndex} in order ${order.orderNumber}` 
+        });
+      }
+      
+      const availableQty = (item.qcPassedQuantity || 0) - (item.allocatedQuantity || 0);
+      const availableCtn = (item.qcPassedCartons || 0) - (item.allocatedCartons || 0);
+      
+      const requestedQty = itemSelection.allocateQuantity || 0;
+      const requestedCtn = itemSelection.allocateCartons || 0;
+      
+      if (requestedQty > availableQty || requestedCtn > availableCtn) {
+        return res.status(400).json({
+          message: 'Requested allocation exceeds available quantity',
+          orderNumber: order.orderNumber,
+          itemCode: item.itemCode,
+          available: { quantity: availableQty, cartons: availableCtn },
+          requested: { quantity: requestedQty, cartons: requestedCtn }
+        });
+      }
+      
+      const itemCbm = requestedCtn * (item.unitCbm || 0);
+      const itemWeight = requestedQty * (item.unitWeight || 0);
+      
+      // Calculate carrying charges for allocated quantity
+      let itemCarryingCharges = 0;
+      const carryingCharge = item.carryingCharge || {};
+      switch (carryingCharge.basis) {
+        case 'carton':
+          itemCarryingCharges = requestedCtn * (carryingCharge.rate || 0);
+          break;
+        case 'cbm':
+          itemCarryingCharges = itemCbm * (carryingCharge.rate || 0);
+          break;
+        case 'weight':
+          itemCarryingCharges = itemWeight * (carryingCharge.rate || 0);
+          break;
+        default:
+          itemCarryingCharges = (carryingCharge.amount || 0) * (requestedQty / item.quantity);
+      }
+      
+      totalCbm += itemCbm;
+      totalWeight += itemWeight;
+      totalCartons += requestedCtn;
+      totalCarryingCharges += itemCarryingCharges;
+      
+      itemValidations.push({
+        itemIndex: itemSelection.itemIndex,
+        itemCode: item.itemCode,
+        description: item.description,
+        allocation: {
+          quantity: requestedQty,
+          cartons: requestedCtn,
+          cbm: itemCbm,
+          weight: itemWeight,
+          carryingCharges: itemCarryingCharges,
+          paymentType: item.paymentType
+        },
+        validation: {
+          isValid: true,
+          availableAfterAllocation: {
+            quantity: availableQty - requestedQty,
+            cartons: availableCtn - requestedCtn
+          }
+        }
+      });
+    }
+    
+    validationResults.push({
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      clientId: order.clientId,
+      clientName: order.clientName,
+      items: itemValidations,
+      orderTotals: {
+        cbm: itemValidations.reduce((sum, item) => sum + item.allocation.cbm, 0),
+        weight: itemValidations.reduce((sum, item) => sum + item.allocation.weight, 0),
+        cartons: itemValidations.reduce((sum, item) => sum + item.allocation.cartons, 0),
+        carryingCharges: itemValidations.reduce((sum, item) => sum + item.allocation.carryingCharges, 0)
+      }
+    });
+  }
+  
+  res.json({
+    status: 'validated',
+    validationResults,
+    allocationTotals: {
+      totalCbm,
+      totalWeight,
+      totalCartons,
+      totalCarryingCharges
+    },
+    recommendations: {
+      suggestedContainerType: totalCbm <= 33 ? '20ft' : totalCbm <= 67 ? '40ft' : '40ft_hc',
+      utilizationWarnings: totalCbm > 76 ? ['Allocation exceeds 40ft HC container capacity'] : []
+    }
+  });
+}
+
+// Helper function: Optimize container allocation
+async function optimizeContainerAllocation(req, res, data) {
+  const { allocationTotals, selectedContainers } = data;
+  // selectedContainers: [{ type, count }] or existing container IDs
+  
+  const containerCapacities = {
+    '20ft': { maxCbm: 33, maxWeight: 28000 },
+    '40ft': { maxCbm: 67, maxWeight: 30000 },
+    '40ft_hc': { maxCbm: 76, maxWeight: 30000 },
+    '45ft': { maxCbm: 86, maxWeight: 30000 }
+  };
+  
+  const optimizationResults = [];
+  
+  if (selectedContainers && selectedContainers.length > 0) {
+    // User provided container preferences
+    let remainingCbm = allocationTotals.totalCbm;
+    let remainingWeight = allocationTotals.totalWeight;
+    
+    for (const containerSpec of selectedContainers) {
+      if (containerSpec.existingId) {
+        // Use existing container
+        const container = await Container.findById(containerSpec.existingId);
+        if (container) {
+          const availableCbm = container.maxCbm - container.currentCbm;
+          const availableWeight = container.maxWeight - container.currentWeight;
+          
+          const allocatedCbm = Math.min(remainingCbm, availableCbm);
+          const allocatedWeight = Math.min(remainingWeight, availableWeight);
+          
+          optimizationResults.push({
+            type: 'existing',
+            containerId: container._id,
+            realContainerId: container.realContainerId,
+            clientFacingId: container.clientFacingId,
+            capacity: { maxCbm: container.maxCbm, maxWeight: container.maxWeight },
+            current: { cbm: container.currentCbm, weight: container.currentWeight },
+            allocated: { cbm: allocatedCbm, weight: allocatedWeight },
+            utilization: {
+              cbm: ((container.currentCbm + allocatedCbm) / container.maxCbm * 100).toFixed(1),
+              weight: ((container.currentWeight + allocatedWeight) / container.maxWeight * 100).toFixed(1)
+            }
+          });
+          
+          remainingCbm -= allocatedCbm;
+          remainingWeight -= allocatedWeight;
+        }
+      } else {
+        // Create new container
+        const capacity = containerCapacities[containerSpec.type];
+        const allocatedCbm = Math.min(remainingCbm, capacity.maxCbm);
+        const allocatedWeight = Math.min(remainingWeight, capacity.maxWeight);
+        
+        optimizationResults.push({
+          type: 'new',
+          containerType: containerSpec.type,
+          capacity,
+          allocated: { cbm: allocatedCbm, weight: allocatedWeight },
+          utilization: {
+            cbm: (allocatedCbm / capacity.maxCbm * 100).toFixed(1),
+            weight: (allocatedWeight / capacity.maxWeight * 100).toFixed(1)
+          }
+        });
+        
+        remainingCbm -= allocatedCbm;
+        remainingWeight -= allocatedWeight;
+      }
+      
+      if (remainingCbm <= 0 && remainingWeight <= 0) break;
+    }
+  } else {
+    // Auto-optimize container selection
+    const totalCbm = allocationTotals.totalCbm;
+    const totalWeight = allocationTotals.totalWeight;
+    
+    // Find most efficient container combination
+    const options = [
+      { type: '20ft', count: Math.ceil(totalCbm / 33) },
+      { type: '40ft', count: Math.ceil(totalCbm / 67) },
+      { type: '40ft_hc', count: Math.ceil(totalCbm / 76) }
+    ];
+    
+    // Choose option with best utilization
+    const bestOption = options.reduce((best, current) => {
+      const currentCapacity = containerCapacities[current.type];
+      const currentUtilization = totalCbm / (currentCapacity.maxCbm * current.count) * 100;
+      const bestCapacity = containerCapacities[best.type];
+      const bestUtilization = totalCbm / (bestCapacity.maxCbm * best.count) * 100;
+      
+      return currentUtilization > bestUtilization ? current : best;
+    });
+    
+    optimizationResults.push({
+      type: 'optimized',
+      recommendation: bestOption,
+      utilization: {
+        cbm: (totalCbm / (containerCapacities[bestOption.type].maxCbm * bestOption.count) * 100).toFixed(1),
+        efficiency: 'optimal'
+      }
+    });
+  }
+  
+  res.json({
+    status: 'optimized',
+    optimizationResults,
+    summary: {
+      totalContainersNeeded: optimizationResults.length,
+      averageUtilization: optimizationResults.reduce((sum, result) => 
+        sum + parseFloat(result.utilization?.cbm || 0), 0) / optimizationResults.length
+    }
+  });
+}
+
+// Helper function: Preview allocation
+async function previewAllocation(req, res, data) {
+  const { validationResults, optimizationResults, shippingCompanyId, baseCharges } = data;
+  
+  // Calculate total costs and profit preview
+  const totalCarryingCharges = validationResults.reduce((sum, order) => 
+    sum + order.orderTotals.carryingCharges, 0);
+  
+  const totalBaseCharges = (baseCharges?.gst || 0) + 
+                          (baseCharges?.duty || 0) + 
+                          (baseCharges?.misc || 0) + 
+                          (baseCharges?.extraCharge || 0);
+  
+  const estimatedProfit = totalCarryingCharges - totalBaseCharges;
+  const profitMargin = totalCarryingCharges > 0 ? (estimatedProfit / totalCarryingCharges * 100) : 0;
+  
+  // Payment type breakdown
+  const paymentBreakdown = {
+    throughMe: { amount: 0, orders: 0 },
+    direct: { amount: 0, orders: 0 }
+  };
+  
+  validationResults.forEach(order => {
+    order.items.forEach(item => {
+      if (item.allocation.paymentType === 'THROUGH_ME') {
+        paymentBreakdown.throughMe.amount += item.allocation.carryingCharges;
+        paymentBreakdown.throughMe.orders++;
+      } else {
+        paymentBreakdown.direct.amount += item.allocation.carryingCharges;
+        paymentBreakdown.direct.orders++;
+      }
+    });
+  });
+  
+  res.json({
+    status: 'preview',
+    allocationPreview: {
+      orders: validationResults.length,
+      containers: optimizationResults.length,
+      totalItems: validationResults.reduce((sum, order) => sum + order.items.length, 0)
+    },
+    financialPreview: {
+      revenue: {
+        totalCarryingCharges,
+        paymentBreakdown
+      },
+      costs: {
+        baseCharges: {
+          gst: baseCharges?.gst || 0,
+          duty: baseCharges?.duty || 0,
+          misc: baseCharges?.misc || 0,
+          extraCharge: baseCharges?.extraCharge || 0,
+          total: totalBaseCharges
+        }
+      },
+      profit: {
+        estimated: estimatedProfit,
+        margin: profitMargin.toFixed(2) + '%'
+      }
+    },
+    shippingCompanyId,
+    warnings: [
+      ...(profitMargin < 10 ? ['Low profit margin detected'] : []),
+      ...(paymentBreakdown.throughMe.amount > paymentBreakdown.direct.amount ? 
+          ['More Through Me payments than Direct payments'] : [])
+    ]
+  });
+}
+
+// Helper function: Confirm allocation
+async function confirmAllocation(req, res, data) {
+  const { validationResults, optimizationResults, shippingCompanyId, baseCharges } = data;
+  
+  const session = await mongoose.startSession();
+  
+  try {
+    await session.withTransaction(async () => {
+      const createdContainers = [];
+      
+      // Create or update containers
+      for (const optimization of optimizationResults) {
+        let container;
+        
+        if (optimization.type === 'existing') {
+          container = await Container.findById(optimization.containerId).session(session);
+        } else {
+          // Create new container
+          const capacity = Container.getCapacityInfo(optimization.containerType);
+          container = new Container({
+            realContainerId: `CONT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+            type: optimization.containerType,
+            maxWeight: capacity.maxWeight,
+            maxCbm: capacity.maxCbm,
+            status: 'planning',
+            charges: [],
+            baseCharges: baseCharges || { gst: 0, duty: 0, misc: 0, extraCharge: 0, currency: 'INR' },
+            createdBy: req.user.id
+          });
+        }
+        
+        // Add shipping company if provided
+        if (shippingCompanyId) {
+          const shippingCompany = await ShippingCompany.findOne({ companyId: shippingCompanyId });
+          if (shippingCompany) {
+            container.shippingCompany = {
+              id: shippingCompany.companyId,
+              name: shippingCompany.companyName,
+              contactInfo: shippingCompany.contactInfo,
+              rates: shippingCompany.getRateForContainer(container.type)
+            };
+          }
+        }
+        
+        createdContainers.push(container);
+      }
+      
+      // Allocate orders to containers (simple round-robin for now)
+      let containerIndex = 0;
+      
+      for (const orderValidation of validationResults) {
+        const order = await Order.findById(orderValidation.orderId).session(session);
+        const container = createdContainers[containerIndex % createdContainers.length];
+        
+        // Calculate totals for this order allocation
+        const orderCbm = orderValidation.orderTotals.cbm;
+        const orderWeight = orderValidation.orderTotals.weight;
+        const orderCarryingCharges = orderValidation.orderTotals.carryingCharges;
+        
+        // Determine payment type (from first item, assuming consistent per order)
+        const paymentType = orderValidation.items[0]?.allocation.paymentType || 'CLIENT_DIRECT';
+        
+        // Add order to container
+        container.orders.push({
+          orderId: order._id,
+          clientId: order.clientId,
+          clientName: order.clientName,
+          cbmShare: orderCbm,
+          weightShare: orderWeight,
+          cartonShare: orderValidation.orderTotals.cartons,
+          partialAllocation: {
+            isPartial: orderValidation.items.some(item => 
+              item.allocation.quantity < order.items[item.itemIndex].qcPassedQuantity),
+            allocatedQuantity: orderValidation.items.reduce((sum, item) => sum + item.allocation.quantity, 0),
+            totalQuantity: orderValidation.items.reduce((sum, item) => 
+              sum + order.items[item.itemIndex].qcPassedQuantity, 0),
+            allocatedCartons: orderValidation.orderTotals.cartons,
+            totalCartons: orderValidation.items.reduce((sum, item) => 
+              sum + order.items[item.itemIndex].qcPassedCartons, 0)
+          },
+          paymentType,
+          carryingCharges: orderCarryingCharges
+        });
+        
+        // Update container totals
+        container.currentCbm += orderCbm;
+        container.currentWeight += orderWeight;
+        
+        // Update order item allocations
+        for (const itemValidation of orderValidation.items) {
+          const item = order.items[itemValidation.itemIndex];
+          item.allocatedQuantity = (item.allocatedQuantity || 0) + itemValidation.allocation.quantity;
+          item.allocatedCartons = (item.allocatedCartons || 0) + itemValidation.allocation.cartons;
+          item.containerId = container._id;
+        }
+        
+        await order.save({ session });
+        containerIndex++;
+      }
+      
+      // Save all containers and calculate financials
+      for (const container of createdContainers) {
+        container.updatePaymentDistribution();
+        container.allocateCharges();
+        container.calculateFinancials();
+        await container.save({ session });
+      }
+    });
+    
+    console.log('Container allocation completed:', {
+      containersCreated: optimizationResults.filter(o => o.type === 'new').length,
+      containersUpdated: optimizationResults.filter(o => o.type === 'existing').length,
+      ordersAllocated: validationResults.length
+    });
+    
+    res.json({
+      status: 'confirmed',
+      message: 'Container allocation completed successfully',
+      result: {
+        containersCreated: optimizationResults.filter(o => o.type === 'new').length,
+        containersUpdated: optimizationResults.filter(o => o.type === 'existing').length,
+        ordersAllocated: validationResults.length,
+        totalCbmAllocated: validationResults.reduce((sum, order) => sum + order.orderTotals.cbm, 0),
+        totalCarryingCharges: validationResults.reduce((sum, order) => sum + order.orderTotals.carryingCharges, 0)
+      }
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+}
 
 module.exports = router;
