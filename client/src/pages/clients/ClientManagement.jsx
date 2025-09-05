@@ -387,13 +387,13 @@ const ClientManagement = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-amber-600 dark:border-amber-400"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <motion.div
@@ -403,11 +403,11 @@ const ClientManagement = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                <Users className="h-8 w-8 mr-3 text-gray-600" />
+              <h1 className="text-3xl font-bold text-foreground flex items-center">
+                <Users className="h-8 w-8 mr-3 text-amber-600 dark:text-amber-400" />
                 Client Management
               </h1>
-              <p className="text-gray-600 mt-2">Manufacturing progress, shipping status, and collections</p>
+              <p className="text-muted-foreground mt-2">Manufacturing progress, shipping status, and collections</p>
             </div>
           </div>
         </motion.div>
@@ -418,51 +418,51 @@ const ClientManagement = () => {
           animate={{ opacity: 1, y: 0 }}
           className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8"
         >
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Users className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalClients}</p>
-              <p className="text-sm text-gray-600">Total Clients</p>
+              <Users className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalClients}</p>
+              <p className="text-sm text-muted-foreground">Total Clients</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Clock className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalPending}</p>
-              <p className="text-sm text-gray-600">Need to Make</p>
+              <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalPending}</p>
+              <p className="text-sm text-muted-foreground">Need to Make</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Package className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalReady}</p>
-              <p className="text-sm text-gray-600">Ready to Ship</p>
+              <Package className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalReady}</p>
+              <p className="text-sm text-muted-foreground">Ready to Ship</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Truck className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalShipped}</p>
-              <p className="text-sm text-gray-600">Shipped</p>
+              <Truck className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalShipped}</p>
+              <p className="text-sm text-muted-foreground">Shipped</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <DollarSign className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(summaryMetrics.totalToCollect)}</p>
-              <p className="text-sm text-gray-600">To Collect</p>
+              <DollarSign className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalToCollect)}</p>
+              <p className="text-sm text-muted-foreground">To Collect</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Factory className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalSuppliers}</p>
-              <p className="text-sm text-gray-600">Suppliers</p>
+              <Factory className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalSuppliers}</p>
+              <p className="text-sm text-muted-foreground">Suppliers</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -476,10 +476,10 @@ const ClientManagement = () => {
 
           {/* Clients Tab */}
           <TabsContent value="clients">
-            <Card className="bg-white border border-gray-200">
+            <Card className="bg-card border border-border">
               <CardHeader>
-                <CardTitle className="flex items-center text-gray-900">
-                  <Users className="h-5 w-5 mr-2" />
+                <CardTitle className="flex items-center text-foreground">
+                  <Users className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
                   Client Progress & Collections
                 </CardTitle>
                 
@@ -513,87 +513,87 @@ const ClientManagement = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+                      <Card className="border border-border hover:shadow-md transition-shadow">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center space-x-4">
-                              <div className="p-3 rounded-full bg-gray-100">
-                                <Building2 className="h-6 w-6 text-gray-600" />
+                              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                                <Building2 className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                               </div>
                               <div>
-                                <h3 className="text-lg font-semibold text-gray-900">{client.clientName}</h3>
-                                <p className="text-sm text-gray-600">
+                                <h3 className="text-lg font-semibold text-foreground">{client.clientName}</h3>
+                                <p className="text-sm text-muted-foreground">
                                   {client.totalOrders} total orders • {client.suppliers.length} suppliers
                                 </p>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                   Status: P:{client.statusBreakdown?.pending} R:{client.statusBreakdown?.ready} S:{client.statusBreakdown?.shipped} D:{client.statusBreakdown?.delivered}
                                 </p>
                                 {client.statusBreakdown?.hasContainers && (
-                                  <p className="text-xs text-gray-400">
+                                  <p className="text-xs text-muted-foreground">
                                     Containers: {client.statusBreakdown?.containerStatuses}
                                   </p>
                                 )}
                                 {client.needsAction && (
-                                  <Badge className="mt-1 bg-gray-100 text-gray-800 border-gray-300">
+                                  <Badge className="mt-1 bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
                                     Needs Action
                                   </Badge>
                                 )}
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-bold text-gray-900">{formatCurrency(client.toCollect)}</p>
-                              <p className="text-sm text-gray-600">To Collect</p>
+                              <p className="text-2xl font-bold text-foreground">{formatCurrency(client.toCollect)}</p>
+                              <p className="text-sm text-muted-foreground">To Collect</p>
                             </div>
                           </div>
                           
                           {/* Progress Metrics */}
                           <div className="grid grid-cols-4 gap-4 mb-4">
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{client.pendingOrders}</p>
-                              <p className="text-xs text-gray-600">Need to Make</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{client.pendingOrders}</p>
+                              <p className="text-xs text-muted-foreground">Need to Make</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{client.readyOrders}</p>
-                              <p className="text-xs text-gray-600">Ready to Ship</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{client.readyOrders}</p>
+                              <p className="text-xs text-muted-foreground">Ready to Ship</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{client.shippedOrders}</p>
-                              <p className="text-xs text-gray-600">Shipped</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{client.shippedOrders}</p>
+                              <p className="text-xs text-muted-foreground">Shipped</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{client.deliveredOrders}</p>
-                              <p className="text-xs text-gray-600">Delivered</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{client.deliveredOrders}</p>
+                              <p className="text-xs text-muted-foreground">Delivered</p>
                             </div>
                           </div>
                           
                           {/* Container Information */}
                           {client.containerDetails && client.containerDetails.length > 0 && (
-                            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                                <Package className="h-4 w-4 mr-2" />
+                            <div className="mb-4 p-3 bg-muted rounded-lg border border-border">
+                              <h4 className="font-medium text-foreground mb-2 flex items-center">
+                                <Package className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />
                                 Containers ({client.containerDetails.length})
                               </h4>
                               <div className="space-y-2">
                                 {client.containerDetails.map((container, idx) => (
-                                  <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border border-gray-200">
+                                  <div key={idx} className="flex justify-between items-center bg-card p-2 rounded border border-border">
                                     <div>
-                                      <span className="font-medium text-gray-800">
+                                      <span className="font-medium text-foreground">
                                         {container.clientFacingId || container.realContainerId}
                                       </span>
                                       <Badge 
                                         variant="outline" 
                                         className={`ml-2 text-xs ${
-                                          container.status === 'shipped' ? 'bg-green-50 text-green-700 border-green-200' :
-                                          container.status === 'loading' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                          container.status === 'delivered' ? 'bg-gray-100 text-gray-800 border-gray-300' :
-                                          'bg-gray-50 text-gray-600 border-gray-200'
+                                          container.status === 'shipped' ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700' :
+                                          container.status === 'loading' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' :
+                                          container.status === 'delivered' ? 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700' :
+                                          'bg-muted text-muted-foreground border-border'
                                         }`}
                                       >
                                         {container.status}
                                       </Badge>
                                     </div>
                                     <div className="text-right">
-                                      <span className="text-sm text-gray-600">
+                                      <span className="text-sm text-muted-foreground">
                                         {container.orders} orders • {formatCurrency(container.carryingCharges)}
                                       </span>
                                     </div>
@@ -605,30 +605,30 @@ const ClientManagement = () => {
                           
                           {/* Progress Bar */}
                           <div className="mb-4">
-                            <div className="flex justify-between text-sm text-gray-600 mb-1">
+                            <div className="flex justify-between text-sm text-muted-foreground mb-1">
                               <span>Progress Rate</span>
                               <span>{client.progressRate}% ({client.actualTotalOrders} orders tracked)</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-3">
-                              <div className="h-3 rounded-full bg-gradient-to-r from-gray-400 to-gray-600 transition-all duration-300" 
+                            <div className="w-full bg-muted rounded-full h-3">
+                              <div className="h-3 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-300" 
                                 style={{ width: `${client.progressRate}%` }}
                               ></div>
                             </div>
-                            <div className="flex justify-between text-xs text-gray-500 mt-1">
-                              <span className="text-orange-600">Pending: {client.pendingOrders}</span>
-                              <span className="text-blue-600">Ready: {client.readyOrders}</span>
-                              <span className="text-green-600">Shipped: {client.shippedOrders}</span>
-                              <span className="text-gray-800">Delivered: {client.deliveredOrders}</span>
+                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                              <span className="text-orange-600 dark:text-orange-400">Pending: {client.pendingOrders}</span>
+                              <span className="text-blue-600 dark:text-blue-400">Ready: {client.readyOrders}</span>
+                              <span className="text-green-600 dark:text-green-400">Shipped: {client.shippedOrders}</span>
+                              <span className="text-foreground">Delivered: {client.deliveredOrders}</span>
                             </div>
                             {client.statusBreakdown?.hasContainers && (
-                              <p className="text-xs text-gray-400 mt-1 text-center">
+                              <p className="text-xs text-muted-foreground mt-1 text-center">
                                 Status based on container progress
                               </p>
                             )}
                           </div>
                           
                           {/* Action Buttons */}
-                          <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                          <div className="flex justify-between items-center pt-4 border-t border-border">
                             <div className="flex items-center space-x-2">
                               <Button variant="outline" size="sm" onClick={() => handleViewDetails(client)}>
                                 <Eye className="h-4 w-4 mr-1" />
@@ -640,7 +640,7 @@ const ClientManagement = () => {
                               </Button>
                             </div>
                             {client.toCollect > 0 && (
-                              <Button size="sm" className="bg-gray-900 hover:bg-gray-800 text-white" onClick={() => handleCollectPayment(client)}>
+                              <Button size="sm" className="amber-gradient hover:from-amber-600 hover:to-orange-600 text-white" onClick={() => handleCollectPayment(client)}>
                                 <DollarSign className="h-4 w-4 mr-1" />
                                 Collect Payment
                               </Button>
@@ -657,10 +657,10 @@ const ClientManagement = () => {
 
           {/* Suppliers Tab */}
           <TabsContent value="suppliers">
-            <Card className="bg-white border border-gray-200">
+            <Card className="bg-card border border-border">
               <CardHeader>
-                <CardTitle className="flex items-center text-gray-900">
-                  <Factory className="h-5 w-5 mr-2" />
+                <CardTitle className="flex items-center text-foreground">
+                  <Factory className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
                   Supplier Manufacturing Status
                 </CardTitle>
               </CardHeader>
@@ -673,51 +673,51 @@ const ClientManagement = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+                      <Card className="border border-border hover:shadow-md transition-shadow">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center space-x-4">
-                              <div className="p-3 rounded-full bg-gray-100">
-                                <Factory className="h-6 w-6 text-gray-600" />
+                              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                                <Factory className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                               </div>
                               <div>
-                                <h3 className="text-lg font-semibold text-gray-900">{supplier.name}</h3>
-                                <p className="text-sm text-gray-600">
+                                <h3 className="text-lg font-semibold text-foreground">{supplier.name}</h3>
+                                <p className="text-sm text-muted-foreground">
                                   {supplier.clientCount} clients • {supplier.totalOrders} orders
                                 </p>
                                 {supplier.contact && (
-                                  <p className="text-xs text-gray-500">{supplier.contact}</p>
+                                  <p className="text-xs text-muted-foreground">{supplier.contact}</p>
                                 )}
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-bold text-gray-900">{formatCurrency(supplier.totalValue)}</p>
-                              <p className="text-sm text-gray-600">Total Business</p>
+                              <p className="text-2xl font-bold text-foreground">{formatCurrency(supplier.totalValue)}</p>
+                              <p className="text-sm text-muted-foreground">Total Business</p>
                             </div>
                           </div>
                           
                           {/* Manufacturing Status */}
                           <div className="grid grid-cols-3 gap-4 mb-4">
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{supplier.pendingMake}</p>
-                              <p className="text-xs text-gray-600">Need to Make</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{supplier.pendingMake}</p>
+                              <p className="text-xs text-muted-foreground">Need to Make</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{supplier.readyToShip}</p>
-                              <p className="text-xs text-gray-600">Ready to Ship</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{supplier.readyToShip}</p>
+                              <p className="text-xs text-muted-foreground">Ready to Ship</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{supplier.productionRate}%</p>
-                              <p className="text-xs text-gray-600">Production Rate</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{supplier.productionRate}%</p>
+                              <p className="text-xs text-muted-foreground">Production Rate</p>
                             </div>
                           </div>
                           
                           {/* Client List */}
-                          <div className="pt-4 border-t border-gray-200">
-                            <h4 className="font-medium text-gray-900 mb-2">Clients ({supplier.clientCount})</h4>
+                          <div className="pt-4 border-t border-border">
+                            <h4 className="font-medium text-foreground mb-2">Clients ({supplier.clientCount})</h4>
                             <div className="flex flex-wrap gap-2">
                               {supplier.clients.map((clientName, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-300">
+                                <Badge key={idx} variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
                                   {clientName}
                                 </Badge>
                               ))}

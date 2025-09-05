@@ -213,7 +213,7 @@ const Containers = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-stone-900">Container Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Container Management</h1>
             <p className="text-muted-foreground mt-2">Track, manage, and allocate shipping containers</p>
           </div>
           <div className="flex space-x-3">
@@ -450,7 +450,7 @@ const Containers = () => {
                                     style={{ width: `${Math.min(utilizationPercentage, 100)}%` }}
                                   />
                                 </div>
-                                <span className="text-sm text-stone-600">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">
                                   {utilizationPercentage.toFixed(1)}%
                                 </span>
                               </div>
@@ -466,13 +466,13 @@ const Containers = () => {
                               </span>
                             </td>
                             <td className="py-3 px-4">
-                              <span className="text-sm font-medium text-green-600">
+                              <span className="text-sm font-medium text-green-600 dark:text-green-400">
                                 ₹{(parseFloat(container?.totalRevenue) || 0).toLocaleString()}
                               </span>
                             </td>
                             <td className="py-3 px-4">
                               <span className={`text-sm font-medium ${
-                                (parseFloat(container?.grossProfit) || 0) > 0 ? 'text-green-600' : 'text-red-600'
+                                (parseFloat(container?.grossProfit) || 0) > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                               }`}>
                                 ₹{(parseFloat(container?.grossProfit) || 0).toLocaleString()}
                               </span>
@@ -503,9 +503,9 @@ const Containers = () => {
             {/* Empty State */}
             {filteredContainers.length === 0 && !loading && (
               <div className="text-center py-12">
-                <ContainerIcon className="h-16 w-16 text-stone-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-stone-900 mb-2">No containers found</h3>
-                <p className="text-stone-500 mb-6">
+                <ContainerIcon className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No containers found</h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">
                   {searchTerm ? 'Try adjusting your search criteria' : 'Get started by creating your first container or using the allocation wizard'}
                 </p>
                 <div className="flex justify-center space-x-4">

@@ -137,7 +137,7 @@ const Login = () => {
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
+      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-background">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -203,7 +203,7 @@ const Login = () => {
 
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full amber-gradient hover:from-amber-600 hover:to-orange-600"
                   size="lg"
                   disabled={isLoading}
                   variant="gradient"
@@ -220,11 +220,11 @@ const Login = () => {
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-stone-600">
+                <p className="text-muted-foreground">
                   Don't have an account?{' '}
                   <Link
                     to="/register"
-                    className="text-amber-600 hover:text-amber-800 font-medium"
+                    className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
                   >
                     Sign up
                   </Link>
@@ -232,9 +232,9 @@ const Login = () => {
               </div>
 
               {/* Demo credentials */}
-              <div className="mt-8 p-4 bg-stone-50 rounded-lg">
-                <p className="text-sm font-medium text-stone-700 mb-2">Demo Credentials:</p>
-                <div className="text-xs text-stone-600 space-y-1">
+              <div className="mt-8 p-4 bg-muted rounded-lg border border-border">
+                <p className="text-sm font-medium text-foreground mb-2">Demo Credentials:</p>
+                <div className="text-xs text-muted-foreground space-y-1">
                   <p><strong>Admin:</strong> admin@demo.com / password</p>
                   <p><strong>Staff:</strong> staff@demo.com / password</p>
                   <p><strong>Client:</strong> client@demo.com / password</p>

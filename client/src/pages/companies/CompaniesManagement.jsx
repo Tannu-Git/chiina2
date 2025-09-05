@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/stores/authStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { formatCurrency } from '@/lib/utils'
 import TransportCompanyModal from '@/components/companies/TransportCompanyModal'
 import axios from 'axios'
@@ -33,6 +34,7 @@ import toast from 'react-hot-toast'
 const CompaniesManagement = () => {
   const navigate = useNavigate()
   const { user, isAuthenticated, token } = useAuthStore()
+  const { isDark } = useThemeStore()
   const [loading, setLoading] = useState(true)
   const [transportCompanies, setTransportCompanies] = useState([])
   const [serviceProviders, setServiceProviders] = useState([])
@@ -209,13 +211,13 @@ const CompaniesManagement = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-600 dark:border-gray-400"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <motion.div
@@ -225,13 +227,13 @@ const CompaniesManagement = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                <Building2 className="h-8 w-8 mr-3 text-gray-600" />
+              <h1 className="text-3xl font-bold text-foreground flex items-center">
+                <Building2 className="h-8 w-8 mr-3 text-amber-600 dark:text-amber-400" />
                 Companies Management
               </h1>
-              <p className="text-gray-600 mt-2">Manage transport companies, service providers, and business partners</p>
+              <p className="text-muted-foreground mt-2">Manage transport companies, service providers, and business partners</p>
             </div>
-            <Button className="bg-gray-900 hover:bg-gray-800 text-white" onClick={handleAddTransportCompany}>
+            <Button className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white" onClick={handleAddTransportCompany}>
               <Plus className="h-4 w-4 mr-2" />
               Add Company
             </Button>
@@ -244,51 +246,51 @@ const CompaniesManagement = () => {
           animate={{ opacity: 1, y: 0 }}
           className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8"
         >
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Ship className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalTransport}</p>
-              <p className="text-sm text-gray-600">Transport</p>
+              <Ship className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalTransport}</p>
+              <p className="text-sm text-muted-foreground">Transport</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Factory className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalServiceProviders}</p>
-              <p className="text-sm text-gray-600">Service Providers</p>
+              <Factory className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalServiceProviders}</p>
+              <p className="text-sm text-muted-foreground">Service Providers</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Users className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.totalBusinessPartners}</p>
-              <p className="text-sm text-gray-600">Partners</p>
+              <Users className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalBusinessPartners}</p>
+              <p className="text-sm text-muted-foreground">Partners</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <TrendingUp className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.activeCompanies}</p>
-              <p className="text-sm text-gray-600">Active</p>
+              <TrendingUp className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.activeCompanies}</p>
+              <p className="text-sm text-muted-foreground">Active</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Star className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{summaryMetrics.preferredPartners}</p>
-              <p className="text-sm text-gray-600">Preferred</p>
+              <Star className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.preferredPartners}</p>
+              <p className="text-sm text-muted-foreground">Preferred</p>
             </CardContent>
           </Card>
           
-          <Card className="bg-white border border-gray-200">
+          <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <DollarSign className="h-6 w-6 text-gray-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(summaryMetrics.totalBusinessValue)}</p>
-              <p className="text-sm text-gray-600">Business Value</p>
+              <DollarSign className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalBusinessValue)}</p>
+              <p className="text-sm text-muted-foreground">Business Value</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -303,13 +305,13 @@ const CompaniesManagement = () => {
 
           {/* Transport Companies Tab */}
           <TabsContent value="transport">
-            <Card className="bg-white border border-gray-200">
+            <Card className="bg-card border border-border">
               <CardHeader>
-                <CardTitle className="flex items-center text-gray-900">
-                  <Ship className="h-5 w-5 mr-2" />
+                <CardTitle className="flex items-center text-foreground">
+                  <Ship className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
                   Transport Companies
                 </CardTitle>
-                <CardDescription>Manage shipping lines and freight carriers</CardDescription>
+                <CardDescription className="text-muted-foreground">Manage shipping lines and freight carriers</CardDescription>
                 
                 {/* Filters */}
                 <div className="flex flex-col sm:flex-row gap-4 mt-4">
@@ -335,14 +337,14 @@ const CompaniesManagement = () => {
                 <div className="space-y-4">
                   {filteredTransportCompanies.length === 0 ? (
                     <div className="text-center py-12">
-                      <Ship className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Transport Companies Found</h3>
-                      <p className="text-gray-500 mb-4">
+                      <Ship className="h-12 w-12 text-amber-500 dark:text-amber-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-foreground mb-2">No Transport Companies Found</h3>
+                      <p className="text-muted-foreground mb-4">
                         {searchTerm || statusFilter !== 'all' 
                           ? 'No companies match your current filters.' 
                           : 'No transport companies have been added yet.'}
                       </p>
-                      <Button onClick={handleAddTransportCompany} className="bg-gray-900 hover:bg-gray-800 text-white">
+                      <Button onClick={handleAddTransportCompany} className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white">
                         <Plus className="h-4 w-4 mr-2" />
                         Add First Company
                       </Button>
@@ -355,20 +357,20 @@ const CompaniesManagement = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+                      <Card className="border border-border hover:shadow-md transition-shadow">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center space-x-4">
-                              <div className="p-3 rounded-full bg-gray-100">
-                                <Ship className="h-6 w-6 text-gray-600" />
+                              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                                <Ship className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                               </div>
                               <div>
-                                <h3 className="text-lg font-semibold text-gray-900">{company.companyName}</h3>
-                                <p className="text-sm text-gray-600">
+                                <h3 className="text-lg font-semibold text-foreground">{company.companyName}</h3>
+                                <p className="text-sm text-muted-foreground">
                                   {company.shortName} • {company.totalContainerTypes} container types • {company.serviceAreasCount} service areas
                                 </p>
                                 <div className="flex items-center space-x-2 mt-1">
-                                  <Badge className={`${company.contractDetails?.preferredPartner ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}>
+                                  <Badge className={`${company.contractDetails?.preferredPartner ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700' : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'}`}>
                                     {company.contractStatus}
                                   </Badge>
                                   <Badge variant="outline" className="text-xs">
@@ -378,52 +380,52 @@ const CompaniesManagement = () => {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-bold text-gray-900">{formatCurrency(company.averageRate)}</p>
-                              <p className="text-sm text-gray-600">Avg Rate</p>
+                              <p className="text-2xl font-bold text-foreground">{formatCurrency(company.averageRate)}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Avg Rate</p>
                             </div>
                           </div>
                           
                           {/* Company Metrics */}
                           <div className="grid grid-cols-4 gap-4 mb-4">
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{company.performanceMetrics?.customerRating || 'N/A'}</p>
-                              <p className="text-xs text-gray-600">Rating</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{company.performanceMetrics?.customerRating || 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">Rating</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{company.performanceMetrics?.totalShipments || 0}</p>
-                              <p className="text-xs text-gray-600">Shipments</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{company.performanceMetrics?.totalShipments || 0}</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Shipments</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{company.serviceAreasCount}</p>
-                              <p className="text-xs text-gray-600">Ports</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{company.serviceAreasCount}</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Ports</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <p className="text-xl font-bold text-gray-900">{company.totalContainerTypes}</p>
-                              <p className="text-xs text-gray-600">Container Types</p>
+                            <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                              <p className="text-xl font-bold text-foreground">{company.totalContainerTypes}</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Container Types</p>
                             </div>
                           </div>
                           
                           {/* Contact Information */}
-                          <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <h4 className="font-medium text-gray-900 mb-2">Contact Information</h4>
+                          <div className="mb-4 p-3 bg-muted rounded-lg border border-border">
+                            <h4 className="font-medium text-foreground mb-2">Contact Information</h4>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                               <div className="flex items-center space-x-2">
-                                <Mail className="h-4 w-4 text-gray-500" />
-                                <span className="text-gray-700">{company.contactInfo?.email}</span>
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-card-foreground">{company.contactInfo?.email}</span>
                               </div>
                               <div className="flex items-center space-x-2">
-                                <Phone className="h-4 w-4 text-gray-500" />
-                                <span className="text-gray-700">{company.contactInfo?.phone}</span>
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-card-foreground">{company.contactInfo?.phone}</span>
                               </div>
                               <div className="flex items-center space-x-2">
-                                <MapPin className="h-4 w-4 text-gray-500" />
-                                <span className="text-gray-700">{company.contactInfo?.address?.city}, {company.contactInfo?.address?.country}</span>
+                                <MapPin className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-card-foreground">{company.contactInfo?.address?.city}, {company.contactInfo?.address?.country}</span>
                               </div>
                             </div>
                           </div>
                           
                           {/* Action Buttons */}
-                          <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                          <div className="flex justify-between items-center pt-4 border-t border-border">
                             <div className="flex items-center space-x-2">
                               <Button variant="outline" size="sm" onClick={() => navigate(`/companies-management/transport/${company._id}`)}>
                                 <Eye className="h-4 w-4 mr-1" />
@@ -442,7 +444,7 @@ const CompaniesManagement = () => {
                               </Button>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <Button size="sm" className="bg-gray-900 hover:bg-gray-800 text-white" onClick={() => {
+                              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white" onClick={() => {
                                 // Open rates update dialog (implement later)
                                 toast.info('Rates update dialog coming soon')
                               }}>
@@ -468,13 +470,13 @@ const CompaniesManagement = () => {
 
           {/* Service Providers Tab */}
           <TabsContent value="services">
-            <Card className="bg-white border border-gray-200">
+            <Card className="bg-card border border-border">
               <CardHeader>
-                <CardTitle className="flex items-center text-gray-900">
-                  <Factory className="h-5 w-5 mr-2" />
+                <CardTitle className="flex items-center text-foreground">
+                  <Factory className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
                   Service Providers
                 </CardTitle>
-                <CardDescription>Manage warehouses, customs brokers, and other logistics services</CardDescription>
+                <CardDescription className="text-muted-foreground">Manage warehouses, customs brokers, and other logistics services</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -485,16 +487,16 @@ const CompaniesManagement = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+                      <Card className="border border-border hover:shadow-md transition-shadow">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center space-x-4">
-                              <div className="p-3 rounded-full bg-gray-100">
-                                <Factory className="h-6 w-6 text-gray-600" />
+                              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                                <Factory className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                               </div>
                               <div>
-                                <h3 className="text-lg font-semibold text-gray-900">{provider.companyName}</h3>
-                                <p className="text-sm text-gray-600">
+                                <h3 className="text-lg font-semibold text-foreground">{provider.companyName}</h3>
+                                <p className="text-sm text-muted-foreground">
                                   {provider.shortName} • {provider.serviceType}
                                 </p>
                                 <Badge variant="outline" className="mt-1 text-xs">
@@ -503,25 +505,25 @@ const CompaniesManagement = () => {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-lg font-bold text-gray-900">
+                              <p className="text-lg font-bold text-foreground">
                                 {provider.performanceMetrics?.customerRating}/5
                               </p>
-                              <p className="text-sm text-gray-600">Rating</p>
+                              <p className="text-sm text-muted-foreground">Rating</p>
                             </div>
                           </div>
                           
                           {/* Contact and Action Buttons */}
                           <div className="space-y-4">
-                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="p-3 bg-muted rounded-lg border border-border">
                               <div className="flex justify-between items-center">
                                 <div className="space-y-1 text-sm">
                                   <div className="flex items-center space-x-2">
-                                    <Mail className="h-4 w-4 text-gray-500" />
-                                    <span className="text-gray-700">{provider.contactInfo?.email}</span>
+                                    <Mail className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-card-foreground">{provider.contactInfo?.email}</span>
                                   </div>
                                   <div className="flex items-center space-x-2">
-                                    <Phone className="h-4 w-4 text-gray-500" />
-                                    <span className="text-gray-700">{provider.contactInfo?.phone}</span>
+                                    <Phone className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-card-foreground">{provider.contactInfo?.phone}</span>
                                   </div>
                                 </div>
                                 <div className="flex space-x-2">
@@ -529,7 +531,7 @@ const CompaniesManagement = () => {
                                     <Edit className="h-4 w-4 mr-1" />
                                     Edit
                                   </Button>
-                                  <Button size="sm" className="bg-gray-900 hover:bg-gray-800 text-white">
+                                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white">
                                     <DollarSign className="h-4 w-4 mr-1" />
                                     Rates
                                   </Button>
@@ -548,13 +550,13 @@ const CompaniesManagement = () => {
 
           {/* Business Partners Tab */}
           <TabsContent value="partners">
-            <Card className="bg-white border border-gray-200">
+            <Card className="bg-card border border-border">
               <CardHeader>
-                <CardTitle className="flex items-center text-gray-900">
-                  <Users className="h-5 w-5 mr-2" />
+                <CardTitle className="flex items-center text-foreground">
+                  <Users className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
                   Business Partners
                 </CardTitle>
-                <CardDescription>Manage freight forwarders and other business partnerships</CardDescription>
+                <CardDescription className="text-muted-foreground">Manage freight forwarders and other business partnerships</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -565,20 +567,20 @@ const CompaniesManagement = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+                      <Card className="border border-border hover:shadow-md transition-shadow">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center space-x-4">
-                              <div className="p-3 rounded-full bg-gray-100">
-                                <Users className="h-6 w-6 text-gray-600" />
+                              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                                <Users className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                               </div>
                               <div>
-                                <h3 className="text-lg font-semibold text-gray-900">{partner.companyName}</h3>
-                                <p className="text-sm text-gray-600">
+                                <h3 className="text-lg font-semibold text-foreground">{partner.companyName}</h3>
+                                <p className="text-sm text-muted-foreground">
                                   {partner.shortName} • {partner.partnerType}
                                 </p>
                                 <div className="flex items-center space-x-2 mt-1">
-                                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
                                     {partner.partnershipLevel}
                                   </Badge>
                                   <Badge variant="outline" className="text-xs">
@@ -588,13 +590,13 @@ const CompaniesManagement = () => {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-bold text-gray-900">{formatCurrency(partner.businessVolume?.totalValue)}</p>
-                              <p className="text-sm text-gray-600">Total Business</p>
+                              <p className="text-2xl font-bold text-foreground">{formatCurrency(partner.businessVolume?.totalValue)}</p>
+                              <p className="text-sm text-muted-foreground">Total Business</p>
                             </div>
                           </div>
                           
                           {/* Partner Actions */}
-                          <div className="pt-4 border-t border-gray-200 flex justify-between items-center">
+                          <div className="pt-4 border-t border-border flex justify-between items-center">
                             <div className="flex items-center space-x-2">
                               <Button variant="outline" size="sm">
                                 <Eye className="h-4 w-4 mr-1" />
@@ -605,7 +607,7 @@ const CompaniesManagement = () => {
                                 Edit Partnership
                               </Button>
                             </div>
-                            <Button size="sm" className="bg-gray-900 hover:bg-gray-800 text-white">
+                            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white">
                               <FileText className="h-4 w-4 mr-1" />
                               Agreement
                             </Button>

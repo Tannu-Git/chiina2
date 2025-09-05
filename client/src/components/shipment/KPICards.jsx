@@ -7,9 +7,9 @@ const KPICard = ({ title, value, className = "" }) => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${className}`}
+      className={`bg-card rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${className}`}
     >
-      <p className="text-sm font-medium text-stone-500 mb-2">{title}</p>
+      <p className="text-sm font-medium text-muted-foreground mb-2">{title}</p>
       <p className="text-2xl md:text-3xl font-bold text-amber-600">{value}</p>
     </motion.div>
   )

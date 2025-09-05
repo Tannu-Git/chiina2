@@ -370,17 +370,17 @@ const OrderCreationGrid = ({ onSave, initialData = [] }) => {
       </div>
 
       {/* Grid Container */}
-      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="overflow-x-auto" ref={gridRef}>
           <table className="w-full">
             {/* Header */}
-            <thead className="bg-stone-50 border-b">
+            <thead className="bg-muted border-b border-border">
               <tr>
                 <th className="w-12 p-2 text-center">#</th>
                 {columns.map(column => (
                   <th
                     key={column.key}
-                    className="p-2 text-left font-medium text-stone-900 border-r"
+                    className="p-2 text-left font-medium text-foreground border-r border-border"
                     style={{ width: column.width }}
                   >
                     <div className="flex items-center space-x-1">

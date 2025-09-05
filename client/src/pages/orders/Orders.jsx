@@ -31,6 +31,12 @@ const Orders = () => {
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrders, setSelectedOrders] = useState([])
   const [selectAllChecked, setSelectAllChecked] = useState(false)
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalOrders, setTotalOrders] = useState(0)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Get status icon
   const getStatusIcon = (status) => {
@@ -46,16 +52,23 @@ const Orders = () => {
     }
   }
 
-  // Fetch orders
-  const fetchOrders = async () => {
+  // Fetch orders with pagination
+  const fetchOrders = async (page = currentPage) => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
+      params.append('page', page.toString())
+      params.append('limit', itemsPerPage.toString())
       if (searchTerm) params.append('search', searchTerm)
       if (statusFilter !== 'all') params.append('status', statusFilter)
 
       const response = await axios.get(`/api/orders?${params}`)
-      setOrders(response.data.orders || [])
+      const data = response.data
+      
+      setOrders(data.orders || [])
+      setTotalPages(data.totalPages || 1)
+      setCurrentPage(parseInt(data.currentPage) || 1)
+      setTotalOrders(data.total || 0)
     } catch (error) {
       console.error('Error fetching orders:', error)
       toast.error('Failed to load orders')
@@ -65,11 +78,24 @@ const Orders = () => {
   }
 
   useEffect(() => {
-    fetchOrders()
+    // Reset to page 1 when filters change
+    if (currentPage !== 1) {
+      setCurrentPage(1)
+      fetchOrders(1)
+    } else {
+      fetchOrders(currentPage)
+    }
     // Reset selections when filters change
     setSelectedOrders([])
     setSelectAllChecked(false)
-  }, [searchTerm, statusFilter])
+  }, [searchTerm, statusFilter, itemsPerPage])
+  
+  useEffect(() => {
+    fetchOrders(currentPage)
+    // Reset selections when page changes
+    setSelectedOrders([])
+    setSelectAllChecked(false)
+  }, [currentPage])
 
   // Delete order
   const handleDeleteOrder = async (orderId, orderNumber) => {
@@ -89,7 +115,7 @@ const Orders = () => {
       await axios.delete(`/api/orders/${orderId}`)
       toast.success(`Order ${orderNumber} deleted successfully`)
       // Refresh the orders list
-      fetchOrders()
+      fetchOrders(currentPage)
     } catch (error) {
       console.error('Error deleting order:', error)
       
@@ -135,7 +161,7 @@ const Orders = () => {
       toast.success(`${selectedOrders.length} order(s) deleted successfully`)
       setSelectedOrders([])
       setSelectAllChecked(false)
-      fetchOrders()
+      fetchOrders(currentPage)
     } catch (error) {
       console.error('Error deleting orders:', error)
       toast.error('Failed to delete some orders. Please try again.')
@@ -162,11 +188,25 @@ const Orders = () => {
     }
   }
 
-  // Export orders to CSV
-  const handleExportOrders = () => {
+  // Export orders to CSV (fetch all orders for export)
+  const handleExportOrders = async () => {
     try {
+      // Fetch all orders for export (without pagination)
+      const params = new URLSearchParams()
+      params.append('limit', '1000') // Large limit to get all orders
+      if (searchTerm) params.append('search', searchTerm)
+      if (statusFilter !== 'all') params.append('status', statusFilter)
+
+      const response = await axios.get(`/api/orders?${params}`)
+      const allOrders = response.data.orders || []
+      
+      if (allOrders.length === 0) {
+        toast.error('No orders to export')
+        return
+      }
+      
       // Prepare CSV data
-      const csvData = filteredOrders.map(order => ({
+      const csvData = allOrders.map(order => ({
         'Order Number': order.orderNumber,
         'Client Name': order.clientName,
         'Status': order.status?.replace('_', ' '),
@@ -208,21 +248,15 @@ const Orders = () => {
       link.click()
       document.body.removeChild(link)
       
-      toast.success(`Exported ${filteredOrders.length} orders to CSV`)
+      toast.success(`Exported ${allOrders.length} orders to CSV`)
     } catch (error) {
       console.error('Export failed:', error)
       toast.error('Failed to export orders')
     }
   }
 
-  // Filter orders
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = !searchTerm || 
-      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.clientName?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  // Since filtering is now done on backend, just use orders directly
+  const filteredOrders = orders
 
   if (loading) {
     return (
@@ -259,7 +293,7 @@ const Orders = () => {
                 Delete Selected ({selectedOrders.length})
               </Button>
             )}
-            <Button variant="outline" onClick={fetchOrders}>
+            <Button variant="outline" onClick={() => fetchOrders(currentPage)}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -267,19 +301,21 @@ const Orders = () => {
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            <Link to="/orders/create">
-              <Button variant="gradient" size="lg">
-                <Plus className="h-5 w-5 mr-2" />
-                Create Order
-              </Button>
-            </Link>
+            {(user.role === 'admin' || user.role === 'staff') && (
+              <Link to="/orders/create">
+                <Button variant="gradient" size="lg">
+                  <Plus className="h-5 w-5 mr-2" />
+                  Create Order
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
 
         {/* Filters */}
         <Card className="mb-6 bg-card">
           <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -291,21 +327,36 @@ const Orders = () => {
                   />
                 </div>
               </div>
-              <div className="w-full sm:w-48">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
-                    <SelectItem value="confirmed">Confirmed</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex gap-3">
+                <div className="w-full sm:w-48">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="submitted">Submitted</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-full sm:w-32">
+                  <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(parseInt(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 per page</SelectItem>
+                      <SelectItem value="25">25 per page</SelectItem>
+                      <SelectItem value="50">50 per page</SelectItem>
+                      <SelectItem value="100">100 per page</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -314,9 +365,14 @@ const Orders = () => {
         {/* Orders Table */}
         <Card className="bg-card">
           <CardHeader>
-            <CardTitle className="flex items-center text-foreground">
-              <Package className="h-5 w-5 mr-2" />
-              Orders ({filteredOrders.length})
+            <CardTitle className="flex items-center justify-between text-foreground">
+              <div className="flex items-center">
+                <Package className="h-5 w-5 mr-2" />
+                Orders ({totalOrders} total)
+              </div>
+              <div className="text-sm text-muted-foreground font-normal">
+                Page {currentPage} of {totalPages}
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -340,13 +396,13 @@ const Orders = () => {
                           />
                         </th>
                       )}
-                      <th className="text-left py-3 px-4 font-medium text-stone-700">Order #</th>
-                      <th className="text-left py-3 px-4 font-medium text-stone-700">Client</th>
-                      <th className="text-left py-3 px-4 font-medium text-stone-700">Status</th>
-                      <th className="text-left py-3 px-4 font-medium text-stone-700">Priority</th>
-                      <th className="text-left py-3 px-4 font-medium text-stone-700">Amount</th>
-                      <th className="text-left py-3 px-4 font-medium text-stone-700">Date</th>
-                      <th className="text-left py-3 px-4 font-medium text-stone-700">Actions</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Order #</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Client</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Priority</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Amount</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -400,11 +456,13 @@ const Orders = () => {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <Link to={`/orders/${order._id}/edit`}>
-                              <Button variant="ghost" size="sm" title="Edit order">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </Link>
+                            {(user.role === 'admin' || user.role === 'staff') && (
+                              <Link to={`/orders/${order._id}/edit`}>
+                                <Button variant="ghost" size="sm" title="Edit order">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                            )}
                             {(user.role === 'admin' || user.role === 'staff') && (
                               <Button 
                                 variant="ghost" 
@@ -422,6 +480,66 @@ const Orders = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-3 border-t border-border">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalOrders)} of {totalOrders} orders
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                  >
+                    Previous
+                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    {[...Array(totalPages)].map((_, index) => {
+                      const page = index + 1
+                      const isCurrentPage = page === currentPage
+                      const showPage = 
+                        page === 1 || 
+                        page === totalPages || 
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      
+                      if (!showPage) {
+                        if (page === currentPage - 2 || page === currentPage + 2) {
+                          return <span key={page} className="px-2 text-muted-foreground">...</span>
+                        }
+                        return null
+                      }
+                      
+                      return (
+                        <Button
+                          key={page}
+                          variant={isCurrentPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className={isCurrentPage ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
+                        >
+                          {page}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage >= totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

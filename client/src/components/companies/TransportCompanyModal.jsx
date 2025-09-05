@@ -177,14 +177,14 @@ const TransportCompanyModal = ({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           <Card className="border-0 shadow-none">
-            <CardHeader className="border-b border-gray-200">
+            <CardHeader className="border-b border-border">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center text-gray-900">
-                  <Building2 className="h-5 w-5 mr-2" />
+                <CardTitle className="flex items-center text-foreground">
+                  <Building2 className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
                   {mode === 'add' ? 'Add Transport Company' : 'Edit Transport Company'}
                 </CardTitle>
                 <Button variant="ghost" size="icon" onClick={onClose}>
@@ -197,11 +197,11 @@ const TransportCompanyModal = ({
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Basic Information */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
+                  <h3 className="text-lg font-medium text-foreground">Basic Information</h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-foreground mb-1">
                         Company ID *
                       </label>
                       <Input
@@ -214,7 +214,7 @@ const TransportCompanyModal = ({
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-foreground mb-1">
                         Short Name *
                       </label>
                       <Input
@@ -227,7 +227,7 @@ const TransportCompanyModal = ({
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-foreground mb-1">
                       Company Name *
                     </label>
                     <Input
@@ -241,11 +241,11 @@ const TransportCompanyModal = ({
 
                 {/* Contact Information */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Contact Information</h3>
+                  <h3 className="text-lg font-medium text-foreground">Contact Information</h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-foreground mb-1">
                         Email *
                       </label>
                       <Input
@@ -258,7 +258,7 @@ const TransportCompanyModal = ({
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-foreground mb-1">
                         Phone
                       </label>
                       <Input
@@ -270,7 +270,7 @@ const TransportCompanyModal = ({
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-foreground mb-1">
                       Website
                     </label>
                     <Input
@@ -283,7 +283,7 @@ const TransportCompanyModal = ({
 
                 {/* Status and Contract */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Status & Contract</h3>
+                  <h3 className="text-lg font-medium text-foreground">Status & Contract</h3>
                   
                   <div className="flex items-center space-x-4">
                     <label className="flex items-center space-x-2">
@@ -293,7 +293,7 @@ const TransportCompanyModal = ({
                         onChange={(e) => handleInputChange('isActive', e.target.checked)}
                         className="rounded"
                       />
-                      <span className="text-sm font-medium text-gray-700">Active Company</span>
+                      <span className="text-sm font-medium text-foreground">Active Company</span>
                     </label>
                     
                     <label className="flex items-center space-x-2">
@@ -303,17 +303,17 @@ const TransportCompanyModal = ({
                         onChange={(e) => handleNestedInputChange('contractDetails', 'preferredPartner', e.target.checked)}
                         className="rounded"
                       />
-                      <span className="text-sm font-medium text-gray-700">Preferred Partner</span>
+                      <span className="text-sm font-medium text-foreground">Preferred Partner</span>
                     </label>
                   </div>
                 </div>
 
                 {/* Submit Buttons */}
-                <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <div className="flex justify-end space-x-3 pt-6 border-t border-border">
                   <Button type="button" variant="outline" onClick={onClose}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={loading} className="bg-gray-900 hover:bg-gray-800 text-white">
+                  <Button type="submit" disabled={loading} className="amber-gradient hover:from-amber-600 hover:to-orange-600 text-white">
                     {loading ? (
                       <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
                     ) : mode === 'add' ? (

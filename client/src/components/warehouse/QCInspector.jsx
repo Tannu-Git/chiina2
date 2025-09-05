@@ -277,7 +277,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] flex flex-col"
+        className="bg-card rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] flex flex-col"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white p-6 flex-shrink-0">
@@ -380,7 +380,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                       ).length} / {inspectionData.items.length}
                     </span>
                   </div>
-                  <div className="w-full bg-stone-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div 
                       className="bg-amber-600 h-2 rounded-full transition-all duration-300" 
                       style={{ width: `${(inspectionData.items.filter(item => 
@@ -394,7 +394,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
           </div>
 
           {/* Right Side - Main Inspection Area */}
-          <div className="flex-1 overflow-y-auto bg-white">
+          <div className="flex-1 overflow-y-auto bg-card">
             <div className="p-6 h-full">
               {currentItem ? (
                 <AnimatePresence mode="wait">
@@ -517,7 +517,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                                     {isAllocated && (
                                       <div className="flex items-center text-xs text-yellow-700">
                                         <Container className="h-3 w-3 mr-1" />
-                                        <span>Min: {minAllowedValue} (allocated)</span>
+                                        <span>Min: {minAllowedValue} (alloc ated)</span>
                                       </div>
                                     )}
                                   </div>

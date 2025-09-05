@@ -5,37 +5,37 @@
 
 @layer base {
   :root {
-    /* Amber & Stone Theme - matching design.html exactly */
+    /* Gray & Neutral Theme - consistent with Companies Management */
     --background: 28 25% 97%; /* stone-100 #f5f5f4 */
     --foreground: 28 25% 23%; /* stone-800 */
     --card: 0 0% 100%; /* white */
     --card-foreground: 28 25% 23%; /* stone-800 */
     --popover: 0 0% 100%; /* white */
     --popover-foreground: 28 25% 23%; /* stone-800 */
-    --primary: 45 93% 47%; /* amber-500 #f59e0b */
+    --primary: 0 0% 23%; /* gray-800 for consistent appearance */
     --primary-foreground: 0 0% 100%; /* white */
     --secondary: 28 25% 97%; /* stone-100 */
     --secondary-foreground: 28 25% 23%; /* stone-800 */
     --muted: 28 25% 95%; /* stone-50 */
     --muted-foreground: 28 10% 53%; /* stone-500 */
-    --accent: 45 93% 47%; /* amber-500 */
+    --accent: 0 0% 23%; /* gray-800 for tabs and accents */
     --accent-foreground: 0 0% 100%; /* white */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 28 13% 80%; /* stone-300 */
     --input: 28 13% 80%; /* stone-300 */
-    --ring: 45 93% 47%; /* amber-500 */
+    --ring: 0 0% 23%; /* gray-800 for focus rings */
     --radius: 0.75rem;
 
-    /* Enhanced Sidebar Variables - Amber & Stone Theme */
+    /* Enhanced Sidebar Variables - Gray & Neutral Theme */
     --sidebar-background: 0 0% 100%; /* white */
     --sidebar-foreground: 28 25% 23%; /* stone-800 */
     --sidebar-border: 28 13% 80%; /* stone-300 */
     --sidebar-hover: 28 25% 95%; /* stone-50 */
-    --sidebar-active: 45 93% 47%; /* amber-500 */
+    --sidebar-active: 0 0% 23%; /* gray-800 */
     --sidebar-active-foreground: 0 0% 100%; /* white */
     --sidebar-muted: 28 10% 53%; /* stone-500 */
-    --sidebar-accent: 45 93% 47%; /* amber-500 */
+    --sidebar-accent: 0 0% 23%; /* gray-800 */
 
     /* Glassmorphism Variables */
     --glass-background: 255 255 255 / 0.1;
@@ -48,36 +48,36 @@
   }
 
   .dark {
-    /* Dark Amber & Stone Theme */
+    /* Dark Gray & Neutral Theme */
     --background: 28 25% 9%; /* stone-900 */
     --foreground: 28 25% 95%; /* stone-50 */
     --card: 28 25% 11%; /* stone-800 */
     --card-foreground: 28 25% 95%; /* stone-50 */
     --popover: 28 25% 11%; /* stone-800 */
     --popover-foreground: 28 25% 95%; /* stone-50 */
-    --primary: 45 93% 47%; /* amber-500 */
-    --primary-foreground: 28 25% 9%; /* stone-900 */
+    --primary: 0 0% 95%; /* gray-50 for dark theme visibility */
+    --primary-foreground: 0 0% 9%; /* gray-900 */
     --secondary: 28 25% 15%; /* stone-700 */
     --secondary-foreground: 28 25% 95%; /* stone-50 */
     --muted: 28 25% 15%; /* stone-700 */
     --muted-foreground: 28 25% 53%; /* stone-400 */
-    --accent: 45 93% 47%; /* amber-500 */
-    --accent-foreground: 28 25% 9%; /* stone-900 */
+    --accent: 0 0% 95%; /* gray-50 for dark theme accents */
+    --accent-foreground: 0 0% 9%; /* gray-900 */
     --destructive: 0 62.8% 50.6%; /* red-600 */
     --destructive-foreground: 210 40% 98%;
     --border: 28 25% 15%; /* stone-700 */
     --input: 28 25% 15%; /* stone-700 */
-    --ring: 45 93% 47%; /* amber-500 */
+    --ring: 0 0% 95%; /* gray-50 for focus rings */
 
-    /* Enhanced Dark Sidebar Variables - Amber & Stone Theme */
+    /* Enhanced Dark Sidebar Variables - Gray & Neutral Theme */
     --sidebar-background: 28 25% 11%; /* stone-800 */
     --sidebar-foreground: 28 25% 95%; /* stone-50 */
     --sidebar-border: 28 25% 15%; /* stone-700 */
     --sidebar-hover: 28 25% 15%; /* stone-700 */
-    --sidebar-active: 45 93% 47%; /* amber-500 */
-    --sidebar-active-foreground: 28 25% 9%; /* stone-900 */
+    --sidebar-active: 0 0% 95%; /* gray-50 */
+    --sidebar-active-foreground: 0 0% 9%; /* gray-900 */
     --sidebar-muted: 28 25% 53%; /* stone-400 */
-    --sidebar-accent: 45 93% 47%; /* amber-500 */
+    --sidebar-accent: 0 0% 95%; /* gray-50 */
 
     /* Dark Glassmorphism Variables */
     --glass-background: 0 0 0 / 0.1;

@@ -6,6 +6,7 @@ import {
   Search,
   Filter,
   Eye,
+  EyeOff,
   Edit,
   Trash2,
   Shield,
@@ -28,7 +29,15 @@ import {
   Save,
   X,
   User,
-  Key
+  Key,
+  ChevronLeft,
+  ChevronRight,
+  CheckSquare,
+  Square,
+  Trash,
+  UserMinus,
+  UserPlus,
+  Container
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,6 +48,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useAuthStore } from '@/stores/authStore'
 import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 import axios from 'axios'
@@ -51,6 +61,17 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const [usersPerPage] = useState(20)
+  
+  // Selection states
+  const [selectedUsers, setSelectedUsers] = useState([])
+  const [selectAll, setSelectAll] = useState(false)
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
   
   // Modal states
   const [showEditModal, setShowEditModal] = useState(false)
@@ -99,31 +120,51 @@ const Users = () => {
     confirmPassword: ''
   })
 
-  // Fetch users with enhanced data
-  const fetchUsers = async () => {
+  // Password visibility states
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false)
+  const [showNewUserConfirmPassword, setShowNewUserConfirmPassword] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [showChangeConfirmPassword, setShowChangeConfirmPassword] = useState(false)
+
+  // Fetch users with enhanced data and pagination
+  const fetchUsers = async (page = currentPage) => {
     try {
       setLoading(true)
-      console.log('Fetching users with enhanced data...')
+      console.log(`Fetching users for page ${page} with filters: role=${roleFilter}, search=${searchTerm}`)
       
       const response = await axios.get('/api/users', {
         params: {
-          limit: 100, // Get more users for comprehensive view
+          page,
+          limit: usersPerPage,
           role: roleFilter !== 'all' ? roleFilter : undefined,
           search: searchTerm || undefined
         }
       })
       
       const fetchedUsers = response.data.users || []
-      console.log(`Fetched ${fetchedUsers.length} users`)
+      console.log(`Fetched ${fetchedUsers.length} users for page ${page} (total: ${response.data.total || 0})`)
       
       setUsers(fetchedUsers)
+      setTotalPages(response.data.totalPages || 1)
+      setTotalUsers(response.data.total || 0)
+      setCurrentPage(page)
+      
+      // Reset selections when data changes
+      setSelectedUsers([])
+      setSelectAll(false)
       
     } catch (error) {
       console.error('Error fetching users:', error)
-      toast.error('Failed to load users')
+      console.log('Falling back to demo data due to fetch error')
+      toast.error('Failed to load users from server, showing demo data')
       
       // Fallback to demo data structure for development
-      setUsers(generateDemoUsers())
+      const demoUsers = generateDemoUsers()
+      console.log('Generated demo users:', demoUsers)
+      setUsers(demoUsers)
+      setTotalPages(1)
+      setTotalUsers(demoUsers.length)
+      setCurrentPage(1)
     } finally {
       setLoading(false)
     }
@@ -133,7 +174,7 @@ const Users = () => {
   const generateDemoUsers = () => {
     return [
       {
-        _id: 'demo_admin_1',
+        _id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId
         name: 'Admin User',
         email: 'admin@demo.com',
         role: 'admin',
@@ -159,7 +200,7 @@ const Users = () => {
         permissions: ['view_all_orders', 'edit_financials', 'view_profits', 'create_users']
       },
       {
-        _id: 'demo_client_1',
+        _id: '507f1f77bcf86cd799439012', // Valid MongoDB ObjectId
         name: 'Rajesh Patel',
         email: 'rajesh@abctrading.com',
         role: 'client',
@@ -194,7 +235,7 @@ const Users = () => {
         permissions: []
       },
       {
-        _id: 'demo_client_2',
+        _id: '507f1f77bcf86cd799439013', // Valid MongoDB ObjectId
         name: 'Priya Sharma',
         email: 'priya@xyzimports.com',
         role: 'client',
@@ -232,18 +273,26 @@ const Users = () => {
   }
   
   useEffect(() => {
-    fetchUsers()
+    fetchUsers(1) // Always start from page 1 when filters change
   }, [roleFilter, statusFilter])
   
+  // Separate effect for search with debouncing
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
       if (searchTerm !== '') {
-        fetchUsers()
+        fetchUsers(1) // Start from page 1 when searching
+      } else if (searchTerm === '') {
+        fetchUsers(currentPage) // Keep current page when clearing search
       }
     }, 500)
     
     return () => clearTimeout(delayedSearch)
   }, [searchTerm])
+  
+  // Initial load effect
+  useEffect(() => {
+    fetchUsers(1) // Load initial data
+  }, []) // Empty dependency array for initial load only
 
   // Filter users based on search and filters
   const filteredUsers = users.filter(user => {
@@ -257,6 +306,16 @@ const Users = () => {
     const matchesStatus = statusFilter === 'all' || user.status === statusFilter
     
     return matchesSearch && matchesRole && matchesStatus
+  })
+  
+  // Debug logging
+  console.log('Filter debug:', {
+    totalUsers: users.length,
+    filteredUsers: filteredUsers.length,
+    searchTerm,
+    roleFilter,
+    statusFilter,
+    currentPage
   })
 
   // Helper functions
@@ -291,7 +350,7 @@ const Users = () => {
       case 'active':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
       case 'inactive':
-        return 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800'
+        return 'bg-muted text-muted-foreground border-border'
       case 'suspended':
         return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800'
       default:
@@ -308,49 +367,98 @@ const Users = () => {
   // CRUD Operations
   const handleCreateUser = async () => {
     try {
-      if (!newUserForm.name || !newUserForm.email || !newUserForm.password) {
-        toast.error('Please fill in all required fields')
+      if (!newUserForm.name) {
+        toast.error('Name is required')
         return
       }
       
-      if (newUserForm.password !== newUserForm.confirmPassword) {
+      // Only validate password confirmation if password is provided
+      if (newUserForm.password && newUserForm.password !== newUserForm.confirmPassword) {
         toast.error('Passwords do not match')
         return
       }
       
+      // Only validate password length if password is provided
+      if (newUserForm.password && newUserForm.password.length < 6) {
+        toast.error('Password must be at least 6 characters long')
+        return
+      }
+      
       const userData = {
-        name: newUserForm.name,
-        email: newUserForm.email,
-        password: newUserForm.password,
+        name: newUserForm.name.trim(),
         role: newUserForm.role,
-        company: newUserForm.company,
-        phone: newUserForm.phone,
-        address: newUserForm.address,
         permissions: newUserForm.permissions
+      }
+      
+      // Only include fields if they have actual values
+      if (newUserForm.email && newUserForm.email.trim()) {
+        userData.email = newUserForm.email.trim()
+      }
+      
+      if (newUserForm.password && newUserForm.password.trim()) {
+        userData.password = newUserForm.password
+      }
+      
+      if (newUserForm.company && newUserForm.company.trim()) {
+        userData.company = newUserForm.company.trim()
+      }
+      
+      if (newUserForm.phone && newUserForm.phone.trim()) {
+        userData.phone = newUserForm.phone.trim()
+      }
+      
+      // Handle address - only include if any address field has a value
+      const hasAddressData = newUserForm.address && (
+        newUserForm.address.street?.trim() ||
+        newUserForm.address.city?.trim() ||
+        newUserForm.address.state?.trim() ||
+        newUserForm.address.country?.trim() ||
+        newUserForm.address.zipCode?.trim()
+      )
+      
+      if (hasAddressData) {
+        userData.address = {
+          street: newUserForm.address.street?.trim() || '',
+          city: newUserForm.address.city?.trim() || '',
+          state: newUserForm.address.state?.trim() || '',
+          country: newUserForm.address.country?.trim() || 'India',
+          zipCode: newUserForm.address.zipCode?.trim() || ''
+        }
       }
       
       await axios.post('/api/users', userData)
       toast.success('User created successfully!')
       setShowAddModal(false)
       resetNewUserForm()
-      fetchUsers()
+      // Navigate to page 1 to show the newly created user
+      setCurrentPage(1)
+      fetchUsers(1)
     } catch (error) {
       console.error('Create user error:', error)
-      toast.error(error.response?.data?.message || 'Failed to create user')
+      
+      // Handle validation errors specifically
+      if (error.response?.status === 400 && error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors
+        const errorMessages = validationErrors.map(err => err.msg).join(', ')
+        toast.error(`Validation failed: ${errorMessages}`)
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to create user')
+      }
     }
   }
   
   const handleUpdateUser = async () => {
     try {
-      if (!editForm.name || !editForm.email) {
-        toast.error('Name and email are required')
+      if (!editForm.name) {
+        toast.error('Name is required')
         return
       }
       
       await axios.put(`/api/users/${selectedUser._id}`, editForm)
       toast.success('User updated successfully!')
       setShowEditModal(false)
-      fetchUsers()
+      // Stay on current page for edits since user should still be visible
+      fetchUsers(currentPage)
     } catch (error) {
       console.error('Update user error:', error)
       toast.error(error.response?.data?.message || 'Failed to update user')
@@ -365,10 +473,18 @@ const Users = () => {
     try {
       await axios.delete(`/api/users/${userId}`)
       toast.success('User deleted successfully')
-      fetchUsers()
+      // If we're on a page > 1 and this might have been the last user on this page,
+      // we might need to go back a page. Let the backend handle pagination correctly.
+      fetchUsers(currentPage)
     } catch (error) {
       console.error('Delete user error:', error)
-      toast.error(error.response?.data?.message || 'Failed to delete user')
+      
+      // Handle specific error cases
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('Invalid user ID format')) {
+        toast.error('Cannot delete demo user - Invalid user ID format')
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to delete user')
+      }
     }
   }
 
@@ -383,7 +499,8 @@ const Users = () => {
     try {
       await axios.patch(`/api/users/${userId}`, { status: newStatus })
       toast.success(`User ${action}d successfully`)
-      fetchUsers()
+      // Stay on current page for status changes
+      fetchUsers(currentPage)
     } catch (error) {
       console.error('Toggle user status error:', error)
       toast.error(error.response?.data?.message || 'Failed to update user status')
@@ -456,27 +573,53 @@ const Users = () => {
   }
 
   const handleViewUser = (user) => {
+    console.log('Viewing user:', user) // Debug log
+    console.log('User address for viewing:', user.address) // Debug address specifically
     setSelectedUser(user)
     setShowDetailsModal(true)
   }
 
   const handleEditUser = (user) => {
+    console.log('Editing user:', user) // Debug log
+    console.log('User address:', user.address) // Debug address specifically
     setSelectedUser(user)
+    
+    // Safely handle address with proper fallbacks
+    const userAddress = user.address || {}
+    console.log('Processed address:', userAddress) // Debug processed address
+    
     setEditForm({
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'client',
       company: user.company || '',
       phone: user.phone || '',
-      address: user.address || {
-        street: '',
-        city: '',
-        state: '',
-        country: 'India',
-        zipCode: ''
+      address: {
+        street: userAddress.street || '',
+        city: userAddress.city || '',
+        state: userAddress.state || '',
+        country: userAddress.country || 'India',
+        zipCode: userAddress.zipCode || ''
       },
       permissions: user.permissions || []
     })
+    
+    console.log('Edit form set to:', {
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'client',
+      company: user.company || '',
+      phone: user.phone || '',
+      address: {
+        street: userAddress.street || '',
+        city: userAddress.city || '',
+        state: userAddress.state || '',
+        country: userAddress.country || 'India',
+        zipCode: userAddress.zipCode || ''
+      },
+      permissions: user.permissions || []
+    }) // Debug final form
+    
     setShowEditModal(true)
   }
 
@@ -486,6 +629,9 @@ const Users = () => {
       newPassword: '',
       confirmPassword: ''
     })
+    // Reset password visibility states
+    setShowChangePassword(false)
+    setShowChangeConfirmPassword(false)
     setShowPasswordModal(true)
   }
 
@@ -513,9 +659,75 @@ const Users = () => {
       toast.success('Password updated successfully!')
       setShowPasswordModal(false)
       setPasswordForm({ newPassword: '', confirmPassword: '' })
+      // Reset password visibility states
+      setShowChangePassword(false)
+      setShowChangeConfirmPassword(false)
     } catch (error) {
       console.error('Update password error:', error)
       toast.error(error.response?.data?.message || 'Failed to update password')
+    }
+  }
+
+  // Selection and bulk operations
+  const handleSelectUser = (userId, checked) => {
+    if (checked) {
+      setSelectedUsers(prev => [...prev, userId])
+    } else {
+      setSelectedUsers(prev => prev.filter(id => id !== userId))
+      setSelectAll(false)
+    }
+  }
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedUsers(filteredUsers.map(user => user._id))
+      setSelectAll(true)
+    } else {
+      setSelectedUsers([])
+      setSelectAll(false)
+    }
+  }
+
+  const handleBulkAction = async (action) => {
+    if (selectedUsers.length === 0) {
+      toast.error('Please select users first')
+      return
+    }
+
+    const actionText = {
+      delete: 'delete',
+      activate: 'activate', 
+      deactivate: 'deactivate'
+    }[action]
+
+    if (!window.confirm(`Are you sure you want to ${actionText} ${selectedUsers.length} selected user(s)?`)) {
+      return
+    }
+
+    try {
+      setBulkActionLoading(true)
+      const response = await axios.post('/api/users/bulk-actions', {
+        action,
+        userIds: selectedUsers
+      })
+
+      toast.success(response.data.message)
+      setSelectedUsers([])
+      setSelectAll(false)
+      // Refresh current page after bulk operations
+      fetchUsers(currentPage)
+    } catch (error) {
+      console.error('Bulk action error:', error)
+      toast.error(error.response?.data?.message || `Failed to ${actionText} users`)
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
+  // Pagination
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      fetchUsers(page)
     }
   }
 
@@ -538,6 +750,9 @@ const Users = () => {
       },
       permissions: []
     })
+    // Reset password visibility states
+    setShowNewUserPassword(false)
+    setShowNewUserConfirmPassword(false)
   }
   
   const resetEditForm = () => {
@@ -560,7 +775,7 @@ const Users = () => {
 
   // Calculate metrics
   const metrics = {
-    totalUsers: filteredUsers.length,
+    totalUsers: totalUsers, // Use actual total from backend
     activeUsers: filteredUsers.filter(u => u.status === 'active').length,
     clientUsers: filteredUsers.filter(u => u.role === 'client').length,
     staffUsers: filteredUsers.filter(u => u.role === 'admin' || u.role === 'staff').length,
@@ -599,7 +814,7 @@ const Users = () => {
               </div>
             </div>
             <div className="flex space-x-3">
-              <Button variant="outline" onClick={fetchUsers} disabled={loading}>
+              <Button variant="outline" onClick={() => fetchUsers(currentPage)} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
@@ -744,17 +959,187 @@ const Users = () => {
             </CardContent>
           </Card>
 
+          {/* Bulk Operations Bar */}
+          {selectedUsers.length > 0 && (
+            <Card className="mb-6 border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <CheckSquare className="h-5 w-5 text-primary" />
+                      <span className="font-medium text-foreground">
+                        {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''} selected
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedUsers([])
+                        setSelectAll(false)
+                      }}
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+                  
+                  {currentUser?.role === 'admin' && (
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBulkAction('activate')}
+                        disabled={bulkActionLoading}
+                        className="text-green-600 hover:text-green-800 hover:bg-green-500/10"
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Activate
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBulkAction('deactivate')}
+                        disabled={bulkActionLoading}
+                        className="text-yellow-600 hover:text-yellow-800 hover:bg-yellow-500/10"
+                      >
+                        <UserMinus className="h-4 w-4 mr-2" />
+                        Deactivate
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBulkAction('delete')}
+                        disabled={bulkActionLoading}
+                        className="text-red-600 hover:text-red-800 hover:bg-red-500/10"
+                      >
+                        <Trash className="h-4 w-4 mr-2" />
+                        Delete
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Users Table */}
           <Card className="border-0 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-xl font-semibold text-foreground">All Users ({filteredUsers.length})</CardTitle>
-              <CardDescription className="text-muted-foreground">Manage system users and their permissions</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl font-semibold text-foreground">
+                    All Users ({totalUsers}) 
+                    {currentPage > 1 && (
+                      <span className="text-sm font-normal text-muted-foreground">
+                        - Page {currentPage} of {totalPages}
+                      </span>
+                    )}
+                  </CardTitle>
+                  <CardDescription className="text-muted-foreground">
+                    Manage system users and their permissions
+                  </CardDescription>
+                </div>
+                
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1 || loading}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        const page = i + 1;
+                        if (totalPages <= 5) {
+                          return (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(page)}
+                              disabled={loading}
+                              className="w-8 h-8 p-0"
+                            >
+                              {page}
+                            </Button>
+                          );
+                        }
+                        // For more than 5 pages, show smart pagination
+                        if (currentPage <= 3) {
+                          if (page <= 4) {
+                            return (
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handlePageChange(page)}
+                                disabled={loading}
+                                className="w-8 h-8 p-0"
+                              >
+                                {page}
+                              </Button>
+                            );
+                          } else if (page === 5) {
+                            return <span key="ellipsis1" className="px-2">...</span>;
+                          }
+                        }
+                        return null;
+                      })}
+                      
+                      {totalPages > 5 && currentPage > 3 && (
+                        <Button
+                          variant={currentPage === totalPages ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(totalPages)}
+                          disabled={loading}
+                          className="w-8 h-8 p-0"
+                        >
+                          {totalPages}
+                        </Button>
+                      )}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages || loading}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
+                      {currentUser?.role === 'admin' && (
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground w-12">
+                          <div className="flex items-center">
+                            {selectAll ? (
+                              <CheckSquare 
+                                className="h-4 w-4 text-primary cursor-pointer" 
+                                onClick={() => handleSelectAll(false)}
+                              />
+                            ) : (
+                              <Square 
+                                className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" 
+                                onClick={() => handleSelectAll(true)}
+                              />
+                            )}
+                          </div>
+                        </th>
+                      )}
                       <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
                       <th className="text-left py-3 px-4 font-medium text-muted-foreground">Contact</th>
                       <th className="text-center py-3 px-4 font-medium text-muted-foreground">Role</th>
@@ -774,6 +1159,23 @@ const Users = () => {
                         transition={{ duration: 0.3, delay: index * 0.05 }}
                         className="border-b border-border hover:bg-muted/50 transition-colors"
                       >
+                        {currentUser?.role === 'admin' && (
+                          <td className="py-4 px-4">
+                            <div className="flex items-center">
+                              {selectedUsers.includes(user._id) ? (
+                                <CheckSquare 
+                                  className="h-4 w-4 text-primary cursor-pointer" 
+                                  onClick={() => handleSelectUser(user._id, false)}
+                                />
+                              ) : (
+                                <Square 
+                                  className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" 
+                                  onClick={() => handleSelectUser(user._id, true)}
+                                />
+                              )}
+                            </div>
+                          </td>
+                        )}
                         <td className="py-4 px-4">
                           <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
@@ -922,6 +1324,9 @@ const Users = () => {
                       : 'Get started by adding your first user'
                     }
                   </p>
+                  <div className="text-xs text-muted-foreground mb-4">
+                    Debug info: Page {currentPage}, Total users: {totalUsers}, Fetched: {users.length}, Filtered: {filteredUsers.length}
+                  </div>
                   {currentUser?.role === 'admin' && !searchTerm && (
                     <Button onClick={handleAddUser} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                       <Plus className="h-4 w-4 mr-2" />
@@ -966,37 +1371,69 @@ const Users = () => {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="add-email">Email Address *</Label>
+                        <Label htmlFor="add-email">Email Address</Label>
                         <Input
                           id="add-email"
                           type="email"
                           value={newUserForm.email}
                           onChange={(e) => setNewUserForm({...newUserForm, email: e.target.value})}
-                          placeholder="Enter email address"
+                          placeholder="Enter email address (optional)"
                         />
                       </div>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="add-password">Password *</Label>
-                        <Input
-                          id="add-password"
-                          type="password"
-                          value={newUserForm.password}
-                          onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
-                          placeholder="Enter password"
-                        />
+                        <Label htmlFor="add-password">Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="add-password"
+                            type={showNewUserPassword ? "text" : "password"}
+                            value={newUserForm.password}
+                            onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
+                            placeholder="Enter password (optional)"
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                          >
+                            {showNewUserPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
                       <div>
-                        <Label htmlFor="add-confirm-password">Confirm Password *</Label>
-                        <Input
-                          id="add-confirm-password"
-                          type="password"
-                          value={newUserForm.confirmPassword}
-                          onChange={(e) => setNewUserForm({...newUserForm, confirmPassword: e.target.value})}
-                          placeholder="Confirm password"
-                        />
+                        <Label htmlFor="add-confirm-password">Confirm Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="add-confirm-password"
+                            type={showNewUserConfirmPassword ? "text" : "password"}
+                            value={newUserForm.confirmPassword}
+                            onChange={(e) => setNewUserForm({...newUserForm, confirmPassword: e.target.value})}
+                            placeholder="Confirm password (optional)"
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            onClick={() => setShowNewUserConfirmPassword(!showNewUserConfirmPassword)}
+                          >
+                            {showNewUserConfirmPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     
@@ -1008,6 +1445,19 @@ const Users = () => {
                         onChange={(e) => setNewUserForm({...newUserForm, company: e.target.value})}
                         placeholder="Enter company name"
                       />
+                    </div>
+                    
+                    <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        <strong>User Creation Tips:</strong>
+                      </p>
+                      <ul className="text-xs text-blue-600 dark:text-blue-400 mt-1 space-y-1">
+                        <li>• Only name and role are required - other fields are optional</li>
+                        <li>• If no email provided, user cannot log in until email is added later</li>
+                        <li>• If no password provided, user must reset password to log in</li>
+                        <li>• Click the eye icon to show/hide password while typing</li>
+                        <li>• Users without email/password can be edited later to add credentials</li>
+                      </ul>
                     </div>
                   </TabsContent>
                   
@@ -1088,35 +1538,158 @@ const Users = () => {
 
           {/* Edit User Modal */}
           <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Edit User: {selectedUser?.name}</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Edit className="h-5 w-5" />
+                  Edit User: {selectedUser?.name}
+                </DialogTitle>
+                <DialogDescription>
+                  Update user information, role, and permissions.
+                </DialogDescription>
               </DialogHeader>
+              
               {selectedUser && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Name</Label>
-                      <Input value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} />
-                    </div>
-                    <div>
-                      <Label>Email</Label>
-                      <Input value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Company</Label>
-                      <Input value={editForm.company} onChange={(e) => setEditForm({...editForm, company: e.target.value})} />
-                    </div>
-                    <div>
-                      <Label>Phone</Label>
-                      <Input value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-3">
-                    <Button variant="outline" onClick={() => setShowEditModal(false)}>Cancel</Button>
-                    <Button onClick={handleUpdateUser}>Update User</Button>
+                <div className="space-y-6">
+                  <Tabs defaultValue="basic" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                      <TabsTrigger value="contact">Contact & Address</TabsTrigger>
+                      <TabsTrigger value="permissions">Role & Permissions</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="basic" className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="edit-name">Full Name *</Label>
+                          <Input
+                            id="edit-name"
+                            value={editForm.name}
+                            onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                            placeholder="Enter full name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-email">Email Address *</Label>
+                          <Input
+                            id="edit-email"
+                            type="email"
+                            value={editForm.email}
+                            onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="edit-company">Company/Organization</Label>
+                          <Input
+                            id="edit-company"
+                            value={editForm.company}
+                            onChange={(e) => setEditForm({...editForm, company: e.target.value})}
+                            placeholder="Enter company name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-phone">Phone Number</Label>
+                          <Input
+                            id="edit-phone"
+                            value={editForm.phone}
+                            onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                            placeholder="Enter phone number"
+                          />
+                        </div>
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="contact" className="space-y-4">
+                        <div className="space-y-3">
+                          <Label>Address</Label>
+                          <Input
+                            placeholder="Street Address"
+                            value={editForm.address?.street || ''}
+                            onChange={(e) => {
+                              console.log('Editing street:', e.target.value) // Debug log
+                              setEditForm({...editForm, address: {...editForm.address, street: e.target.value}})
+                            }}
+                          />
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              placeholder="City"
+                              value={editForm.address?.city || ''}
+                              onChange={(e) => {
+                                console.log('Editing city:', e.target.value) // Debug log
+                                setEditForm({...editForm, address: {...editForm.address, city: e.target.value}})
+                              }}
+                            />
+                            <Input
+                              placeholder="State"
+                              value={editForm.address?.state || ''}
+                              onChange={(e) => {
+                                console.log('Editing state:', e.target.value) // Debug log
+                                setEditForm({...editForm, address: {...editForm.address, state: e.target.value}})
+                              }}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              placeholder="Country"
+                              value={editForm.address?.country || 'India'}
+                              onChange={(e) => {
+                                console.log('Editing country:', e.target.value) // Debug log
+                                setEditForm({...editForm, address: {...editForm.address, country: e.target.value}})
+                              }}
+                            />
+                            <Input
+                              placeholder="ZIP Code"
+                              value={editForm.address?.zipCode || ''}
+                              onChange={(e) => {
+                                console.log('Editing zipCode:', e.target.value) // Debug log
+                                setEditForm({...editForm, address: {...editForm.address, zipCode: e.target.value}})
+                              }}
+                            />
+                          </div>
+                        </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="permissions" className="space-y-4">
+                      <div>
+                        <Label htmlFor="edit-role">User Role</Label>
+                        <Select value={editForm.role} onValueChange={(value) => setEditForm({...editForm, role: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="client">Client</SelectItem>
+                            <SelectItem value="staff">Staff</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="bg-amber-50 dark:bg-amber-950 p-3 rounded-lg">
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                          <strong>Role Change Notice:</strong>
+                        </p>
+                        <ul className="text-xs text-amber-600 dark:text-amber-400 mt-1 space-y-1">
+                          <li>• Changing role affects user permissions and access</li>
+                          <li>• Client role: Limited access to own data only</li>
+                          <li>• Staff role: Access to operational functions</li>
+                          <li>• Admin role: Full system access</li>
+                        </ul>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                  
+                  <div className="flex justify-end gap-3 pt-4 border-t">
+                    <Button variant="outline" onClick={() => setShowEditModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleUpdateUser} className="bg-green-600 hover:bg-green-700">
+                      <Save className="h-4 w-4 mr-2" />
+                      Update User
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1125,41 +1698,208 @@ const Users = () => {
 
           {/* View Details Modal */}
           <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>User Details: {selectedUser?.name}</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  User Details: {selectedUser?.name}
+                </DialogTitle>
+                <DialogDescription>
+                  Complete user information and statistics
+                </DialogDescription>
               </DialogHeader>
               {selectedUser && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-6">
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Card>
-                      <CardHeader><CardTitle>Contact Info</CardTitle></CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          <p><Mail className="h-4 w-4 inline mr-2" />{selectedUser.email}</p>
-                          {selectedUser.phone && <p><Phone className="h-4 w-4 inline mr-2" />{selectedUser.phone}</p>}
-                          <p><Building className="h-4 w-4 inline mr-2" />{selectedUser.company}</p>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          Basic Info
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Name</Label>
+                          <p className="font-medium">{selectedUser.name}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Role</Label>
+                          <div className="flex items-center gap-2">
+                            {getRoleIcon(selectedUser.role)}
+                            <Badge className={getRoleColor(selectedUser.role)}>
+                              {selectedUser.role}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                          <Badge className={getStatusColor(selectedUser.status)}>
+                            {selectedUser.status}
+                          </Badge>
+                        </div>
+                        {selectedUser.clientId && (
+                          <div>
+                            <Label className="text-sm font-medium text-muted-foreground">Client ID</Label>
+                            <p className="font-mono text-sm">{selectedUser.clientId}</p>
+                          </div>
+                        )}
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Created</Label>
+                          <p className="text-sm">{formatDate(selectedUser.createdAt)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Last Login</Label>
+                          <p className="text-sm">{selectedUser.lastLogin ? formatDateTime(selectedUser.lastLogin) : 'Never'}</p>
                         </div>
                       </CardContent>
                     </Card>
+
                     <Card>
-                      <CardHeader><CardTitle>Business Stats</CardTitle></CardHeader>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          Contact Info
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Email</Label>
+                          {selectedUser.email ? (
+                            <a href={`mailto:${selectedUser.email}`} className="text-primary hover:underline block">
+                              {selectedUser.email}
+                            </a>
+                          ) : (
+                            <p className="text-muted-foreground text-sm">No email provided</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
+                          {selectedUser.phone ? (
+                            <a href={`tel:${selectedUser.phone}`} className="text-primary hover:underline block">
+                              {selectedUser.phone}
+                            </a>
+                          ) : (
+                            <p className="text-muted-foreground text-sm">No phone provided</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Company</Label>
+                          <p className="font-medium">{selectedUser.company || 'No company specified'}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          Address
+                        </CardTitle>
+                      </CardHeader>
                       <CardContent>
-                        {selectedUser.role === 'client' ? (
+                        {selectedUser.address && (
+                          selectedUser.address.street || selectedUser.address.city || selectedUser.address.state || selectedUser.address.country || selectedUser.address.zipCode
+                        ) ? (
                           <div className="space-y-2">
-                            <p>Orders: {selectedUser.ordersCount || 0}</p>
-                            <p>Containers: {selectedUser.containerCount || 0}</p>
-                            <p>Total Spent: {formatCurrency(selectedUser.totalSpent || 0)}</p>
-                            <p>Balance: {formatCurrency(selectedUser.accountBalance?.INR || 0)}</p>
+                            {selectedUser.address.street && <p className="text-sm">{selectedUser.address.street}</p>}
+                            <p className="text-sm">
+                              {[selectedUser.address.city, selectedUser.address.state].filter(Boolean).join(', ')}
+                            </p>
+                            <p className="text-sm">
+                              {[selectedUser.address.country, selectedUser.address.zipCode].filter(Boolean).join(' ')}
+                            </p>
                           </div>
                         ) : (
-                          <p>System user - No business statistics</p>
+                          <p className="text-muted-foreground text-sm">No address provided</p>
                         )}
                       </CardContent>
                     </Card>
                   </div>
-                  <div className="flex justify-end">
-                    <Button onClick={() => setShowDetailsModal(false)}>Close</Button>
+
+                  {/* Business Statistics for Clients */}
+                  {selectedUser.role === 'client' && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4" />
+                          Business Statistics
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="text-center p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                            <Package className="h-6 w-6 mx-auto mb-2 text-blue-600 dark:text-blue-400" />
+                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{selectedUser.ordersCount || 0}</p>
+                            <p className="text-sm text-muted-foreground">Orders</p>
+                          </div>
+                          <div className="text-center p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+                            <Container className="h-6 w-6 mx-auto mb-2 text-green-600 dark:text-green-400" />
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{selectedUser.containerCount || 0}</p>
+                            <p className="text-sm text-muted-foreground">Containers</p>
+                          </div>
+                          <div className="text-center p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                            <DollarSign className="h-6 w-6 mx-auto mb-2 text-purple-600 dark:text-purple-400" />
+                            <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                              {formatCurrency(selectedUser.totalSpent || 0)}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Total Spent</p>
+                          </div>
+                          <div className="text-center p-4 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                            <CreditCard className="h-6 w-6 mx-auto mb-2 text-orange-600 dark:text-orange-400" />
+                            <p className={`text-lg font-bold ${getBalanceColor(selectedUser.accountBalance?.INR || 0)}`}>
+                              {formatCurrency(selectedUser.accountBalance?.INR || 0)}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Balance (INR)</p>
+                          </div>
+                        </div>
+                        {selectedUser.lastOrderDate && (
+                          <div className="mt-4 p-3 bg-muted rounded-lg">
+                            <p className="text-sm text-muted-foreground">
+                              <Clock className="h-4 w-4 inline mr-2" />
+                              Last Order: {formatDateTime(selectedUser.lastOrderDate)}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Permissions */}
+                  {selectedUser.permissions && selectedUser.permissions.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Key className="h-4 w-4" />
+                          Permissions
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedUser.permissions.map((permission, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {permission.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </Badge>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <div className="flex justify-end gap-3 pt-4 border-t">
+                    <Button variant="outline" onClick={() => setShowDetailsModal(false)}>
+                      Close
+                    </Button>
+                    {currentUser?.role === 'admin' && (
+                      <Button onClick={() => {
+                        setShowDetailsModal(false)
+                        handleEditUser(selectedUser)
+                      }} className="bg-blue-600 hover:bg-blue-700">
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit User
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1182,24 +1922,56 @@ const Users = () => {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="new-password">New Password *</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    value={passwordForm.newPassword}
-                    onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
-                    placeholder="Enter new password (min 6 characters)"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="new-password"
+                      type={showChangePassword ? "text" : "password"}
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                      placeholder="Enter new password (min 6 characters)"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowChangePassword(!showChangePassword)}
+                    >
+                      {showChangePassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 
                 <div>
                   <Label htmlFor="confirm-password">Confirm Password *</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={passwordForm.confirmPassword}
-                    onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
-                    placeholder="Confirm new password"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="confirm-password"
+                      type={showChangeConfirmPassword ? "text" : "password"}
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                      placeholder="Confirm new password"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowChangeConfirmPassword(!showChangeConfirmPassword)}
+                    >
+                      {showChangeConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="bg-primary/10 p-3 rounded-lg">
@@ -1209,6 +1981,7 @@ const Users = () => {
                   <ul className="text-xs text-muted-foreground mt-1 space-y-1">
                     <li>• Minimum 6 characters long</li>
                     <li>• User will need to login again with new password</li>
+                    <li>• Click the eye icon to show/hide password</li>
                   </ul>
                 </div>
                 

@@ -84,22 +84,22 @@ const MetricCard = React.forwardRef(({
     <CardContent className="p-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="metric-label group-hover:text-stone-600 transition-colors duration-200">{title}</p>
-          <p className="metric-value group-hover:text-amber-700 transition-colors duration-200">{value}</p>
+          <p className="metric-label group-hover:text-muted-foreground/80 transition-colors duration-200">{title}</p>
+          <p className="metric-value group-hover:text-primary transition-colors duration-200">{value}</p>
           {change && (
             <p className={cn(
               "metric-change transition-colors duration-200",
-              changeType === 'positive' && "metric-change-positive group-hover:text-green-700",
-              changeType === 'negative' && "metric-change-negative group-hover:text-red-700",
-              changeType === 'neutral' && "group-hover:text-stone-600"
+              changeType === 'positive' && "metric-change-positive group-hover:text-green-600 dark:group-hover:text-green-400",
+              changeType === 'negative' && "metric-change-negative group-hover:text-red-600 dark:group-hover:text-red-400",
+              changeType === 'neutral' && "group-hover:text-muted-foreground/80"
             )}>
               {change}
             </p>
           )}
         </div>
         {Icon && (
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-amber-500/20 group-hover:scale-110 transition-all duration-300">
-            <Icon className="h-6 w-6 text-primary group-hover:text-amber-600 transition-colors duration-200" />
+          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 group-hover:scale-110 transition-all duration-300">
+            <Icon className="h-6 w-6 text-primary group-hover:text-primary transition-colors duration-200" />
           </div>
         )}
       </div>

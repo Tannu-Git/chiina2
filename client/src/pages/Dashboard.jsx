@@ -871,7 +871,7 @@ const Dashboard = () => {
                     </p>
                     <Button 
                       onClick={() => navigate('/containers/create')}
-                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                      className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white"
                       size="sm"
                     >
                       <Container className="h-4 w-4 mr-2" />
@@ -891,7 +891,7 @@ const Dashboard = () => {
           transition={{ duration: 0.6, delay: 0.6 }}
           className="mt-8"
         >
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="bg-card rounded-xl shadow-lg p-6">
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-foreground">Quick Actions</h3>
               <p className="text-sm text-muted-foreground">Common tasks and shortcuts</p>

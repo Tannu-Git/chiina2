@@ -369,8 +369,8 @@ router.get('/:id', auth, async (req, res) => {
 
 // @route   POST /api/orders
 // @desc    Create new order
-// @access  Private
-router.post('/', auth, [
+// @access  Private (Admin/Staff only)
+router.post('/', auth, authorize('admin', 'staff'), [
   body('clientName').trim().notEmpty().withMessage('Client name is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
   body('items.*.itemCode').trim().notEmpty().withMessage('Item code is required'),
@@ -1090,8 +1090,8 @@ router.patch('/:id', auth, async (req, res) => {
 
 // @route   PUT /api/orders/:id
 // @desc    Update order (full update)
-// @access  Private
-router.put('/:id', auth, async (req, res) => {
+// @access  Private (Admin/Staff only)
+router.put('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
 

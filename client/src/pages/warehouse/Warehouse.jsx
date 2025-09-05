@@ -267,10 +267,10 @@ const Warehouse = () => {
   }
 
   const getQCStatusBadge = (order) => {
-    if (order.status === 'ready') return { text: 'QC PASSED', color: 'bg-green-100 text-green-800' }
-    if (order.status === 'partial_ready') return { text: 'PARTIAL QC', color: 'bg-yellow-100 text-yellow-800' }
-    if (order.status === 'qc_failed') return { text: 'QC FAILED', color: 'bg-red-100 text-red-800' }
-    return { text: 'PENDING', color: 'bg-gray-100 text-gray-800' }
+    if (order.status === 'ready') return { text: 'QC PASSED', color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' }
+    if (order.status === 'partial_ready') return { text: 'PARTIAL QC', color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' }
+    if (order.status === 'qc_failed') return { text: 'QC FAILED', color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' }
+    return { text: 'PENDING', color: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300' }
   }
 
   if (loading) {
@@ -807,7 +807,7 @@ const Warehouse = () => {
                             <Button 
                               size="sm"
                               onClick={() => {/* Handle container allocation */}}
-                              className="bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:shadow-md"
+                              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white transition-all duration-200 hover:shadow-md"
                             >
                               <Container className="h-4 w-4 mr-1" />
                               Allocate Container
@@ -819,9 +819,9 @@ const Warehouse = () => {
                     
                     {/* Expandable Edit Section */}
                     {isEditingThis && loopBack.loopBackItems && (
-                      <div className="border-t bg-orange-50/50 p-4">
-                        <h4 className="font-medium text-stone-900 mb-4 flex items-center">
-                          <AlertTriangle className="h-4 w-4 mr-2 text-orange-600" />
+                      <div className="border-t bg-orange-50/50 dark:bg-orange-900/20 p-4">
+                        <h4 className="font-medium text-foreground mb-4 flex items-center">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-orange-600 dark:text-orange-400" />
                           Edit Loop-back Quantities
                         </h4>
                         
@@ -832,13 +832,13 @@ const Warehouse = () => {
                             const loopBackQty = item.loopBackQuantity || 0
                             
                             return (
-                              <div key={itemIndex} className="bg-white border rounded-lg p-4">
+                              <div key={itemIndex} className="bg-card border border-border rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-3">
                                   <div>
-                                    <h5 className="font-medium text-stone-900">{item.itemCode}</h5>
-                                    <p className="text-sm text-stone-600">{item.description}</p>
+                                    <h5 className="font-medium text-foreground">{item.itemCode}</h5>
+                                    <p className="text-sm text-muted-foreground">{item.description}</p>
                                   </div>
-                                  <Badge className="bg-orange-100 text-orange-800">
+                                  <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400">
                                     {item.loopBackStatus || 'pending'}
                                   </Badge>
                                 </div>

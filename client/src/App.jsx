@@ -120,7 +120,7 @@ function App() {
             } />
 
             <Route path="/orders/create" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRole="staff">
                 <DashboardLayout>
                   <OrderCreate />
                 </DashboardLayout>
@@ -136,7 +136,7 @@ function App() {
             } />
 
             <Route path="/orders/:id/edit" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRole="staff">
                 <DashboardLayout>
                   <OrderCreate />
                 </DashboardLayout>

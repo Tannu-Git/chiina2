@@ -68,7 +68,7 @@ const Register = () => {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 flex">
+    <div className="min-h-screen bg-background flex">
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:flex-1 relative overflow-hidden amber-gradient">
         <div className="flex flex-col justify-center px-12 text-white relative z-10">
@@ -128,26 +128,26 @@ const Register = () => {
       </div>
 
       {/* Right Side - Registration Form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
+      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-background">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="w-full max-w-md"
         >
-          <Card className="shadow-2xl border-0">
+          <Card className="shadow-2xl border-0 bg-card">
             <CardHeader className="text-center pb-8">
-              <CardTitle className="text-2xl font-bold text-stone-900">
+              <CardTitle className="text-2xl font-bold text-foreground">
                 Create Account
               </CardTitle>
-              <CardDescription className="text-stone-600">
+              <CardDescription className="text-muted-foreground">
                 Sign up for a new account to get started
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Full Name *
                   </label>
                   <Input
@@ -162,7 +162,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Email Address *
                   </label>
                   <Input
@@ -177,7 +177,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Phone Number
                   </label>
                   <Input
@@ -191,7 +191,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Company Name
                   </label>
                   <Input
@@ -205,7 +205,7 @@ const Register = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Password *
                   </label>
                   <div className="relative">
@@ -221,16 +221,16 @@ const Register = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="text-xs text-stone-500 mt-1">Password must be at least 6 characters long</p>
+                  <p className="text-xs text-muted-foreground mt-1">Password must be at least 6 characters long</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Confirm Password *
                   </label>
                   <div className="relative">
@@ -246,7 +246,7 @@ const Register = () => {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -255,7 +255,7 @@ const Register = () => {
 
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full amber-gradient hover:from-amber-600 hover:to-orange-600"
                   size="lg"
                   disabled={isLoading}
                   variant="gradient"
@@ -272,11 +272,11 @@ const Register = () => {
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-stone-600">
+                <p className="text-muted-foreground">
                   Already have an account?{' '}
                   <Link
                     to="/login"
-                    className="text-amber-600 hover:text-amber-800 font-medium"
+                    className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
                   >
                     Sign in
                   </Link>

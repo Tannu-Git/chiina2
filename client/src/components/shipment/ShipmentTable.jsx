@@ -4,12 +4,12 @@ import { formatCurrency } from '@/lib/utils'
 const ShipmentTable = ({ data = [] }) => {
   if (data.length === 0) {
     return (
-      <div className="lg:col-span-3 p-6 bg-white rounded-xl shadow-lg">
-        <h3 className="text-lg font-semibold text-stone-800 mb-1">Shipment Details</h3>
-        <p className="text-sm text-stone-500 mb-4">
+      <div className="lg:col-span-3 p-6 bg-card rounded-xl shadow-lg">
+        <h3 className="text-lg font-semibold text-foreground mb-1">Shipment Details</h3>
+        <p className="text-sm text-muted-foreground mb-4">
           A detailed, sortable list of all items in the shipment. Use the filters above to narrow down the results.
         </p>
-        <div className="text-center py-8 text-stone-500">
+        <div className="text-center py-8 text-muted-foreground">
           No data matches your filters.
         </div>
       </div>
@@ -17,15 +17,15 @@ const ShipmentTable = ({ data = [] }) => {
   }
 
   return (
-    <div className="lg:col-span-3 p-6 bg-white rounded-xl shadow-lg">
-      <h3 className="text-lg font-semibold text-stone-800 mb-1">Shipment Details</h3>
-      <p className="text-sm text-stone-500 mb-4">
+    <div className="lg:col-span-3 p-6 bg-card rounded-xl shadow-lg">
+      <h3 className="text-lg font-semibold text-foreground mb-1">Shipment Details</h3>
+      <p className="text-sm text-muted-foreground mb-4">
         A detailed, sortable list of all items in the shipment. Use the filters above to narrow down the results.
       </p>
       
-      <div className="overflow-x-auto max-h-[800px] border border-stone-200 rounded-lg">
-        <table className="w-full text-sm text-left text-stone-500">
-          <thead className="text-xs text-stone-700 uppercase bg-stone-100 sticky top-0">
+      <div className="overflow-x-auto max-h-[800px] border border-border rounded-lg">
+        <table className="w-full text-sm text-left text-muted-foreground">
+          <thead className="text-xs text-foreground uppercase bg-muted sticky top-0">
             <tr>
               <th scope="col" className="px-6 py-3 font-semibold">Item No.</th>
               <th scope="col" className="px-6 py-3 font-semibold">Description</th>
@@ -41,9 +41,9 @@ const ShipmentTable = ({ data = [] }) => {
             {data.map((item, index) => (
               <tr 
                 key={index} 
-                className="bg-white border-b border-stone-200 hover:bg-stone-50 transition-colors"
+                className="bg-card border-b border-border hover:bg-muted transition-colors"
               >
-                <td className="px-6 py-4 font-medium text-stone-900 whitespace-nowrap">
+                <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
                   {item['ITEM NO.'] || 'N/A'}
                 </td>
                 <td className="px-6 py-4 max-w-xs">

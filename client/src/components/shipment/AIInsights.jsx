@@ -106,12 +106,12 @@ Logistics Team`
   }
 
   return (
-    <section className="mb-8 p-6 bg-white rounded-xl shadow-lg">
-      <h2 className="text-2xl font-semibold text-stone-800 mb-2 flex items-center">
+    <section className="mb-8 p-6 bg-card rounded-xl shadow-lg">
+      <h2 className="text-2xl font-semibold text-foreground mb-2 flex items-center">
         <Sparkles className="h-6 w-6 mr-2 text-amber-500" />
         AI-Powered Insights
       </h2>
-      <p className="text-stone-500 mb-6">
+      <p className="text-muted-foreground mb-6">
         Use AI to generate summaries and draft communications based on the current data view.
       </p>
       

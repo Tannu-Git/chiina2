@@ -24,8 +24,8 @@ const ClientAllocationSummary = ({
     return (
       <Card className={className}>
         <CardContent className="p-6 text-center">
-          <Package className="h-12 w-12 text-stone-400 mx-auto mb-3" />
-          <p className="text-stone-500">No orders allocated to this container</p>
+          <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground">No orders allocated to this container</p>
         </CardContent>
       </Card>
     )
@@ -87,7 +87,7 @@ const ClientAllocationSummary = ({
             </Badge>
           </CardTitle>
           {!compact && (
-            <div className="flex items-center justify-between text-sm text-stone-600">
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>Container: {container.realContainerId || container.clientFacingId}</span>
               <span>{container.orders.length} orders allocated</span>
             </div>
@@ -126,7 +126,7 @@ const ClientAllocationSummary = ({
               {/* Client Allocation Metrics */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {/* CBM Allocation */}
-                <div className="bg-white p-3 rounded-lg border border-blue-100 text-center">
+                <div className="bg-card p-3 rounded-lg border border-blue-100 dark:border-blue-800 text-center">
                   <div className="flex items-center justify-center mb-2">
                     <Layers className="h-5 w-5 text-blue-600 mr-1" />
                     <span className="text-xs font-medium text-blue-700">CBM</span>
@@ -140,7 +140,7 @@ const ClientAllocationSummary = ({
                         {containerTotals.cbm > 0 ? ((client.totals.cbm / containerTotals.cbm) * 100).toFixed(1) : 0}% of total
                       </p>
                       {container.maxCbm && (
-                        <p className="text-xs text-stone-500">
+                        <p className="text-xs text-muted-foreground">
                           {((client.totals.cbm / container.maxCbm) * 100).toFixed(1)}% of container
                         </p>
                       )}
@@ -149,7 +149,7 @@ const ClientAllocationSummary = ({
                 </div>
 
                 {/* Weight Allocation */}
-                <div className="bg-white p-3 rounded-lg border border-green-100 text-center">
+                <div className="bg-card p-3 rounded-lg border border-green-100 dark:border-green-800 text-center">
                   <div className="flex items-center justify-center mb-2">
                     <Weight className="h-5 w-5 text-green-600 mr-1" />
                     <span className="text-xs font-medium text-green-700">Weight</span>
@@ -163,7 +163,7 @@ const ClientAllocationSummary = ({
                         {containerTotals.weight > 0 ? ((client.totals.weight / containerTotals.weight) * 100).toFixed(1) : 0}% of total
                       </p>
                       {container.maxWeight && (
-                        <p className="text-xs text-stone-500">
+                        <p className="text-xs text-muted-foreground">
                           {((client.totals.weight / container.maxWeight) * 100).toFixed(1)}% of container
                         </p>
                       )}
@@ -185,7 +185,7 @@ const ClientAllocationSummary = ({
                       <p className="text-xs text-orange-600">
                         {containerTotals.cartons > 0 ? ((client.totals.cartons / containerTotals.cartons) * 100).toFixed(1) : 0}% of total
                       </p>
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-muted-foreground">
                         Total cartons
                       </p>
                     </div>
@@ -193,7 +193,7 @@ const ClientAllocationSummary = ({
                 </div>
 
                 {/* Revenue Allocation */}
-                <div className="bg-white p-3 rounded-lg border border-purple-100 text-center">
+                <div className="bg-card p-3 rounded-lg border border-purple-100 dark:border-purple-800 text-center">
                   <div className="flex items-center justify-center mb-2">
                     <DollarSign className="h-5 w-5 text-purple-600 mr-1" />
                     <span className="text-xs font-medium text-purple-700">Revenue</span>

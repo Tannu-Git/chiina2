@@ -5,10 +5,6 @@ require('dotenv').config();
 
 // Security and audit imports
 const {
-  generalLimiter,
-  authLimiter,
-  financialLimiter,
-  adminLimiter,
   securityHeaders,
   validateRequest,
   sanitizeAndValidateInput,
@@ -36,8 +32,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(validateRequest);
 app.use(sanitizeAndValidateInput);
 
-// General rate limiting
-app.use('/api', generalLimiter);
+// Rate limiting disabled for development
 
 // Session security
 app.use(sessionSecurity);
@@ -82,20 +77,20 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/logistics
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Routes with specific security middleware
-app.use('/api/auth', authLimiter, require('./routes/auth'));
+// Routes without rate limiting
+app.use('/api/auth', require('./routes/auth'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/warehouse', require('./routes/warehouse'));
 app.use('/api/containers', require('./routes/containers'));
 app.use('/api/companies', require('./routes/companies'));
-app.use('/api/financials', financialLimiter, auditFinancialMiddleware, require('./routes/financials'));
+app.use('/api/financials', auditFinancialMiddleware, require('./routes/financials'));
 app.use('/api/payments', require('./routes/payments'));
-app.use('/api/users', adminLimiter, require('./routes/users'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/items', require('./routes/items'));
 app.use('/api/upload', require('./routes/upload')); // Upload routes with built-in security
-app.use('/api/audit', adminLimiter, require('./routes/audit'));
+app.use('/api/audit', require('./routes/audit'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 // Health check

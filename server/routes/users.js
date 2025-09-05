@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { auth, authorize } = require('../middleware/auth');
@@ -10,7 +11,7 @@ const router = express.Router();
 // @access  Private (Admin only)
 router.get('/', auth, authorize('admin'), async (req, res) => {
   try {
-    const { page = 1, limit = 50, role, search } = req.query;
+    const { page = 1, limit = 20, role, search } = req.query;
     
     const query = {};
     
@@ -146,8 +147,8 @@ router.get('/:id', auth, authorize('admin'), async (req, res) => {
 // @access  Private (Admin only)
 router.post('/', auth, authorize('admin'), [
   body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
-  body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('email').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail().withMessage('Please enter a valid email'),
+  body('password').optional({ nullable: true, checkFalsy: true }).isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['admin', 'staff', 'client']).withMessage('Invalid role')
 ], async (req, res) => {
   try {
@@ -159,24 +160,32 @@ router.post('/', auth, authorize('admin'), [
       });
     }
 
-    const { name, email, password, role, company, phone, permissions } = req.body;
+    const { name, email, password, role, company, phone, permissions, address } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists with this email' });
+    // Check if user already exists (only if email is provided)
+    if (email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ message: 'User already exists with this email' });
+      }
     }
 
-    // Create user
-    const user = new User({
+    // Create user object with required field
+    const userData = {
       name,
-      email,
-      password,
       role,
       company,
       phone,
-      permissions: permissions || []
-    });
+      permissions: permissions || [],
+      address
+    };
+
+    // Add optional fields if provided
+    if (email) userData.email = email;
+    if (password) userData.password = password;
+
+    // Create user
+    const user = new User(userData);
 
     // Generate client ID if role is client
     if (user.role === 'client') {
@@ -195,6 +204,7 @@ router.post('/', auth, authorize('admin'), [
         clientId: user.clientId,
         company: user.company,
         phone: user.phone,
+        address: user.address,
         permissions: user.permissions
       }
     });
@@ -256,6 +266,11 @@ router.put('/:id', auth, authorize('admin'), async (req, res) => {
 // @access  Private (Admin only)
 router.delete('/:id', auth, authorize('admin'), async (req, res) => {
   try {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -281,6 +296,11 @@ router.delete('/:id', auth, authorize('admin'), async (req, res) => {
 // @access  Private (Admin only)
 router.patch('/:id', auth, authorize('admin'), async (req, res) => {
   try {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
     const { status } = req.body;
     const user = await User.findById(req.params.id);
 
@@ -323,6 +343,11 @@ router.patch('/:id', auth, authorize('admin'), async (req, res) => {
 // @access  Private (Admin only)
 router.put('/:id/toggle-status', auth, authorize('admin'), async (req, res) => {
   try {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -359,6 +384,11 @@ router.patch('/:id/password', auth, authorize('admin'), [
   body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
 ], async (req, res) => {
   try {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -388,6 +418,67 @@ router.patch('/:id/password', auth, authorize('admin'), [
     });
   } catch (error) {
     console.error('Update password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/users/bulk-actions
+// @desc    Perform bulk actions on multiple users
+// @access  Private (Admin only)
+router.post('/bulk-actions', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { action, userIds } = req.body;
+
+    if (!action || !userIds || !Array.isArray(userIds)) {
+      return res.status(400).json({ message: 'Action and userIds array required' });
+    }
+
+    // Validate ObjectIds
+    const invalidIds = userIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({ 
+        message: 'Invalid user IDs provided',
+        invalidIds 
+      });
+    }
+
+    // Prevent admin from targeting themselves
+    if (userIds.includes(req.user.id)) {
+      return res.status(400).json({ message: 'Cannot perform bulk actions on your own account' });
+    }
+
+    let result = {};
+
+    switch (action) {
+      case 'delete':
+        result = await User.deleteMany({ _id: { $in: userIds } });
+        break;
+      
+      case 'activate':
+        result = await User.updateMany(
+          { _id: { $in: userIds } },
+          { $set: { isActive: true } }
+        );
+        break;
+      
+      case 'deactivate':
+        result = await User.updateMany(
+          { _id: { $in: userIds } },
+          { $set: { isActive: false } }
+        );
+        break;
+      
+      default:
+        return res.status(400).json({ message: 'Invalid action' });
+    }
+
+    res.json({
+      message: `Bulk ${action} completed successfully`,
+      affected: result.modifiedCount || result.deletedCount || 0,
+      requested: userIds.length
+    });
+  } catch (error) {
+    console.error('Bulk action error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
