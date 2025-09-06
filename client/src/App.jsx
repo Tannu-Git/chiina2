@@ -21,8 +21,16 @@ import Containers from './pages/containers/Containers'
 import ContainerDetails from './pages/containers/ContainerDetails'
 import ContainerEdit from './pages/containers/ContainerEdit'
 import ClientAllocations from './pages/containers/ClientAllocations'
+
+// Financial Pages
+import FinancialDashboard from './pages/financials/FinancialDashboard'
+import FinancialOverview from './pages/financials/FinancialOverview'
+import TransactionManagement from './pages/financials/TransactionManagement'
+import AccountBalances from './pages/financials/AccountBalances'
+import InvoiceManagement from './pages/financials/InvoiceManagement'
 import Financials from './pages/financials/Financials'
-import PaymentCollections from './pages/financials/PaymentCollections'
+import PaymentCollections from './pages/financials/PaymentCollectionsManager'
+
 import ClientManagement from './pages/clients/ClientManagement'
 import CompaniesManagement from './pages/companies/CompaniesManagement'
 import Users from './pages/admin/Users'
@@ -209,6 +217,46 @@ function App() {
 
             {/* Financial Routes */}
             <Route path="/financials" element={
+              <ProtectedRoute requiredRole="admin">
+                <DashboardLayout>
+                  <FinancialDashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/financials/overview" element={
+              <ProtectedRoute requiredRole="admin">
+                <DashboardLayout>
+                  <FinancialOverview />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/financials/transactions" element={
+              <ProtectedRoute requiredRole="admin">
+                <DashboardLayout>
+                  <TransactionManagement />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/financials/accounts" element={
+              <ProtectedRoute requiredRole="admin">
+                <DashboardLayout>
+                  <AccountBalances />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/financials/invoices" element={
+              <ProtectedRoute requiredRole="admin">
+                <DashboardLayout>
+                  <InvoiceManagement />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/financials/legacy" element={
               <ProtectedRoute requiredRole="admin">
                 <DashboardLayout>
                   <Financials />

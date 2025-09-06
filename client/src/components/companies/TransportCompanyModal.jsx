@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X,
   Building2,
   Save,
-  Plus
+  Plus,
+  DollarSign,
+  Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -140,6 +142,35 @@ const TransportCompanyModal = ({
       }
     }))
   }
+
+  // Rate management functions
+  const addNewRate = useCallback(() => {
+    setFormData(prev => ({
+      ...prev,
+      rates: [...prev.rates, {
+        containerType: '',
+        oceanFreight: 0,
+        localCharges: 0,
+        currency: 'USD'
+      }]
+    }))
+  }, [])
+
+  const updateRate = useCallback((index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      rates: prev.rates.map((rate, i) => 
+        i === index ? { ...rate, [field]: value } : rate
+      )
+    }))
+  }, [])
+
+  const removeRate = useCallback((index) => {
+    setFormData(prev => ({
+      ...prev,
+      rates: prev.rates.filter((_, i) => i !== index)
+    }))
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -306,6 +337,110 @@ const TransportCompanyModal = ({
                       <span className="text-sm font-medium text-foreground">Preferred Partner</span>
                     </label>
                   </div>
+                </div>
+
+                {/* Shipping Rates */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium text-foreground">Shipping Rates</h3>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addNewRate}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Rate
+                    </Button>
+                  </div>
+                  
+                  {formData.rates.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No rates configured. Add rates for different container types.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {formData.rates.map((rate, index) => (
+                        <div key={index} className="p-4 border border-border rounded-lg bg-muted/50">
+                          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-foreground mb-1">
+                                Container Type
+                              </label>
+                              <Select
+                                value={rate.containerType}
+                                onValueChange={(value) => updateRate(index, 'containerType', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="20ft">20ft Container</SelectItem>
+                                  <SelectItem value="40ft">40ft Container</SelectItem>
+                                  <SelectItem value="40ft_hc">40ft High Cube</SelectItem>
+                                  <SelectItem value="45ft">45ft Container</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-foreground mb-1">
+                                Ocean Freight
+                              </label>
+                              <Input
+                                type="number"
+                                value={rate.oceanFreight || ''}
+                                onChange={(e) => updateRate(index, 'oceanFreight', parseFloat(e.target.value) || 0)}
+                                placeholder="1500"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-foreground mb-1">
+                                Local Charges
+                              </label>
+                              <Input
+                                type="number"
+                                value={rate.localCharges || ''}
+                                onChange={(e) => updateRate(index, 'localCharges', parseFloat(e.target.value) || 0)}
+                                placeholder="500"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-foreground mb-1">
+                                Currency
+                              </label>
+                              <Select
+                                value={rate.currency || 'USD'}
+                                onValueChange={(value) => updateRate(index, 'currency', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="USD">USD</SelectItem>
+                                  <SelectItem value="INR">INR</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => removeRate(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Submit Buttons */}

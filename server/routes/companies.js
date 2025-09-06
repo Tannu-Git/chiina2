@@ -78,20 +78,46 @@ router.post('/transport', auth, authorize('admin', 'staff'), async (req, res) =>
       performanceMetrics 
     } = req.body;
     
+    // Validate required fields
+    if (!companyId || !companyName || !shortName) {
+      return res.status(400).json({ 
+        message: 'Missing required fields: companyId, companyName, and shortName are required' 
+      });
+    }
+    
+    if (!contactInfo || !contactInfo.email || !contactInfo.phone) {
+      return res.status(400).json({ 
+        message: 'Contact information (email and phone) is required' 
+      });
+    }
+    
     // Check if company ID already exists
     const existingCompany = await ShippingCompany.findOne({ companyId });
     if (existingCompany) {
       return res.status(400).json({ message: 'Company ID already exists' });
     }
     
+    // Check if company name already exists
+    const existingName = await ShippingCompany.findOne({ companyName });
+    if (existingName) {
+      return res.status(400).json({ message: 'Company name already exists' });
+    }
+    
     const newCompany = new ShippingCompany({
-      companyId,
-      companyName,
-      shortName,
-      contactInfo,
+      companyId: companyId.trim(),
+      companyName: companyName.trim(),
+      shortName: shortName.trim(),
+      contactInfo: {
+        email: contactInfo.email.trim().toLowerCase(),
+        phone: contactInfo.phone.trim(),
+        address: contactInfo.address || {},
+        website: contactInfo.website || ''
+      },
       rates: rates || [],
       serviceAreas: serviceAreas || [],
-      contractDetails: contractDetails || {},
+      contractDetails: contractDetails || {
+        preferredPartner: false
+      },
       chargeStructure: chargeStructure || {
         baseCharges: { documentationFee: 0, handlingFee: 0, securityFee: 0 },
         additionalServices: {
@@ -105,6 +131,7 @@ router.post('/transport', auth, authorize('admin', 'staff'), async (req, res) =>
         customerRating: 4.5,
         totalShipments: 0
       },
+      isActive: true,
       createdBy: req.user.id
     });
     
@@ -122,6 +149,16 @@ router.post('/transport', auth, authorize('admin', 'staff'), async (req, res) =>
     });
   } catch (error) {
     console.error('Transport company creation error:', error);
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: messages 
+      });
+    }
+    
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -139,6 +176,40 @@ router.put('/transport/:id', auth, authorize('admin', 'staff'), async (req, res)
     const updateFields = { ...req.body };
     delete updateFields._id;
     delete updateFields.__v;
+    delete updateFields.createdAt;
+    delete updateFields.updatedAt;
+    
+    // Validate if companyId is being changed and doesn't conflict
+    if (updateFields.companyId && updateFields.companyId !== company.companyId) {
+      const existingCompany = await ShippingCompany.findOne({ 
+        companyId: updateFields.companyId,
+        _id: { $ne: req.params.id }
+      });
+      if (existingCompany) {
+        return res.status(400).json({ message: 'Company ID already exists' });
+      }
+    }
+    
+    // Validate if companyName is being changed and doesn't conflict
+    if (updateFields.companyName && updateFields.companyName !== company.companyName) {
+      const existingName = await ShippingCompany.findOne({ 
+        companyName: updateFields.companyName,
+        _id: { $ne: req.params.id }
+      });
+      if (existingName) {
+        return res.status(400).json({ message: 'Company name already exists' });
+      }
+    }
+    
+    // Clean and validate contact info if provided
+    if (updateFields.contactInfo) {
+      if (updateFields.contactInfo.email) {
+        updateFields.contactInfo.email = updateFields.contactInfo.email.trim().toLowerCase();
+      }
+      if (updateFields.contactInfo.phone) {
+        updateFields.contactInfo.phone = updateFields.contactInfo.phone.trim();
+      }
+    }
     
     // Add updated by info
     updateFields.updatedBy = req.user.id;
@@ -161,12 +232,22 @@ router.put('/transport/:id', auth, authorize('admin', 'staff'), async (req, res)
     });
   } catch (error) {
     console.error('Transport company update error:', error);
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: messages 
+      });
+    }
+    
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 // @route   DELETE /api/companies/transport/:id
-// @desc    Delete transport company (soft delete by setting isActive to false)
+// @desc    Delete transport company (hard delete)
 // @access  Private (Admin only)
 router.delete('/transport/:id', auth, authorize('admin'), async (req, res) => {
   try {
@@ -175,20 +256,25 @@ router.delete('/transport/:id', auth, authorize('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Transport company not found' });
     }
     
-    // Soft delete by setting isActive to false
-    company.isActive = false;
-    company.updatedBy = req.user.id;
-    await company.save();
-    
-    console.log('Transport company deactivated:', {
+    // Store company info for logging before deletion
+    const companyInfo = {
       companyId: company.companyId,
       companyName: company.companyName,
-      deactivatedBy: req.user.name
-    });
+      deletedBy: req.user.name
+    };
+    
+    // Hard delete the company
+    await ShippingCompany.findByIdAndDelete(req.params.id);
+    
+    console.log('Transport company permanently deleted:', companyInfo);
     
     res.json({
-      message: 'Transport company deactivated successfully',
-      company: { id: company._id, companyName: company.companyName, isActive: false }
+      message: 'Transport company deleted successfully',
+      deletedCompany: {
+        id: req.params.id,
+        companyName: companyInfo.companyName,
+        companyId: companyInfo.companyId
+      }
     });
   } catch (error) {
     console.error('Transport company deletion error:', error);
@@ -223,9 +309,22 @@ router.put('/transport/:id/rates', auth, authorize('admin', 'staff'), async (req
   try {
     const { rates } = req.body;
     
+    if (!rates || !Array.isArray(rates)) {
+      return res.status(400).json({ message: 'Rates must be provided as an array' });
+    }
+    
     const company = await ShippingCompany.findById(req.params.id);
     if (!company) {
       return res.status(404).json({ message: 'Transport company not found' });
+    }
+    
+    // Validate rate structure
+    for (const rate of rates) {
+      if (!rate.containerType || !rate.oceanFreight || !rate.localCharges) {
+        return res.status(400).json({ 
+          message: 'Each rate must have containerType, oceanFreight, and localCharges' 
+        });
+      }
     }
     
     company.rates = rates;
@@ -334,164 +433,49 @@ router.post('/transport/:id/performance', auth, authorize('admin', 'staff'), asy
   }
 });
 
-// ============ SERVICE PROVIDERS ============
-// Note: These are mock implementations. In a real scenario, you'd create a ServiceProvider model
 
-// @route   GET /api/companies/service-providers
-// @desc    Get all service providers
-// @access  Private
-router.get('/service-providers', auth, async (req, res) => {
-  try {
-    // Mock service providers data - in real implementation, use ServiceProvider model
-    const serviceProviders = [
-      {
-        _id: 'sp_001',
-        companyName: 'Global Warehouse Solutions',
-        shortName: 'GWS',
-        serviceType: 'Warehousing',
-        contactInfo: {
-          email: 'operations@gws.com',
-          phone: '+91-22-2345-6789',
-          address: { city: 'Mumbai', country: 'India' }
-        },
-        rates: { storagePerCBM: 150, currency: 'INR' },
-        isActive: true,
-        performanceMetrics: { accuracyRate: 99.2, customerRating: 4.6 }
-      },
-      {
-        _id: 'sp_002',
-        companyName: 'Express Customs Clearance',
-        shortName: 'ECC',
-        serviceType: 'Customs Brokerage',
-        contactInfo: {
-          email: 'clearance@ecc.in',
-          phone: '+91-11-3456-7890',
-          address: { city: 'New Delhi', country: 'India' }
-        },
-        rates: { clearanceFee: 5000, currency: 'INR' },
-        isActive: true,
-        performanceMetrics: { successRate: 98.5, customerRating: 4.8 }
-      },
-      {
-        _id: 'sp_003',
-        companyName: 'Fast Track Logistics',
-        shortName: 'FTL',
-        serviceType: 'Last Mile Delivery',
-        contactInfo: {
-          email: 'delivery@ftl.com',
-          phone: '+91-80-9876-5432',
-          address: { city: 'Bangalore', country: 'India' }
-        },
-        rates: { deliveryPerKm: 12, currency: 'INR' },
-        isActive: true,
-        performanceMetrics: { deliverySpeed: 96.8, customerRating: 4.4 }
-      }
-    ];
-    
-    res.json({
-      serviceProviders,
-      total: serviceProviders.length,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Service providers fetch error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
 
-// ============ BUSINESS PARTNERS ============
-// Note: These are mock implementations. In a real scenario, you'd create a BusinessPartner model
 
-// @route   GET /api/companies/business-partners
-// @desc    Get all business partners
-// @access  Private
-router.get('/business-partners', auth, async (req, res) => {
-  try {
-    // Mock business partners data - in real implementation, use BusinessPartner model
-    const businessPartners = [
-      {
-        _id: 'bp_001',
-        companyName: 'Asia Freight Forwarders',
-        shortName: 'AFF',
-        partnerType: 'Freight Forwarder',
-        contactInfo: {
-          email: 'bookings@aff.com',
-          phone: '+86-21-5678-9012',
-          address: { city: 'Shanghai', country: 'China' }
-        },
-        businessVolume: { totalOrders: 245, totalValue: 2450000 },
-        partnershipLevel: 'Premium',
-        isActive: true,
-        performanceMetrics: { reliabilityScore: 96, customerRating: 4.5 }
-      },
-      {
-        _id: 'bp_002',
-        companyName: 'Port Operations Ltd',
-        shortName: 'POL',
-        partnerType: 'Port Operator',
-        contactInfo: {
-          email: 'operations@pol.in',
-          phone: '+91-22-1234-5678',
-          address: { city: 'Mumbai', country: 'India' }
-        },
-        businessVolume: { totalOrders: 189, totalValue: 1890000 },
-        partnershipLevel: 'Standard',
-        isActive: true,
-        performanceMetrics: { reliabilityScore: 94, customerRating: 4.3 }
-      },
-      {
-        _id: 'bp_003',
-        companyName: 'Inland Transport Co.',
-        shortName: 'ITC',
-        partnerType: 'Trucking Company',
-        contactInfo: {
-          email: 'dispatch@itc.com',
-          phone: '+91-11-8765-4321',
-          address: { city: 'Delhi', country: 'India' }
-        },
-        businessVolume: { totalOrders: 156, totalValue: 1560000 },
-        partnershipLevel: 'Standard',
-        isActive: true,
-        performanceMetrics: { reliabilityScore: 92, customerRating: 4.2 }
-      }
-    ];
-    
-    res.json({
-      businessPartners,
-      total: businessPartners.length,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Business partners fetch error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
 
 // @route   GET /api/companies/summary
-// @desc    Get companies summary statistics
+// @desc    Get transport companies summary statistics
 // @access  Private
 router.get('/summary', auth, async (req, res) => {
   try {
-    const transportCount = await ShippingCompany.countDocuments({ isActive: true });
-    const preferredCount = await ShippingCompany.countDocuments({ 
-      isActive: true, 
+    const totalTransport = await ShippingCompany.countDocuments({});
+    const activeTransport = await ShippingCompany.countDocuments({ isActive: true });
+    const inactiveTransport = await ShippingCompany.countDocuments({ isActive: false });
+    const preferredPartners = await ShippingCompany.countDocuments({ 
       'contractDetails.preferredPartner': true 
     });
     
-    // Mock counts for service providers and business partners
-    const serviceProvidersCount = 3; // In real implementation, count from ServiceProvider model
-    const businessPartnersCount = 3; // In real implementation, count from BusinessPartner model
+    // Calculate average performance metrics from all companies
+    const performanceAggregation = await ShippingCompany.aggregate([
+      {
+        $group: {
+          _id: null,
+          avgOnTimeDelivery: { $avg: '$performanceMetrics.onTimeDelivery' },
+          avgCustomerRating: { $avg: '$performanceMetrics.customerRating' },
+          totalShipments: { $sum: '$performanceMetrics.totalShipments' }
+        }
+      }
+    ]);
     
-    const totalBusinessValue = 5900000; // Mock value - calculate from actual business partner data
+    const performanceData = performanceAggregation[0] || {
+      avgOnTimeDelivery: 0,
+      avgCustomerRating: 0,
+      totalShipments: 0
+    };
     
     res.json({
       summary: {
-        totalTransport: transportCount,
-        totalServiceProviders: serviceProvidersCount,
-        totalBusinessPartners: businessPartnersCount,
-        activeCompanies: transportCount + serviceProvidersCount + businessPartnersCount,
-        preferredPartners: preferredCount,
-        totalBusinessValue
+        totalTransport,
+        activeTransport,
+        inactiveTransport,
+        preferredPartners,
+        averageOnTimeDelivery: Math.round(performanceData.avgOnTimeDelivery * 10) / 10 || 0,
+        averageCustomerRating: Math.round(performanceData.avgCustomerRating * 10) / 10 || 0,
+        totalShipments: performanceData.totalShipments || 0
       },
       timestamp: new Date().toISOString()
     });

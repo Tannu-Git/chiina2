@@ -84,6 +84,8 @@ app.use('/api/warehouse', require('./routes/warehouse'));
 app.use('/api/containers', require('./routes/containers'));
 app.use('/api/companies', require('./routes/companies'));
 app.use('/api/financials', auditFinancialMiddleware, require('./routes/financials'));
+app.use('/api/financials-comprehensive', auditFinancialMiddleware, require('./routes/financials-comprehensive'));
+app.use('/api/payment-collections', auditFinancialMiddleware, require('./routes/payment-collections'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/suppliers', require('./routes/suppliers'));

@@ -267,11 +267,12 @@ router.delete('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
     console.log(`🗑️ [DELETE CONTAINER] Deleting container: ${container.realContainerId}`);
     console.log(`📦 [DELETE CONTAINER] Container has ${container.orders?.length || 0} allocated orders`);
 
-    // Reset all allocated orders to ready status
+    // Reset all allocated orders to ready status and clear ALL allocation data
     if (container.orders && container.orders.length > 0) {
       const orderIds = container.orders.map(order => order.orderId).filter(Boolean);
       
       if (orderIds.length > 0) {
+        // COMPREHENSIVE CLEANUP: Clear both order-level and item-level allocation data
         const updateResult = await Order.updateMany(
           { _id: { $in: orderIds } },
           { 
@@ -284,7 +285,40 @@ router.delete('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
           }
         );
         
-        console.log(`✅ [DELETE CONTAINER] Reset ${updateResult.modifiedCount} orders to ready status`);
+        // CRITICAL FIX: Use proper MongoDB syntax for clearing item allocations
+        for (const orderId of orderIds) {
+          try {
+            await Order.updateOne(
+              { _id: orderId },
+              {
+                $set: {
+                  'items.$[].allocatedCartons': 0,
+                  'items.$[].allocatedQuantity': 0,
+                  'items.$[].containerId': null
+                }
+              }
+            );
+            console.log(`✅ [DELETE CONTAINER] Cleared item allocations for order ${orderId}`);
+          } catch (itemError) {
+            console.warn(`⚠️ [DELETE CONTAINER] Failed to clear item allocations for order ${orderId}:`, itemError.message);
+            
+            // Fallback: Manual item clearing
+            try {
+              const order = await Order.findById(orderId);
+              if (order && order.items) {
+                order.items.forEach(item => {
+                  item.allocatedCartons = 0;
+                  item.allocatedQuantity = 0;
+                  item.containerId = null;
+                });
+                await order.save();
+                console.log(`✅ [DELETE CONTAINER] Fallback clearing successful for order ${orderId}`);
+              }
+            } catch (fallbackError) {
+              console.error(`❌ [DELETE CONTAINER] Fallback clearing failed for order ${orderId}:`, fallbackError.message);
+            }
+          }
+        }
       }
     }
 

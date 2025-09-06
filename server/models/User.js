@@ -14,13 +14,27 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true, // Only enforce uniqueness when not null
     lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
+    trim: true,
+    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'],
+    // Allow empty string to avoid unique constraint issues
+    default: ''
   },
   password: {
     type: String,
     required: false, // Made optional
-    minlength: [6, 'Password must be at least 6 characters'],
-    select: false
+    validate: {
+      validator: function(value) {
+        // Only validate length if password is provided and not empty
+        // Skip validation for already hashed passwords (they start with $2a$ or $2b$)
+        if (!value || value.startsWith('$2a$') || value.startsWith('$2b$')) {
+          return true;
+        }
+        return value.length >= 6;
+      },
+      message: 'Password must be at least 6 characters'
+    },
+    select: false,
+    default: undefined // Don't set default to avoid validation issues
   },
   role: {
     type: String,
@@ -66,14 +80,26 @@ const userSchema = new mongoose.Schema({
       'initiate_loopbacks',
       'view_all_clients'
     ]
-  }]
+  }],
+  // Auto-registration metadata
+  registrationSource: {
+    type: String,
+    enum: ['manual', 'order_creation', 'import'],
+    default: 'manual'
+  },
+  registrationOrderData: {
+    firstOrderDate: Date,
+    registeredBy: String
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }
 }, {
   timestamps: true
 });
 
 // Index for better query performance
-userSchema.index({ email: 1 });
-userSchema.index({ clientId: 1 });
 userSchema.index({ role: 1 });
 
 // Pre-save middleware to hash password
@@ -100,9 +126,21 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 // Method to generate client ID
 userSchema.methods.generateClientId = function() {
   if (this.role === 'client' && !this.clientId) {
-    this.clientId = `CLI-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+    // Generate more readable client ID based on name
+    const sanitizedName = this.name ? this.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : 'CLIENT';
+    const namePrefix = sanitizedName.substring(0, 6) || 'CLIENT';
+    const randomSuffix = Math.random().toString(36).substr(2, 3).toUpperCase();
+    this.clientId = `CLI-${namePrefix}${randomSuffix}`;
   }
 };
+
+// Pre-save middleware to auto-generate clientId for clients
+userSchema.pre('save', function(next) {
+  if (this.role === 'client' && !this.clientId) {
+    this.generateClientId();
+  }
+  next();
+});
 
 // Virtual for full name
 userSchema.virtual('fullName').get(function() {

@@ -6,45 +6,61 @@ export function cn(...inputs) {
 }
 
 export function formatCurrency(amount, currency = 'INR') {
-  const formatter = new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })
-  return formatter.format(amount)
+  if (amount === null || amount === undefined) {
+    return currency === 'INR' ? '₹0' : '$0.00'
+  }
+  
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
+  
+  if (isNaN(numAmount)) {
+    return currency === 'INR' ? '₹0' : '$0.00'
+  }
+  
+  if (currency === 'INR') {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(numAmount)
+  } else if (currency === 'USD') {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(numAmount)
+  }
+  
+  // Fallback for other currencies
+  return `${currency} ${numAmount.toFixed(2)}`
 }
 
-export function formatNumber(number) {
-  return new Intl.NumberFormat('en-IN').format(number)
+export function formatNumber(num) {
+  if (num === null || num === undefined) return '0'
+  const numValue = typeof num === 'string' ? parseFloat(num) : num
+  if (isNaN(numValue)) return '0'
+  return numValue.toLocaleString('en-IN')
 }
 
 export function formatDate(date) {
-  if (!date) return 'N/A';
-
-  const parsedDate = new Date(date);
-  if (isNaN(parsedDate.getTime())) return 'Invalid Date';
-
-  return new Intl.DateTimeFormat('en-IN', {
+  if (!date) return 'N/A'
+  return new Date(date).toLocaleDateString('en-IN', {
     year: 'numeric',
     month: 'short',
-    day: 'numeric',
-  }).format(parsedDate)
+    day: 'numeric'
+  })
 }
 
 export function formatDateTime(date) {
-  if (!date) return 'N/A';
-
-  const parsedDate = new Date(date);
-  if (isNaN(parsedDate.getTime())) return 'Invalid Date';
-
-  return new Intl.DateTimeFormat('en-IN', {
+  if (!date) return 'N/A'
+  return new Date(date).toLocaleString('en-IN', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsedDate)
+    minute: '2-digit'
+  })
 }
 
 export function getStatusColor(status) {

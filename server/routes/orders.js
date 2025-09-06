@@ -469,12 +469,45 @@ router.post('/', auth, authorize('admin', 'staff'), [
       // Admin/staff users creating orders for clients
       resolvedClientId = clientId || req.user.clientId;
       
-      // If no clientId provided, generate one based on client name for admin/staff
+      // AUTO-REGISTER CLIENT: If no clientId provided, try to auto-register client
       if (!resolvedClientId && clientName) {
-        // Generate a temporary clientId based on client name
-        const sanitizedName = clientName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-        resolvedClientId = `CLI-${sanitizedName.substring(0, 6)}${Math.random().toString(36).substr(2, 3).toUpperCase()}`;
-        console.log(`Generated temporary clientId for '${clientName}': ${resolvedClientId}`);
+        try {
+          // Check if client exists first
+          const existingClient = await User.findOne({
+            name: clientName.trim(),
+            role: 'client'
+          });
+          
+          if (existingClient) {
+            resolvedClientId = existingClient.clientId;
+            console.log(`Found existing client: ${clientName} (${resolvedClientId})`);
+          } else {
+            // Auto-register new client
+            const autoRegisterResponse = await axios.post('/api/clients/auto-register', {
+              clientName: clientName.trim(),
+              orderData: {
+                firstOrder: true,
+                registeredBy: req.user.name || req.user.email,
+                registrationDate: new Date()
+              }
+            }, {
+              headers: {
+                'Authorization': req.headers.authorization
+              }
+            });
+            
+            if (autoRegisterResponse.data.client) {
+              resolvedClientId = autoRegisterResponse.data.client.clientId;
+              console.log(`Auto-registered new client: ${clientName} (${resolvedClientId})`);
+            }
+          }
+        } catch (autoRegisterError) {
+          console.warn('Auto-registration failed, using fallback:', autoRegisterError.message);
+          // Fallback: Generate temporary clientId
+          const sanitizedName = clientName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+          resolvedClientId = `CLI-${sanitizedName.substring(0, 6)}${Math.random().toString(36).substr(2, 3).toUpperCase()}`;
+          console.log(`Generated fallback clientId for '${clientName}': ${resolvedClientId}`);
+        }
       }
     }
     
@@ -672,6 +705,8 @@ router.patch('/:id', auth, async (req, res) => {
 
     // Process allowed updates
     const allowedUpdates = [
+      'clientName',
+      'clientId', 
       'items', 
       'notes', 
       'deadline', 
@@ -708,8 +743,24 @@ router.patch('/:id', auth, async (req, res) => {
           }
         }
         
+        // Validate clientName
+        if (field === 'clientName') {
+          if (!req.body[field] || typeof req.body[field] !== 'string' || req.body[field].trim() === '') {
+            throw new Error('Client name is required and must be a non-empty string');
+          }
+          updates[field] = req.body[field].trim();
+        }
+        
+        // Validate clientId (optional, can be empty for some cases)
+        else if (field === 'clientId') {
+          if (req.body[field] && typeof req.body[field] !== 'string') {
+            throw new Error('Client ID must be a string');
+          }
+          updates[field] = req.body[field] || '';
+        }
+        
         // Validate numeric fields (excluding totalCartons which will be auto-calculated)
-        if (['totalAmount', 'totalCarryingCharges', 'totalWeight', 'totalCbm'].includes(field)) {
+        else if (['totalAmount', 'totalCarryingCharges', 'totalWeight', 'totalCbm'].includes(field)) {
           const value = parseFloat(req.body[field]);
           if (isNaN(value) || value < 0) {
             throw new Error(`${field} must be a non-negative number`);
@@ -1115,8 +1166,37 @@ router.put('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
       'totalCarryingCharges',
       'totalWeight',
       'totalCbm',
-      'totalCartons'
+      'totalCartons',
+      'clearItemAllocations' // NEW: Support clearing item-level allocations
     ];
+    
+    // Handle clearItemAllocations flag for container deletion
+    if (req.body.clearItemAllocations === true) {
+      console.log(`🧹 [ORDER PATCH] Clearing item allocations for order ${order.orderNumber}`);
+      
+      // Clear all item-level allocation data with validation bypass
+      if (order.items && order.items.length > 0) {
+        order.items.forEach((item, index) => {
+          const oldAllocatedCartons = item.allocatedCartons || 0;
+          const oldAllocatedQuantity = item.allocatedQuantity || 0;
+          
+          // Force clear allocations (bypass validation)
+          item.allocatedCartons = 0;
+          item.allocatedQuantity = 0;
+          item.containerId = null;
+          
+          // Mark for validation bypass
+          item._bypassAllocationValidation = true;
+          
+          console.log(`  📦 Cleared item ${index + 1} (${item.itemCode}): ${oldAllocatedCartons} cartons → 0, ${oldAllocatedQuantity} qty → 0`);
+        });
+        
+        // Mark order for validation bypass during save
+        order._bypassAllocationValidation = true;
+      }
+      
+      console.log(`✅ [ORDER PATCH] Cleared allocations for ${order.items?.length || 0} items`);
+    }
     
     allowedUpdates.forEach(field => {
       if (req.body[field] !== undefined) {

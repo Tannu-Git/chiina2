@@ -4,24 +4,21 @@ import { useNavigate } from 'react-router-dom'
 import {
   Building2,
   Ship,
-  Factory,
-  Users,
   Plus,
   Eye,
   Edit,
   Search,
   DollarSign,
-  Star,
   TrendingUp,
   MapPin,
   Phone,
   Mail,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/stores/authStore'
@@ -37,14 +34,12 @@ const CompaniesManagement = () => {
   const { isDark } = useThemeStore()
   const [loading, setLoading] = useState(true)
   const [transportCompanies, setTransportCompanies] = useState([])
-  const [serviceProviders, setServiceProviders] = useState([])
-  const [businessPartners, setBusinessPartners] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedCompany, setSelectedCompany] = useState(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('transport')
+  const [summaryData, setSummaryData] = useState(null)
 
   // Set up axios defaults
   useEffect(() => {
@@ -53,7 +48,7 @@ const CompaniesManagement = () => {
     }
   }, [token])
 
-  // Fetch all companies data
+  // Fetch transport companies data
   const fetchCompaniesData = async () => {
     try {
       setLoading(true)
@@ -64,8 +59,12 @@ const CompaniesManagement = () => {
         return
       }
       
-      // Fetch transport companies from new API
-      const transportResponse = await axios.get('/api/companies/transport')
+      // Fetch transport companies and summary in parallel
+      const [transportResponse, summaryResponse] = await Promise.all([
+        axios.get('/api/companies/transport'),
+        axios.get('/api/companies/summary')
+      ])
+      
       const transport = transportResponse.data.companies || []
       
       // Process transport companies data
@@ -79,22 +78,12 @@ const CompaniesManagement = () => {
         contractStatus: company.contractDetails?.preferredPartner ? 'Preferred' : 'Standard'
       }))
       
-      // Fetch service providers
-      const serviceResponse = await axios.get('/api/companies/service-providers')
-      const serviceProviders = serviceResponse.data.serviceProviders || []
-      
-      // Fetch business partners
-      const partnersResponse = await axios.get('/api/companies/business-partners')
-      const businessPartners = partnersResponse.data.businessPartners || []
-      
       setTransportCompanies(processedTransport)
-      setServiceProviders(serviceProviders)
-      setBusinessPartners(businessPartners)
+      setSummaryData(summaryResponse.data.summary)
       
       console.log('📊 [COMPANIES MANAGEMENT] Data loaded:', {
         transport: processedTransport.length,
-        serviceProviders: serviceProviders.length,
-        businessPartners: businessPartners.length
+        summary: summaryResponse.data.summary
       })
       
     } catch (error) {
@@ -129,7 +118,15 @@ const CompaniesManagement = () => {
       setSelectedCompany(null)
     } catch (error) {
       console.error('Error updating transport company:', error)
-      toast.error('Failed to update transport company')
+      
+      // Handle specific error responses
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message)
+      } else if (error.response?.data?.errors) {
+        toast.error(error.response.data.errors.join(', '))
+      } else {
+        toast.error('Failed to update transport company')
+      }
     }
   }
 
@@ -141,22 +138,40 @@ const CompaniesManagement = () => {
       setIsAddModalOpen(false)
     } catch (error) {
       console.error('Error creating transport company:', error)
-      toast.error('Failed to create transport company')
+      
+      // Handle specific error responses
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message)
+      } else if (error.response?.data?.errors) {
+        toast.error(error.response.data.errors.join(', '))
+      } else {
+        toast.error('Failed to create transport company')
+      }
     }
   }
 
   const handleDeleteTransportCompany = async (companyId) => {
-    if (!window.confirm('Are you sure you want to deactivate this transport company?')) {
+    // Find the company to get its name
+    const company = transportCompanies.find(c => c._id === companyId)
+    const companyName = company?.companyName || 'this company'
+    
+    if (!window.confirm(`Are you sure you want to permanently delete "${companyName}"? This action cannot be undone.`)) {
       return
     }
     
     try {
-      await axios.delete(`/api/companies/transport/${companyId}`)
-      toast.success('Transport company deactivated successfully')
+      const response = await axios.delete(`/api/companies/transport/${companyId}`)
+      toast.success(`"${companyName}" has been permanently deleted`)
       fetchCompaniesData() // Refresh data
     } catch (error) {
-      console.error('Error deactivating transport company:', error)
-      toast.error('Failed to deactivate transport company')
+      console.error('Error deleting transport company:', error)
+      
+      // Handle specific error responses
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message)
+      } else {
+        toast.error('Failed to delete transport company')
+      }
     }
   }
 
@@ -167,7 +182,13 @@ const CompaniesManagement = () => {
       fetchCompaniesData() // Refresh data
     } catch (error) {
       console.error('Error updating rates:', error)
-      toast.error('Failed to update rates')
+      
+      // Handle specific error responses
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message)
+      } else {
+        toast.error('Failed to update rates')
+      }
     }
   }
 
@@ -178,7 +199,13 @@ const CompaniesManagement = () => {
       fetchCompaniesData() // Refresh data
     } catch (error) {
       console.error('Error updating contract:', error)
-      toast.error('Failed to update contract')
+      
+      // Handle specific error responses
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message)
+      } else {
+        toast.error('Failed to update contract')
+      }
     }
   }
 
@@ -196,17 +223,19 @@ const CompaniesManagement = () => {
     return matchesSearch && matchesStatus
   })
 
-  // Calculate summary metrics
-  const summaryMetrics = React.useMemo(() => ({
-    totalTransport: transportCompanies.length,
-    totalServiceProviders: serviceProviders.length,
-    totalBusinessPartners: businessPartners.length,
-    activeCompanies: transportCompanies.filter(c => c.isActive).length + 
-                    serviceProviders.filter(c => c.isActive).length + 
-                    businessPartners.filter(c => c.isActive).length,
-    preferredPartners: transportCompanies.filter(c => c.contractDetails?.preferredPartner).length,
-    totalBusinessValue: businessPartners.reduce((sum, p) => sum + (p.businessVolume?.totalValue || 0), 0)
-  }), [transportCompanies, serviceProviders, businessPartners])
+  // Calculate summary metrics from real data
+  const summaryMetrics = React.useMemo(() => {
+    if (!summaryData) return {
+      totalTransport: 0,
+      activeTransport: 0,
+      preferredPartners: 0,
+      averageOnTimeDelivery: 0,
+      averageCustomerRating: 0,
+      totalShipments: 0
+    }
+    
+    return summaryData
+  }, [summaryData])
 
   if (loading) {
     return (
@@ -228,14 +257,14 @@ const CompaniesManagement = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-foreground flex items-center">
-                <Building2 className="h-8 w-8 mr-3 text-amber-600 dark:text-amber-400" />
-                Companies Management
+                <Ship className="h-8 w-8 mr-3 text-amber-600 dark:text-amber-400" />
+                Transport Companies
               </h1>
-              <p className="text-muted-foreground mt-2">Manage transport companies, service providers, and business partners</p>
+              <p className="text-muted-foreground mt-2">Manage shipping companies and logistics carriers</p>
             </div>
             <Button className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white" onClick={handleAddTransportCompany}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Company
+              Add Transport Company
             </Button>
           </div>
         </motion.div>
@@ -250,90 +279,81 @@ const CompaniesManagement = () => {
             <CardContent className="p-4 text-center">
               <Ship className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
               <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalTransport}</p>
-              <p className="text-sm text-muted-foreground">Transport</p>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-card border border-border">
-            <CardContent className="p-4 text-center">
-              <Factory className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalServiceProviders}</p>
-              <p className="text-sm text-muted-foreground">Service Providers</p>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-card border border-border">
-            <CardContent className="p-4 text-center">
-              <Users className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalBusinessPartners}</p>
-              <p className="text-sm text-muted-foreground">Partners</p>
+              <p className="text-sm text-muted-foreground">Total Companies</p>
             </CardContent>
           </Card>
           
           <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
               <TrendingUp className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-foreground">{summaryMetrics.activeCompanies}</p>
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.activeTransport}</p>
               <p className="text-sm text-muted-foreground">Active</p>
             </CardContent>
           </Card>
           
           <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <Star className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <DollarSign className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
               <p className="text-2xl font-bold text-foreground">{summaryMetrics.preferredPartners}</p>
-              <p className="text-sm text-muted-foreground">Preferred</p>
+              <p className="text-sm text-muted-foreground">Preferred Partners</p>
             </CardContent>
           </Card>
           
           <Card className="bg-card border border-border">
             <CardContent className="p-4 text-center">
-              <DollarSign className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(summaryMetrics.totalBusinessValue)}</p>
-              <p className="text-sm text-muted-foreground">Business Value</p>
+              <TrendingUp className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.averageOnTimeDelivery}%</p>
+              <p className="text-sm text-muted-foreground">Avg On-Time</p>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-card border border-border">
+            <CardContent className="p-4 text-center">
+              <Mail className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.averageCustomerRating}</p>
+              <p className="text-sm text-muted-foreground">Avg Rating</p>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-card border border-border">
+            <CardContent className="p-4 text-center">
+              <Ship className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-foreground">{summaryMetrics.totalShipments}</p>
+              <p className="text-sm text-muted-foreground">Total Shipments</p>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Main Content */}
-        <Tabs defaultValue="transport" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="transport">Transport Companies</TabsTrigger>
-            <TabsTrigger value="services">Service Providers</TabsTrigger>
-            <TabsTrigger value="partners">Business Partners</TabsTrigger>
-          </TabsList>
-
-          {/* Transport Companies Tab */}
-          <TabsContent value="transport">
-            <Card className="bg-card border border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center text-foreground">
-                  <Ship className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
-                  Transport Companies
-                </CardTitle>
-                <CardDescription className="text-muted-foreground">Manage shipping lines and freight carriers</CardDescription>
-                
-                {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                  <Input
-                    placeholder="Search companies..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="sm:w-64"
-                  />
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="sm:w-48">
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Companies</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="preferred">Preferred Partners</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardHeader>
-              <CardContent>
+        <Card className="bg-card border border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center text-foreground">
+              <Ship className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
+              Transport Companies
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">Manage shipping lines and freight carriers</CardDescription>
+            
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4 mt-4">
+              <Input
+                placeholder="Search companies..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="sm:w-64"
+              />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="sm:w-48">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Companies</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="preferred">Preferred Partners</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
                 <div className="space-y-4">
                   {filteredTransportCompanies.length === 0 ? (
                     <div className="text-center py-12">
@@ -445,14 +465,15 @@ const CompaniesManagement = () => {
                             </div>
                             <div className="flex items-center space-x-2">
                               <Button size="sm" className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white" onClick={() => {
-                                // Open rates update dialog (implement later)
-                                toast.info('Rates update dialog coming soon')
+                                // Open the edit modal which now includes rates editing
+                                handleEditTransportCompany(company)
                               }}>
                                 <DollarSign className="h-4 w-4 mr-1" />
                                 Update Rates
                               </Button>
                               {user?.role === 'admin' && (
                                 <Button variant="destructive" size="sm" onClick={() => handleDeleteTransportCompany(company._id)}>
+                                  <Trash2 className="h-4 w-4 mr-1" />
                                   Delete
                                 </Button>
                               )}
@@ -463,164 +484,9 @@ const CompaniesManagement = () => {
                     </motion.div>
                   ))
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Service Providers Tab */}
-          <TabsContent value="services">
-            <Card className="bg-card border border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center text-foreground">
-                  <Factory className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
-                  Service Providers
-                </CardTitle>
-                <CardDescription className="text-muted-foreground">Manage warehouses, customs brokers, and other logistics services</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {serviceProviders.map((provider, index) => (
-                    <motion.div
-                      key={provider._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <Card className="border border-border hover:shadow-md transition-shadow">
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center space-x-4">
-                              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
-                                <Factory className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                              </div>
-                              <div>
-                                <h3 className="text-lg font-semibold text-foreground">{provider.companyName}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                  {provider.shortName} • {provider.serviceType}
-                                </p>
-                                <Badge variant="outline" className="mt-1 text-xs">
-                                  {provider.serviceType}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-lg font-bold text-foreground">
-                                {provider.performanceMetrics?.customerRating}/5
-                              </p>
-                              <p className="text-sm text-muted-foreground">Rating</p>
-                            </div>
-                          </div>
-                          
-                          {/* Contact and Action Buttons */}
-                          <div className="space-y-4">
-                            <div className="p-3 bg-muted rounded-lg border border-border">
-                              <div className="flex justify-between items-center">
-                                <div className="space-y-1 text-sm">
-                                  <div className="flex items-center space-x-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-card-foreground">{provider.contactInfo?.email}</span>
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-card-foreground">{provider.contactInfo?.phone}</span>
-                                  </div>
-                                </div>
-                                <div className="flex space-x-2">
-                                  <Button variant="outline" size="sm">
-                                    <Edit className="h-4 w-4 mr-1" />
-                                    Edit
-                                  </Button>
-                                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white">
-                                    <DollarSign className="h-4 w-4 mr-1" />
-                                    Rates
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Business Partners Tab */}
-          <TabsContent value="partners">
-            <Card className="bg-card border border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center text-foreground">
-                  <Users className="h-5 w-5 mr-2 text-amber-600 dark:text-amber-400" />
-                  Business Partners
-                </CardTitle>
-                <CardDescription className="text-muted-foreground">Manage freight forwarders and other business partnerships</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {businessPartners.map((partner, index) => (
-                    <motion.div
-                      key={partner._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <Card className="border border-border hover:shadow-md transition-shadow">
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center space-x-4">
-                              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
-                                <Users className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                              </div>
-                              <div>
-                                <h3 className="text-lg font-semibold text-foreground">{partner.companyName}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                  {partner.shortName} • {partner.partnerType}
-                                </p>
-                                <div className="flex items-center space-x-2 mt-1">
-                                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
-                                    {partner.partnershipLevel}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs">
-                                    {partner.businessVolume?.totalOrders} Orders
-                                  </Badge>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-bold text-foreground">{formatCurrency(partner.businessVolume?.totalValue)}</p>
-                              <p className="text-sm text-muted-foreground">Total Business</p>
-                            </div>
-                          </div>
-                          
-                          {/* Partner Actions */}
-                          <div className="pt-4 border-t border-border flex justify-between items-center">
-                            <div className="flex items-center space-x-2">
-                              <Button variant="outline" size="sm">
-                                <Eye className="h-4 w-4 mr-1" />
-                                View Details
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit Partnership
-                              </Button>
-                            </div>
-                            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white">
-                              <FileText className="h-4 w-4 mr-1" />
-                              Agreement
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            </div>
+          </CardContent>
+        </Card>
       </div>
       
       {/* Add Transport Company Modal */}

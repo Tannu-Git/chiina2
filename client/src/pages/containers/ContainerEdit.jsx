@@ -22,6 +22,7 @@ import {
   FileText,
   Settings,
   Plus,
+  Minus,
   Search,
   Filter,
   Zap,
@@ -31,7 +32,8 @@ import {
   Layers,
   Clock,
   CheckSquare,
-  Calculator
+  Calculator,
+  Truck
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -59,13 +61,21 @@ const ContainerEdit = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')  
   
-  // Order allocation states
+  // Order allocation states - Enhanced for item-level selection
   const [showOrderSearch, setShowOrderSearch] = useState(false)
   const [availableOrders, setAvailableOrders] = useState([])
   const [searchingOrders, setSearchingOrders] = useState(false)
   const [orderSearchTerm, setOrderSearchTerm] = useState('')
-  const [selectedOrdersForAllocation, setSelectedOrdersForAllocation] = useState([])
+  const [selectedOrderItems, setSelectedOrderItems] = useState({}) // Item-level selection like warehouse allocation
   const [loadingOrders, setLoadingOrders] = useState(false)
+  
+  // Utilization stats for real-time capacity tracking
+  const [utilizationStats, setUtilizationStats] = useState({
+    usedCbm: 0,
+    usedWeight: 0,
+    remainingCbm: 0,
+    utilizationPercent: 0
+  })
   
   // Auto-fill and template states
   const [showTemplateDialog, setShowTemplateDialog] = useState(false)
@@ -77,6 +87,10 @@ const ContainerEdit = () => {
   const [showOptimization, setShowOptimization] = useState(false)
   const [optimizationSuggestions, setOptimizationSuggestions] = useState(null)
   const [calculating, setCalculating] = useState(false)
+  
+  // Transport companies state
+  const [transportCompanies, setTransportCompanies] = useState([])
+  const [loadingTransportCompanies, setLoadingTransportCompanies] = useState(false)
 
   // Form data state
   const [formData, setFormData] = useState({
@@ -118,6 +132,261 @@ const ContainerEdit = () => {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     }
   }, [token])
+  // Enhanced utilization calculation with real-time updates
+  useEffect(() => {
+    if (container?.maxCbm && selectedOrderItems) {
+      calculateUtilizationStats()
+    }
+  }, [selectedOrderItems, container?.maxCbm])
+
+  const calculateUtilizationStats = () => {
+    const totalCbm = Object.values(selectedOrderItems).reduce((sum, sel) => {
+      const cbm = parseFloat(sel.cbm) || 0
+      return sum + cbm
+    }, 0)
+    
+    const totalWeight = Object.values(selectedOrderItems).reduce((sum, sel) => {
+      const weight = parseFloat(sel.weight) || 0
+      return sum + weight
+    }, 0)
+    
+    const maxCbm = parseFloat(container?.maxCbm) || 0
+    const maxWeight = parseFloat(container?.maxWeight) || 0
+    
+    const utilizationPercent = maxCbm > 0 ? (totalCbm / maxCbm) * 100 : 0
+    
+    setUtilizationStats({
+      usedCbm: totalCbm,
+      usedWeight: totalWeight,
+      remainingCbm: maxCbm - totalCbm,
+      utilizationPercent
+    })
+  }
+
+  // Item-level selection handler (like warehouse allocation)
+  const updateItemSelection = (orderId, itemId, quantity) => {
+    const order = availableOrders.find(o => o._id === orderId)
+    const item = order?.items?.find(i => i._id === itemId)
+    
+    if (!item) {
+      console.error('Item not found:', { orderId, itemId })
+      return
+    }
+    
+    const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+    const validQuantity = Math.max(0, Math.min(quantity, maxAvailable))
+    
+    setSelectedOrderItems(prev => {
+      const key = `${orderId}_${itemId}`
+      const newSelection = { ...prev }
+      
+      if (validQuantity > 0) {
+        const cbmPerCarton = item.unitCbm || 0
+        const weightPerCarton = item.unitWeight || 0
+        const carryingChargePerCarton = item.carryingCharge?.rate || 0
+        
+        newSelection[key] = {
+          orderId,
+          itemId,
+          quantity: validQuantity,
+          cbm: validQuantity * cbmPerCarton,
+          weight: validQuantity * weightPerCarton,
+          charges: validQuantity * carryingChargePerCarton,
+          item: {
+            ...item,
+            orderNumber: order.orderNumber,
+            clientName: order.clientName,
+            cbmPerCarton,
+            weightPerCarton,
+            carryingChargePerCarton
+          }
+        }
+      } else {
+        delete newSelection[key]
+      }
+      
+      return newSelection
+    })
+  }
+
+  // Auto-fill optimization (like warehouse allocation)
+  const autoFillBestItems = () => {
+    console.log('🚀 Auto-fill starting...')
+    
+    const maxCbm = parseFloat(container?.maxCbm || 0)
+    const maxWeight = parseFloat(container?.maxWeight || 0)
+    
+    if (!maxCbm || !maxWeight) {
+      toast.error('Container capacity not configured properly')
+      return
+    }
+    
+    // Clear current selection
+    setSelectedOrderItems({})
+    
+    // Create list of all available items
+    const allItems = []
+    availableOrders.forEach(order => {
+      order.items?.forEach(item => {
+        const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+        const cbmPerCarton = item.unitCbm || 0
+        const weightPerCarton = item.unitWeight || 0
+        const chargePerCarton = item.carryingCharge?.rate || 0
+        
+        if (maxAvailable > 0 && cbmPerCarton > 0) {
+          allItems.push({
+            orderId: order._id,
+            itemId: item._id,
+            maxAvailable,
+            cbmPerCarton,
+            weightPerCarton,
+            chargePerCarton,
+            efficiency: chargePerCarton / cbmPerCarton, // profit per CBM
+            order,
+            item
+          })
+        }
+      })
+    })
+    
+    if (allItems.length === 0) {
+      toast.error('No items available for auto-fill')
+      return
+    }
+    
+    // Sort by efficiency (profit per CBM)
+    allItems.sort((a, b) => b.efficiency - a.efficiency)
+    
+    // Fill container with best items
+    let usedCbm = 0
+    let usedWeight = 0
+    const newSelection = {}
+    let itemsAdded = 0
+    
+    allItems.forEach(itemData => {
+      if (usedCbm >= maxCbm * 0.99) return // Container nearly full
+      
+      let canFit = itemData.maxAvailable
+      
+      // Check CBM constraint
+      const remainingCbm = maxCbm - usedCbm
+      if (itemData.cbmPerCarton > 0) {
+        canFit = Math.min(canFit, Math.floor(remainingCbm / itemData.cbmPerCarton))
+      }
+      
+      // Check weight constraint
+      if (itemData.weightPerCarton > 0) {
+        const remainingWeight = maxWeight - usedWeight
+        canFit = Math.min(canFit, Math.floor(remainingWeight / itemData.weightPerCarton))
+      }
+      
+      if (canFit > 0) {
+        const key = `${itemData.orderId}_${itemData.itemId}`
+        newSelection[key] = {
+          orderId: itemData.orderId,
+          itemId: itemData.itemId,
+          quantity: canFit,
+          cbm: canFit * itemData.cbmPerCarton,
+          weight: canFit * itemData.weightPerCarton,
+          charges: canFit * itemData.chargePerCarton,
+          item: {
+            ...itemData.item,
+            orderNumber: itemData.order.orderNumber,
+            clientName: itemData.order.clientName,
+            cbmPerCarton: itemData.cbmPerCarton,
+            weightPerCarton: itemData.weightPerCarton,
+            carryingChargePerCarton: itemData.chargePerCarton
+          }
+        }
+        
+        usedCbm += canFit * itemData.cbmPerCarton
+        usedWeight += canFit * itemData.weightPerCarton
+        itemsAdded++
+      }
+    })
+    
+    setSelectedOrderItems(newSelection)
+    
+    const utilization = maxCbm > 0 ? (usedCbm / maxCbm * 100).toFixed(1) : '0'
+    toast.success(`Auto-fill complete! ${itemsAdded} items selected, ${utilization}% utilization`)
+  }
+
+  // Apply selected items to container with backend validation
+  const applySelectedItemsToContainer = async () => {
+    if (Object.keys(selectedOrderItems).length === 0) {
+      toast.error('Please select at least one item before proceeding')
+      return
+    }
+    
+    if (utilizationStats.utilizationPercent > 100) {
+      toast.error('Cannot allocate: Container over capacity!')
+      return
+    }
+    
+    try {
+      setSaving(true)
+      
+      // Prepare allocation data with proper validation
+      const allocationData = Object.values(selectedOrderItems)
+        .filter(selection => selection.quantity > 0)
+        .map(selection => ({
+          orderId: selection.orderId,
+          itemId: selection.itemId,
+          allocatedCartons: selection.quantity,
+          cbmShare: selection.cbm,
+          weightShare: selection.weight,
+          carryingCharges: selection.charges
+        }))
+      
+      console.log('🚀 Applying selected items to container:', allocationData)
+      
+      // Backend validation and allocation
+      const response = await axios.post('/api/warehouse/container-item-allocation', {
+        containerId: id,
+        allocations: allocationData,
+        containerSpecs: {
+          maxCbm: container?.maxCbm || 67,
+          maxWeight: container?.maxWeight || 30000
+        }
+      })
+      
+      if (response.data.success) {
+        // Update container with new allocations
+        setContainer(response.data.container)
+        
+        // Show success with details
+        const itemCount = Object.keys(selectedOrderItems).length
+        const totalCbm = Object.values(selectedOrderItems).reduce((sum, sel) => sum + (parseFloat(sel.cbm) || 0), 0)
+        const utilization = ((totalCbm / (container?.maxCbm || 67)) * 100).toFixed(1)
+        
+        toast.success(`✅ Successfully allocated ${itemCount} items (${totalCbm.toFixed(1)} CBM, ${utilization}% utilization)`, {
+          duration: 5000
+        })
+        
+        setShowOrderSearch(false)
+        setSelectedOrderItems({}) // Clear selection after allocation
+      } else {
+        toast.error('Failed to allocate items: ' + (response.data.message || 'Unknown error'))
+      }
+      
+    } catch (error) {
+      console.error('Error applying item allocations:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to allocate items to container'
+      toast.error(errorMessage)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+
+
+  // Handle adding new order allocation (opens order search)
+  const handleAddNewOrderAllocation = () => {
+    setShowOrderSearch(true)
+    if (availableOrders.length === 0) {
+      fetchQCReadyOrders()
+    }
+  }
 
   // Fetch container details
   const fetchContainer = async () => {
@@ -307,10 +576,82 @@ const ContainerEdit = () => {
     }
   }
 
+  // Fetch transport companies
+  const fetchTransportCompanies = async () => {
+    try {
+      setLoadingTransportCompanies(true)
+      console.log('🚛 [CONTAINER EDIT] Fetching transport companies')
+      
+      const response = await axios.get('/api/companies/transport?status=active&limit=50')
+      const companies = response.data.companies || []
+      
+      console.log('🚛 [CONTAINER EDIT] Found transport companies:', companies.length)
+      setTransportCompanies(companies)
+      
+    } catch (error) {
+      console.error('❌ [CONTAINER EDIT] Error fetching transport companies:', error)
+      toast.error('Failed to load transport companies')
+    } finally {
+      setLoadingTransportCompanies(false)
+    }
+  }
+
+  // Handle transport company assignment
+  const handleTransportCompanyUpdate = async (companyId) => {
+    if (!companyId || companyId === 'none') {
+      // Remove transport company assignment
+      try {
+        setSaving(true)
+        const updatedContainer = { ...container }
+        delete updatedContainer.shippingCompany
+        
+        const response = await axios.put(`/api/containers/${id}`, updatedContainer)
+        setContainer(response.data)
+        toast.success('Transport company removed successfully')
+      } catch (error) {
+        console.error('❌ [CONTAINER EDIT] Error removing transport company:', error)
+        toast.error('Failed to remove transport company')
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+    
+    try {
+      setSaving(true)
+      console.log('🚛 [CONTAINER EDIT] Assigning transport company:', companyId)
+      
+      // Use the dedicated endpoint for shipping company assignment
+      const response = await axios.post(`/api/financials/assign-shipping-company/${id}`, {
+        companyId: companyId
+      })
+      
+      if (response.data.message) {
+        // Refresh container data to get updated shipping company info
+        await fetchContainer()
+        toast.success('Transport company assigned successfully')
+      }
+      
+    } catch (error) {
+      console.error('❌ [CONTAINER EDIT] Error assigning transport company:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to assign transport company'
+      
+      // If no rates found, suggest user to update rates in companies management
+      if (errorMessage.includes('No rate found')) {
+        toast.error('No rates found for this container type. Please update company rates in Companies Management.')
+      } else {
+        toast.error(errorMessage)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
   useEffect(() => {
     if (id) {
       fetchContainer()
       loadTemplates()
+      fetchTransportCompanies()
     }
   }, [id])
 
@@ -439,12 +780,11 @@ const ContainerEdit = () => {
     }))
   }
 
-  // Smart proportional calculation when cartons change
+  // Smart proportional calculation when cartons change (UI-level validation already applied)
   const handleProportionalUpdate = (orderIndex, field, value, orderAllocation) => {
     const newValue = parseFloat(value) || 0
     
     if (field === 'cartonShare') {
-      // Get original ratios from the order data
       const originalOrder = orderAllocation.orderId
       const originalCartons = originalOrder?.allocationSummary?.totalAvailableCartons || 
                             orderAllocation.cartonShare || 1
@@ -539,7 +879,7 @@ const ContainerEdit = () => {
     })
   }
 
-  // Update individual item within an order with smart auto-calculation
+  // Update individual item within an order with smart auto-calculation (UI-level QC validation already applied)
   const handleUpdateItemInOrder = (orderIndex, itemIndex, field, value) => {
     setContainer(prev => {
       const updatedContainer = { ...prev }
@@ -672,9 +1012,7 @@ const ContainerEdit = () => {
     
     // Show appropriate success message
     if (field === 'cartons' || field === 'quantity') {
-      toast.success(`🧮 Smart calculation: ${field} updated to ${value} using REAL order data (CBM: ${updatedItem.cbm}, Weight: ${updatedItem.weight}kg)`, { 
-        duration: 4000 
-      })
+      console.log(`✅ [QC VALIDATED] ${field} updated to ${value} (respecting QC limits)`)
     } else {
       toast.success(`📦 Item ${field} updated: ${value}`, { duration: 2000 })
     }
@@ -818,13 +1156,7 @@ const ContainerEdit = () => {
     }
   }
 
-  // Add new order allocation - IMPLEMENTATION
-  const handleAddNewOrderAllocation = () => {
-    setShowOrderSearch(true)
-    if (availableOrders.length === 0) {
-      fetchQCReadyOrders()
-    }
-  }
+
 
   // Handle order selection for allocation
   const handleSelectOrderForAllocation = (order) => {
@@ -1200,19 +1532,26 @@ const ContainerEdit = () => {
       setDeleting(true)
       console.log('🗑️ [CONTAINER EDIT] Deleting container:', id)
 
-      // First deallocate all orders
+      // First deallocate all orders with comprehensive cleanup
       if (container.orders && container.orders.length > 0) {
-        // Reset orders to ready status and remove container allocation
+        // Reset orders to ready status and clear ALL allocation data
         for (const orderAllocation of container.orders) {
           try {
+            // Request comprehensive cleanup including item-level allocation data
             await axios.patch(`/api/orders/${orderAllocation.orderId}`, {
               status: 'ready',
-              containerId: null
+              containerId: null,
+              // Request backend to clear item-level allocations
+              clearItemAllocations: true
             })
+            console.log(`✅ [CONTAINER EDIT] Reset order ${orderAllocation.orderId} and cleared allocations`)
           } catch (orderError) {
             console.warn('Warning: Failed to reset order status:', orderError)
           }
         }
+        
+        // Additional safety: Ensure container deletion will handle any missed cleanup
+        console.log('📦 [CONTAINER EDIT] All orders reset, proceeding with container deletion')
       }
 
       // Delete the container
@@ -1294,17 +1633,17 @@ const ContainerEdit = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            <Button variant="outline" onClick={() => setShowTemplateDialog(true)}>
+            {/* <Button variant="outline" onClick={() => setShowTemplateDialog(true)}>
               <Copy className="h-4 w-4 mr-2" />
               Templates
-            </Button>
-            
+            </Button> */}
+{/*             
             <Button variant="outline" onClick={() => setShowChargeTemplates(true)}>
               <Calculator className="h-4 w-4 mr-2" />
               Charge Presets
-            </Button>
+            </Button> */}
             
-            <Button variant="outline" onClick={generateOptimizationSuggestions} disabled={calculating}>
+            {/* <Button variant="outline" onClick={generateOptimizationSuggestions} disabled={calculating}>
               {calculating ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
@@ -1316,7 +1655,7 @@ const ContainerEdit = () => {
                   Optimize
                 </>
               )}
-            </Button>
+            </Button> */}
             
             <Button variant="outline" onClick={() => navigate(`/containers/${id}`)}>
               <Eye className="h-4 w-4 mr-2" />
@@ -1434,9 +1773,7 @@ const ContainerEdit = () => {
                           <Label htmlFor="maxCbm" className="text-sm font-medium text-blue-700">Max CBM</Label>
                           <Input
                             id="maxCbm"
-                            type="number"
-                            step="0.1"
-                            min="0"
+                            type="text"
                             value={container?.maxCbm || 0}
                             onChange={(e) => setContainer(prev => ({ ...prev, maxCbm: parseFloat(e.target.value) || 0 }))}
                             className="border-blue-300 focus:border-blue-500"
@@ -1446,8 +1783,7 @@ const ContainerEdit = () => {
                           <Label htmlFor="maxWeight" className="text-sm font-medium text-blue-700">Max Weight (kg)</Label>
                           <Input
                             id="maxWeight"
-                            type="number"
-                            min="0"
+                            type="text"
                             value={container?.maxWeight || 0}
                             onChange={(e) => setContainer(prev => ({ ...prev, maxWeight: parseFloat(e.target.value) || 0 }))}
                             className="border-blue-300 focus:border-blue-500"
@@ -1457,6 +1793,29 @@ const ContainerEdit = () => {
                       <div className="text-xs text-blue-600">
                         💡 Tip: Modify these values to customize container capacity beyond standard types
                       </div>
+                    </div>
+
+                    {/* Transport Company Selection */}
+                    <div>
+                      <Label htmlFor="transportCompany" className="text-sm font-medium text-stone-700">
+                        Transport Company
+                      </Label>
+                      <Select 
+                        value={container?.shippingCompany?.id || 'none'} 
+                        onValueChange={handleTransportCompanyUpdate}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select transport company" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No transport company</SelectItem>
+                          {transportCompanies.map((company) => (
+                            <SelectItem key={company.companyId} value={company.companyId}>
+                              {company.companyName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div>
@@ -1554,9 +1913,7 @@ const ContainerEdit = () => {
                       <Label htmlFor="gst">GST Amount (₹)</Label>
                       <Input
                         id="gst"
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
                         value={formData.baseCharges.gst}
                         onChange={(e) => handleInputChange('baseCharges.gst', parseFloat(e.target.value) || 0)}
                       />
@@ -1566,9 +1923,7 @@ const ContainerEdit = () => {
                       <Label htmlFor="duty">Duty Amount (₹)</Label>
                       <Input
                         id="duty"
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
                         value={formData.baseCharges.duty}
                         onChange={(e) => handleInputChange('baseCharges.duty', parseFloat(e.target.value) || 0)}
                       />
@@ -1578,9 +1933,7 @@ const ContainerEdit = () => {
                       <Label htmlFor="misc">Miscellaneous Charges (₹)</Label>
                       <Input
                         id="misc"
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
                         value={formData.baseCharges.misc}
                         onChange={(e) => handleInputChange('baseCharges.misc', parseFloat(e.target.value) || 0)}
                       />
@@ -1590,9 +1943,7 @@ const ContainerEdit = () => {
                       <Label htmlFor="extraCharge">Extra Charges (₹)</Label>
                       <Input
                         id="extraCharge"
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
                         value={formData.baseCharges.extraCharge}
                         onChange={(e) => handleInputChange('baseCharges.extraCharge', parseFloat(e.target.value) || 0)}
                       />
@@ -1658,606 +2009,872 @@ const ContainerEdit = () => {
             </Card>
           </TabsContent>
 
-          {/* Orders Tab */}
+          {/* Orders Tab - Clean Order Selection like NewContainerAllocation Phase 2 */}
           <TabsContent value="orders">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Package className="h-5 w-5 mr-2" />
-                  Allocated Orders
+                  Container Order Allocation
                 </CardTitle>
                 <CardDescription>
-                  Orders currently allocated to this container
+                  Select items from QC-ready orders to optimize container utilization
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Container Capacity Overview */}
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-semibold text-blue-900 flex items-center">
-                      <ContainerIcon className="h-5 w-5 mr-2" />
-                      Container Capacity & Utilization
-                    </h4>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="bg-white">
-                        {formData.type} Container
-                      </Badge>
-                      <Badge variant={container.orders?.length > 0 ? 'default' : 'secondary'}>
-                        {container.orders?.length || 0} Orders
-                      </Badge>
-                      <Badge className="bg-green-500 text-white">
-                        ⚡ Auto-Update ON
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  {/* Capacity Display with Edit Options */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* CBM Section */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h5 className="font-medium text-blue-800">CBM (Cubic Meters)</h5>
-                        <div className="flex items-center space-x-2">
-                          <Label htmlFor="editMaxCbm" className="text-xs text-blue-600">Max CBM:</Label>
-                          <Input
-                            id="editMaxCbm"
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            value={container?.maxCbm || 0}
-                            onChange={(e) => {
-                              const newMaxCbm = parseFloat(e.target.value) || 0
-                              setContainer(prev => ({ ...prev, maxCbm: newMaxCbm }))
-                              // Auto-recalculate utilization when max capacity changes
-                              if (container?.orders) {
-                                recalculateContainerUtilization(container.orders)
-                              }
-                            }}
-                            className="w-20 h-8 text-xs border-blue-300"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (container?.orders) {
-                                recalculateContainerUtilization(container.orders)
-                                toast.success('Container utilization recalculated!')
-                              }
-                            }}
-                            className="h-8 px-2"
-                            title="Recalculate utilization"
-                          >
-                            <RefreshCw className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      {(() => {
-                        const usedCbm = container.orders?.reduce((sum, order) => sum + (order.cbmShare || 0), 0) || 0
-                        const maxCbm = container?.maxCbm || 1
-                        const utilization = (usedCbm / maxCbm) * 100
-                        const isOverCapacity = usedCbm > maxCbm
-                        
-                        return (
+                {/* Show Order Search Modal */}
+                {showOrderSearch ? (
+                  <div className="grid grid-cols-12 gap-6">
+                    {/* Left Panel - Available Orders */}
+                    <div className="col-span-8 space-y-6">
+                      {/* Container Capacity Status */}
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="flex items-center">
+                                <ContainerIcon className="h-5 w-5 mr-2" />
+                                Container: {container?.maxCbm || 67} CBM
+                              </CardTitle>
+                              <p className="text-sm text-gray-600">
+                                Used: {utilizationStats.usedCbm.toFixed(1)} CBM • Remaining: {utilizationStats.remainingCbm.toFixed(1)} CBM
+                              </p>
+                            </div>
+                            <Button onClick={autoFillBestItems} className="bg-green-600 hover:bg-green-700">
+                              <Calculator className="h-4 w-4 mr-2" />
+                              Auto Fill Best
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
                           <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium">{usedCbm.toFixed(1)} / {maxCbm} CBM</span>
-                              <span className={`text-sm font-bold ${
-                                isOverCapacity ? 'text-red-600' : utilization > 90 ? 'text-orange-600' : 'text-green-600'
-                              }`}>
-                                {utilization.toFixed(1)}%
-                              </span>
+                            <div className="flex justify-between text-sm">
+                              <span>Utilization</span>
+                              <span>{utilizationStats.utilizationPercent.toFixed(1)}%</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-3">
                               <div 
-                                className={`h-3 rounded-full transition-all duration-300 ${
-                                  isOverCapacity ? 'bg-red-500' : utilization > 90 ? 'bg-orange-500' : 'bg-green-500'
+                                className={`h-3 rounded-full transition-all ${
+                                  utilizationStats.utilizationPercent > 100 ? 'bg-red-500' :
+                                  utilizationStats.utilizationPercent > 95 ? 'bg-green-500' :
+                                  utilizationStats.utilizationPercent > 50 ? 'bg-blue-500' : 'bg-gray-400'
                                 }`}
-                                style={{ width: `${Math.min(utilization, 100)}%` }}
-                              ></div>
+                                style={{ width: `${Math.min(utilizationStats.utilizationPercent, 100)}%` }}
+                              />
                             </div>
-                            {isOverCapacity && (
-                              <div className="flex items-center text-xs text-red-600">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Over capacity by {(usedCbm - maxCbm).toFixed(1)} CBM
-                              </div>
+                            
+                            {utilizationStats.utilizationPercent > 100 && (
+                              <Alert className="mt-2">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription>
+                                  Over capacity! Reduce selection by {(utilizationStats.usedCbm - (container?.maxCbm || 67)).toFixed(1)} CBM
+                                </AlertDescription>
+                              </Alert>
                             )}
                           </div>
-                        )
-                      })()}
-                    </div>
-                    
-                    {/* Weight Section */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h5 className="font-medium text-green-800">Weight (Kilograms)</h5>
-                        <div className="flex items-center space-x-2">
-                          <Label htmlFor="editMaxWeight" className="text-xs text-green-600">Max Weight:</Label>
+                        </CardContent>
+                      </Card>
+
+                      {/* Search and Filter */}
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-1">
                           <Input
-                            id="editMaxWeight"
-                            type="number"
-                            min="0"
-                            value={container?.maxWeight || 0}
-                            onChange={(e) => {
-                              const newMaxWeight = parseFloat(e.target.value) || 0
-                              setContainer(prev => ({ ...prev, maxWeight: newMaxWeight }))
-                              // Auto-recalculate utilization when max capacity changes
-                              if (container?.orders) {
-                                recalculateContainerUtilization(container.orders)
-                              }
-                            }}
-                            className="w-24 h-8 text-xs border-green-300"
+                            placeholder="Search orders by number, client name..."
+                            value={orderSearchTerm}
+                            onChange={(e) => setOrderSearchTerm(e.target.value)}
+                            className="w-full"
                           />
                         </div>
+                        <Button variant="outline" onClick={fetchQCReadyOrders} disabled={searchingOrders}>
+                          {searchingOrders ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                          ) : (
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                          )}
+                          Refresh
+                        </Button>
                       </div>
-                      
-                      {(() => {
-                        const usedWeight = container.orders?.reduce((sum, order) => sum + (order.weightShare || 0), 0) || 0
-                        const maxWeight = container?.maxWeight || 1
-                        const utilization = (usedWeight / maxWeight) * 100
-                        const isOverCapacity = usedWeight > maxWeight
-                        
-                        return (
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium">{usedWeight.toLocaleString()} / {maxWeight.toLocaleString()} kg</span>
-                              <span className={`text-sm font-bold ${
-                                isOverCapacity ? 'text-red-600' : utilization > 90 ? 'text-orange-600' : 'text-green-600'
-                              }`}>
-                                {utilization.toFixed(1)}%
-                              </span>
+
+                      {/* Available Orders & Items - Editable Interface */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center">
+                            <Package className="h-5 w-5 mr-2" />
+                            Available Orders
+                          </CardTitle>
+                          <p className="text-sm text-gray-600">Select items to add to your container (cannot exceed {container?.maxCbm || 67} CBM)</p>
+                        </CardHeader>
+                        <CardContent>
+                          {loadingOrders ? (
+                            <div className="flex items-center justify-center py-8">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                              <span className="ml-2">Loading orders...</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-3">
-                              <div 
-                                className={`h-3 rounded-full transition-all duration-300 ${
-                                  isOverCapacity ? 'bg-red-500' : utilization > 90 ? 'bg-orange-500' : 'bg-green-500'
-                                }`}
-                                style={{ width: `${Math.min(utilization, 100)}%` }}
-                              ></div>
-                            </div>
-                            {isOverCapacity && (
-                              <div className="flex items-center text-xs text-red-600">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Over capacity by {(usedWeight - maxWeight).toLocaleString()} kg
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  </div>
-                  
-                  {/* Capacity Status Summary */}
-                  <div className="mt-4 p-3 bg-white border border-blue-100 rounded">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-blue-700">Container Status:</span>
-                      {(() => {
-                        const cbmOver = (container.orders?.reduce((sum, order) => sum + (order.cbmShare || 0), 0) || 0) > (container?.maxCbm || 0)
-                        const weightOver = (container.orders?.reduce((sum, order) => sum + (order.weightShare || 0), 0) || 0) > (container?.maxWeight || 0)
-                        
-                        if (cbmOver || weightOver) {
-                          return <Badge variant="destructive">Over Capacity</Badge>
-                        } else if (container.orders?.length > 0) {
-                          return <Badge className="bg-green-500">Within Limits</Badge>
-                        } else {
-                          return <Badge variant="secondary">Empty</Badge>
-                        }
-                      })()}
-                    </div>
-                  </div>
-                </div>
-                {container.orders && container.orders.length > 0 ? (
-                  <div className="space-y-4">
-                    {container.orders.map((orderAllocation, index) => (
-                      <div key={index} className="border rounded-lg p-4 bg-white hover:bg-stone-50 transition-colors">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h4 className="font-medium text-stone-900">
-                                {orderAllocation.orderId?.orderNumber || `Order ${index + 1}`}
-                              </h4>
-                              <Badge variant="outline" className="text-xs">
-                                {orderAllocation.paymentType === 'THROUGH_ME' ? 'Through Agent' : 'Direct Payment'}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-stone-600 flex items-center">
-                              <Users className="h-4 w-4 mr-1" />
-                              Client: {orderAllocation.clientName}
-                            </p>
-                          </div>
-                          
-                          {/* Order Action Buttons */}
-                          <div className="flex items-center space-x-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => navigate(`/orders/${orderAllocation.orderId}`)}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View Order
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleEditOrderAllocation(orderAllocation, index)}
-                            >
-                              <Edit3 className="h-4 w-4 mr-1" />
-                              Edit Allocation
-                            </Button>
-                            <Button 
-                              variant="destructive" 
-                              size="sm"
-                              onClick={() => handleRemoveOrderAllocation(orderAllocation, index)}
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Remove
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        {/* Editable Allocation Details */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div className="space-y-2">
-                            <label className="text-xs font-medium text-stone-600">CBM Share (m³)</label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max={container.maxCbm}
-                              value={orderAllocation.cbmShare || 0}
-                              onChange={(e) => handleUpdateOrderAllocation(index, 'cbmShare', parseFloat(e.target.value) || 0)}
-                              className="text-sm border-blue-300 focus:border-blue-500"
-                              title="Manually edit CBM or change cartons for auto-calculation"
-                            />
-                            <div className="text-xs text-blue-600 flex items-center">
-                              📊 Auto-updates from cartons
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-xs font-medium text-stone-600">Weight Share (kg)</label>
-                            <Input
-                              type="number"
-                              step="1"
-                              min="0"
-                              max={container.maxWeight}
-                              value={orderAllocation.weightShare || 0}
-                              onChange={(e) => handleUpdateOrderAllocation(index, 'weightShare', parseFloat(e.target.value) || 0)}
-                              className="text-sm border-green-300 focus:border-green-500"
-                              title="Manually edit weight or change cartons for auto-calculation"
-                            />
-                            <div className="text-xs text-green-600 flex items-center">
-                              ⚖️ Auto-updates from cartons
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-xs font-medium text-stone-600">Cartons</label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={orderAllocation.cartonShare || 0}
-                              onChange={(e) => handleProportionalUpdate(index, 'cartonShare', parseInt(e.target.value) || 0, orderAllocation)}
-                              className="text-sm border-orange-300 focus:border-orange-500"
-                              title="Changing cartons will proportionally update CBM, weight, and revenue"
-                            />
-                            <div className="text-xs text-orange-600 flex items-center">
-                              📦 Auto-calculates CBM & weight
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-xs font-medium text-stone-600">Revenue (₹)</label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={orderAllocation.carryingCharges || 0}
-                              onChange={(e) => handleUpdateOrderAllocation(index, 'carryingCharges', parseFloat(e.target.value) || 0)}
-                              className="text-sm border-purple-300 focus:border-purple-500"
-                              title="Manually edit revenue or change cartons for auto-calculation"
-                            />
-                            <div className="text-xs text-purple-600 flex items-center">
-                              💰 Auto-updates from cartons
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Allocation Validation */}
-                        <div className="mt-3 flex items-center justify-between text-xs">
-                          <div className="flex items-center space-x-4">
-                            <span className={`px-2 py-1 rounded ${
-                              (orderAllocation.cbmShare || 0) <= container.maxCbm ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              CBM: {((orderAllocation.cbmShare || 0) / container.maxCbm * 100).toFixed(1)}% of container
-                            </span>
-                            <span className={`px-2 py-1 rounded ${
-                              (orderAllocation.weightShare || 0) <= container.maxWeight ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              Weight: {((orderAllocation.weightShare || 0) / container.maxWeight * 100).toFixed(1)}% of container
-                            </span>
-                          </div>
-                          <div className="text-stone-500">
-                            Last updated: {new Date(orderAllocation.allocatedAt || Date.now()).toLocaleDateString()}
-                          </div>
-                        </div>
-                        
-                        {/* Item Details Section */}
-                        <div className="mt-4 border-t pt-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <h6 className="text-sm font-medium text-stone-700 flex items-center">
-                              <Package className="h-4 w-4 mr-1" />
-                              Order Items ({orderAllocation.orderId?.items?.length || 0} items)
-                            </h6>
-                            <Badge variant="outline" className="text-xs">
-                              Order Level Allocation
-                            </Badge>
-                          </div>
-                          
-                          {orderAllocation.orderId?.items && orderAllocation.orderId.items.length > 0 ? (
-                            <div className="bg-stone-50 rounded-lg p-3">
-                              <div className="space-y-2">
-                                {orderAllocation.orderId.items.map((item, itemIndex) => (
-                                  <div key={itemIndex} className="border border-stone-300 rounded-lg p-3 bg-white">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="font-medium text-stone-900">
-                                        {item.itemCode} - {item.description}
-                                      </div>
-                                      <Badge variant="outline" className="text-xs">
-                                        Item #{itemIndex + 1}
-                                      </Badge>
-                                    </div>
-                                    
-                                    {/* Editable Item Fields */}
-                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-                                      <div className="space-y-1">
-                                        <label className="text-stone-600 font-medium">Quantity</label>
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          value={item.quantity || 0}
-                                          onChange={(e) => handleUpdateItemInOrder(index, itemIndex, 'quantity', parseInt(e.target.value) || 0)}
-                                          className="h-7 text-xs"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-stone-600 font-medium">Cartons</label>
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          value={item.cartons || 0}
-                                          onChange={(e) => handleUpdateItemInOrder(index, itemIndex, 'cartons', parseInt(e.target.value) || 0)}
-                                          className="h-7 text-xs border-orange-300 focus:border-orange-500"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-stone-600 font-medium">CBM (m³)</label>
-                                        <Input
-                                          type="number"
-                                          step="0.01"
-                                          min="0"
-                                          value={item.cbm || 0}
-                                          onChange={(e) => handleUpdateItemInOrder(index, itemIndex, 'cbm', parseFloat(e.target.value) || 0)}
-                                          className="h-7 text-xs border-blue-300 focus:border-blue-500"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-stone-600 font-medium">Weight (kg)</label>
-                                        <Input
-                                          type="number"
-                                          step="0.1"
-                                          min="0"
-                                          value={item.weight || 0}
-                                          onChange={(e) => handleUpdateItemInOrder(index, itemIndex, 'weight', parseFloat(e.target.value) || 0)}
-                                          className="h-7 text-xs border-green-300 focus:border-green-500"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-stone-600 font-medium">Value (₹)</label>
-                                        <Input
-                                          type="number"
-                                          step="0.01"
-                                          min="0"
-                                          value={item.carryingCharges || 0}
-                                          onChange={(e) => handleUpdateItemInOrder(index, itemIndex, 'carryingCharges', parseFloat(e.target.value) || 0)}
-                                          className="h-7 text-xs border-purple-300 focus:border-purple-500"
-                                        />
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Smart Auto-Calculation Hint */}
-                                    <div className="mt-2 p-2 bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded text-xs">
-                                      <div className="flex items-center text-blue-700">
-                                        <span className="text-base mr-1">🧮</span>
-                                        <strong>Smart Auto-Calculation:</strong> 
-                                      </div>
-                                      <div className="text-blue-600 mt-1">
-                                        • Change <strong>Quantity</strong> → Auto-calculates cartons (10 items/carton), CBM, weight & value<br/>
-                                        • Change <strong>Cartons</strong> → Auto-calculates CBM (0.1/carton), weight (15kg/carton) & value (₹500/carton)
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Item Actions */}
-                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-stone-200">
-                                      <div className="text-xs text-stone-600">
-                                        📦 Item CBM: {((item.cbm || 0) / (orderAllocation.cbmShare || 1) * 100).toFixed(1)}% of order allocation
-                                      </div>
-                                      <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() => handleRemoveItemFromOrder(index, itemIndex)}
-                                        className="h-6 text-xs px-2"
-                                      >
-                                        <X className="h-3 w-3 mr-1" />
-                                        Remove Item
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                              
-                              {/* Order Summary */}
-                              <div className="mt-3 pt-2 border-t border-stone-300">
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-                                  <div className="text-center">
-                                    <p className="font-medium text-blue-600">
-                                      {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.quantity || 0), 0)}
-                                    </p>
-                                    <p className="text-blue-700">Total Qty</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="font-medium text-orange-600">
-                                      {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.cartons || 0), 0)}
-                                    </p>
-                                    <p className="text-orange-700">Total Cartons</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="font-medium text-green-600">
-                                      {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.cbm || 0), 0).toFixed(1)}
-                                    </p>
-                                    <p className="text-green-700">Total CBM</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="font-medium text-purple-600">
-                                      {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.weight || 0), 0).toFixed(0)}
-                                    </p>
-                                    <p className="text-purple-700">Total Weight</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="font-medium text-red-600">
-                                      ₹{orderAllocation.orderId.items.reduce((sum, item) => sum + (item.carryingCharges || 0), 0).toLocaleString()}
-                                    </p>
-                                    <p className="text-red-700">Total Value</p>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              
-              {/* Auto-Populate Button for Missing Data */}
-              {orderAllocation.orderId.items.some(item => (item.cbm === 0 || !item.cbm) && item.cartons > 0) && (
-                <div className="mt-3 pt-2 border-t border-orange-300">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs text-orange-700">
-                      ⚠️ <strong>Missing Data Detected:</strong> Some items have cartons but no CBM/weight values
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => autoPopulateItemData(index)}
-                      className="border-orange-300 text-orange-600 hover:bg-orange-50"
-                    >
-                      <Zap className="h-3 w-3 mr-1" />
-                      Auto-Populate Missing Data
-                    </Button>
-                  </div>
-                </div>
-              )}
-              
-              <div className="mt-2 text-xs text-stone-600 bg-blue-50 p-2 rounded border border-blue-200">
-                                📊 <strong>Note:</strong> This order contains {orderAllocation.orderId.items.length} items. 
-                                The allocation above applies to the entire order proportionally.
-                              </div>
-                              
-                              {/* Add New Item Button */}
-                              <div className="mt-3 pt-2 border-t border-stone-300">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleAddNewItemToOrder(index)}
-                                  className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50"
-                                >
-                                  <Plus className="h-4 w-4 mr-1" />
-                                  Add New Item to Order
-                                </Button>
-                              </div>
+                          ) : availableOrders.length === 0 ? (
+                            <div className="text-center py-8">
+                              <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                              <p className="text-gray-600">No additional QC-ready orders available</p>
+                              <Button variant="outline" onClick={fetchQCReadyOrders} className="mt-2">
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Refresh Orders
+                              </Button>
                             </div>
                           ) : (
-                            <div className="bg-stone-50 rounded-lg p-3 text-center text-xs text-stone-500">
-                              <Package className="h-8 w-8 text-stone-400 mx-auto mb-2" />
-                              <p>No item details available</p>
-                              <p className="text-stone-400">Order may not have detailed item breakdown</p>
+                            <div className="space-y-6">
+                              {availableOrders
+                                .filter(order => 
+                                  orderSearchTerm === '' ||
+                                  order.orderNumber?.toLowerCase().includes(orderSearchTerm.toLowerCase()) ||
+                                  order.clientName?.toLowerCase().includes(orderSearchTerm.toLowerCase())
+                                )
+                                .map(order => {
+                                  const orderTotal = order.items?.reduce((sum, item) => {
+                                    const key = `${order._id}_${item._id}`
+                                    const selection = selectedOrderItems[key]
+                                    const cbm = selection ? (parseFloat(selection.cbm) || 0) : 0
+                                    return sum + cbm
+                                  }, 0) || 0
+                                  
+                                  return (
+                                    <div key={order._id} className="border rounded-lg p-4">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div>
+                                          <h3 className="font-semibold text-lg">{order.orderNumber}</h3>
+                                          <p className="text-sm text-gray-600">{order.clientName}</p>
+                                        </div>
+                                        <div className="text-right">
+                                          <Badge variant="outline">{order.items?.length || 0} items</Badge>
+                                          {orderTotal > 0 && (
+                                            <p className="text-sm text-green-600 mt-1">{orderTotal.toFixed(1)} CBM selected</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="space-y-3">
+                                        {order.items?.map(item => {
+                                          const key = `${order._id}_${item._id}`
+                                          const selection = selectedOrderItems[key]
+                                          
+                                          const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+                                          const cbmPerCarton = item.unitCbm || 0
+                                          const weightPerCarton = item.unitWeight || 0
+                                          const carryingChargePerCarton = item.carryingCharge?.rate || 0
+                                          
+                                          const selected = selection?.quantity || 0
+                                          const maxCbm = parseFloat(container?.maxCbm || 67)
+                                          const currentTotal = Object.values(selectedOrderItems).reduce((sum, sel) => {
+                                            return sum + (parseFloat(sel.cbm) || 0)
+                                          }, 0)
+                                          
+                                          const maxCanAdd = cbmPerCarton > 0 ? Math.floor((maxCbm - currentTotal + (selected * cbmPerCarton)) / cbmPerCarton) : maxAvailable
+                                          const actualMax = Math.min(maxAvailable, maxCanAdd)
+                                          
+                                          return (
+                                            <div key={item._id} className="bg-gray-50 rounded p-3">
+                                              <div className="grid grid-cols-12 items-center gap-3">
+                                                <div className="col-span-4">
+                                                  <p className="font-medium">{item.itemCode}</p>
+                                                  <p className="text-xs text-gray-600">{item.description}</p>
+                                                </div>
+                                                
+                                                <div className="col-span-2 text-center">
+                                                  <p className="text-sm font-medium">{cbmPerCarton > 0 ? cbmPerCarton.toFixed(2) : '0.00'} CBM</p>
+                                                  <p className="text-xs text-gray-600">per carton</p>
+                                                </div>
+                                                
+                                                <div className="col-span-2 text-center">
+                                                  <p className="text-sm font-medium">{maxAvailable}</p>
+                                                  <p className="text-xs text-gray-600">available</p>
+                                                </div>
+                                                
+                                                <div className="col-span-3">
+                                                  <div className="flex items-center gap-2">
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      onClick={() => updateItemSelection(order._id, item._id, selected - 1)}
+                                                      disabled={selected <= 0}
+                                                    >
+                                                      <Minus className="h-3 w-3" />
+                                                    </Button>
+                                                    
+                                                    <Input
+                                                      type="text"
+                                                      value={selected}
+                                                      onChange={(e) => updateItemSelection(order._id, item._id, parseInt(e.target.value) || 0)}
+                                                      className="w-16 text-center"
+                                                      
+                                                      max={actualMax}
+                                                    />
+                                                    
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      onClick={() => updateItemSelection(order._id, item._id, selected + 1)}
+                                                      disabled={selected >= actualMax}
+                                                    >
+                                                      <Plus className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                  {actualMax < maxAvailable && (
+                                                    <p className="text-xs text-red-600 mt-1">CBM limit: max {actualMax}</p>
+                                                  )}
+                                                </div>
+                                                
+                                                <div className="col-span-1 text-right">
+                                                  {selected > 0 && (
+                                                    <CheckCircle className="h-4 w-4 text-green-500" />
+                                                  )}
+                                                </div>
+                                              </div>
+                                              
+                                              {selected > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                                  <div className="grid grid-cols-3 gap-4 text-xs text-gray-600">
+                                                    <div>CBM: {(selected * cbmPerCarton).toFixed(2)}</div>
+                                                    <div>Weight: {(selected * weightPerCarton).toFixed(0)} kg</div>
+                                                    <div>Charges: ₹{(selected * carryingChargePerCarton).toFixed(0)}</div>
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )
+                                        })},
+                                      </div>
+                                    </div>
+                                  )
+                                })}
                             </div>
                           )}
-                        </div>
-                      </div>
-                    ))}
-                    
-                    {/* Container Utilization Summary */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
-                      <h5 className="font-medium text-blue-900 mb-3">Total Container Utilization</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-blue-600">
-                            {container.orders.reduce((sum, order) => sum + (order.cbmShare || 0), 0).toFixed(1)}
-                          </p>
-                          <p className="text-blue-700">CBM Used</p>
-                          <p className="text-xs text-blue-600">
-                            {((container.orders.reduce((sum, order) => sum + (order.cbmShare || 0), 0) / container.maxCbm) * 100).toFixed(1)}% of {container.maxCbm} CBM
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-green-600">
-                            {container.orders.reduce((sum, order) => sum + (order.weightShare || 0), 0).toLocaleString()}
-                          </p>
-                          <p className="text-green-700">Weight Used (kg)</p>
-                          <p className="text-xs text-green-600">
-                            {((container.orders.reduce((sum, order) => sum + (order.weightShare || 0), 0) / container.maxWeight) * 100).toFixed(1)}% of {container.maxWeight.toLocaleString()} kg
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-orange-600">
-                            {container.orders.reduce((sum, order) => sum + (order.cartonShare || 0), 0)}
-                          </p>
-                          <p className="text-orange-700">Total Cartons</p>
-                          <p className="text-xs text-orange-600">
-                            {container.orders.length} orders
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-purple-600">
-                            {formatCurrency(container.orders.reduce((sum, order) => sum + (order.carryingCharges || 0), 0))}
-                          </p>
-                          <p className="text-purple-700">Total Revenue</p>
-                          <p className="text-xs text-purple-600">
-                            Carrying charges
-                          </p>
-                        </div>
-                      </div>
+                        </CardContent>
+                      </Card>
                     </div>
-                    
-                    {/* Action Buttons - Add Orders and Auto-Optimize */}
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 py-4">
+
+                    {/* Right Panel - Selection Summary */}
+                    <div className="col-span-4 space-y-6">
+                      {/* Selection Summary */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Selection Summary</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4 text-center">
+                              <div>
+                                <p className="text-lg font-bold text-blue-600">{Object.keys(selectedOrderItems).length}</p>
+                                <p className="text-xs text-gray-600">Items Selected</p>
+                              </div>
+                              <div>
+                                <p className="text-lg font-bold text-green-600">
+                                  {Object.values(selectedOrderItems).reduce((sum, sel) => sum + sel.quantity, 0)}
+                                </p>
+                                <p className="text-xs text-gray-600">Total Cartons</p>
+                              </div>
+                            </div>
+                            
+                            <Separator />
+                            
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span>Total CBM:</span>
+                                <span className="font-medium">{utilizationStats.usedCbm.toFixed(1)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Total Weight:</span>
+                                <span className="font-medium">{utilizationStats.usedWeight.toFixed(0)} kg</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Total Charges:</span>
+                                <span className="font-medium">₹{Object.values(selectedOrderItems).reduce((sum, sel) => {
+                                  const charges = parseFloat(sel.charges) || 0
+                                  return sum + charges
+                                }, 0).toFixed(0)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Apply Changes Button */}
                       <Button 
-                        variant="outline" 
-                        onClick={handleAddNewOrderAllocation}
-                        className="px-6"
+                        onClick={applySelectedItemsToContainer}
+                        disabled={Object.keys(selectedOrderItems).length === 0 || utilizationStats.utilizationPercent > 100 || saving}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        size="lg"
                       >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add QC-Ready Orders
-                      </Button>
-                      
-                      <Button 
-                        variant="default" 
-                        onClick={generateOptimizationSuggestions}
-                        disabled={calculating || !container.orders?.length}
-                        className="px-6 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                      >
-                        {calculating ? (
+                        {saving ? (
                           <>
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Analyzing...
+                            Adding to Container...
                           </>
                         ) : (
                           <>
-                            <Target className="h-4 w-4 mr-2" />
-                            Auto-Optimize Container
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Selected Items to Container
                           </>
                         )}
+                      </Button>
+                      
+                      <Button 
+                        onClick={() => {
+                          setShowOrderSearch(false)
+                          setSelectedOrderItems({})
+                        }}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <Package className="h-12 w-12 text-stone-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-stone-900 mb-2">No orders allocated</h3>
-                    <p className="text-stone-500">This container doesn't have any orders allocated yet.</p>
+                  <div className="space-y-6">
+                    {/* Container Utilization Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Card className="bg-blue-50 border-blue-200">
+                        <CardContent className="p-4 text-center">
+                          <Layers className="h-6 w-6 text-blue-600 mx-auto mb-2" />
+                          <p className="text-2xl font-bold text-blue-800">
+                            {(container.currentCbm || 0).toFixed(1)} / {container.maxCbm || 67}
+                          </p>
+                          <p className="text-sm text-blue-600">CBM Used</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {container.maxCbm > 0 ? ((container.currentCbm || 0) / container.maxCbm * 100).toFixed(1) : 0}% utilized
+                          </p>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="bg-green-50 border-green-200">
+                        <CardContent className="p-4 text-center">
+                          <Package className="h-6 w-6 text-green-600 mx-auto mb-2" />
+                          <p className="text-2xl font-bold text-green-800">
+                            {(container.currentWeight || 0).toLocaleString()} / {(container.maxWeight || 0).toLocaleString()}
+                          </p>
+                          <p className="text-sm text-green-600">Weight (kg)</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {container.maxWeight > 0 ? ((container.currentWeight || 0) / container.maxWeight * 100).toFixed(1) : 0}% utilized
+                          </p>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="bg-purple-50 border-purple-200">
+                        <CardContent className="p-4 text-center">
+                          <Users className="h-6 w-6 text-purple-600 mx-auto mb-2" />
+                          <p className="text-2xl font-bold text-purple-800">{container.orders?.length || 0}</p>
+                          <p className="text-sm text-purple-600">Orders Allocated</p>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="bg-orange-50 border-orange-200">
+                        <CardContent className="p-4 text-center">
+                          <DollarSign className="h-6 w-6 text-orange-600 mx-auto mb-2" />
+                          <p className="text-xl font-bold text-orange-800">
+                            {formatCurrency(container.totalRevenue || 0)}
+                          </p>
+                          <p className="text-sm text-orange-600">Total Revenue</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Add New Order/Item Button */}
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold">Allocated Orders</h3>
+                      <Button onClick={handleAddNewOrderAllocation} className="bg-blue-600 hover:bg-blue-700">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Items from Orders
+                      </Button>
+                    </div>
+
+                    {/* Main Container View */}
+                    {/* Simple Container Capacity Overview */}
+                    <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+                      <CardContent className="pt-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-semibold text-blue-900 flex items-center">
+                            <ContainerIcon className="h-5 w-5 mr-2" />
+                            Container Capacity: {container?.maxCbm || 67} CBM, {(container?.maxWeight || 30000).toLocaleString()} kg
+                          </h4>
+                          <Badge variant={container.orders?.length > 0 ? 'default' : 'secondary'}>
+                            {container.orders?.length || 0} Orders Allocated
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* CBM Utilization */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span>CBM Used:</span>
+                              <span className="font-medium">
+                                {(container.orders?.reduce((sum, order) => sum + (order.cbmShare || 0), 0) || 0).toFixed(1)} / {container?.maxCbm || 67} CBM
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-500 h-2 rounded-full transition-all"
+                                style={{ 
+                                  width: `${Math.min(
+                                    ((container.orders?.reduce((sum, order) => sum + (order.cbmShare || 0), 0) || 0) / (container?.maxCbm || 67)) * 100, 
+                                    100
+                                  )}%` 
+                                }}
+                              />
+                            </div>
+                          </div>
+                          
+                          {/* Weight Utilization */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span>Weight Used:</span>
+                              <span className="font-medium">
+                                {(container.orders?.reduce((sum, order) => sum + (order.weightShare || 0), 0) || 0).toLocaleString()} / {(container?.maxWeight || 30000).toLocaleString()} kg
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-green-500 h-2 rounded-full transition-all"
+                                style={{ 
+                                  width: `${Math.min(
+                                    ((container.orders?.reduce((sum, order) => sum + (order.weightShare || 0), 0) || 0) / (container?.maxWeight || 30000)) * 100, 
+                                    100
+                                  )}%` 
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Allocated Orders List - Now Editable */}
+                    {container.orders && container.orders.length > 0 ? (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-lg font-semibold">Allocated Orders (Editable)</h4>
+                          <p className="text-sm text-gray-600">Click on values to edit allocation quantities</p>
+                        </div>
+                        
+                        {container.orders.map((orderAllocation, orderIndex) => {
+                          // Calculate max available cartons for this order - FIXED QC VALIDATION
+                          const orderItems = orderAllocation.orderId?.items || []
+                          const totalQcPassed = orderItems.reduce((sum, item) => sum + (item.qcPassedCartons || 0), 0)
+                          const totalAllocated = orderItems.reduce((sum, item) => sum + (item.allocatedCartons || 0), 0)
+                          const currentOrderAllocation = orderAllocation.cartonShare || 0
+                                    
+                          // FIXED: Simplified QC calculation - allow up to full QC passed quantity
+                          const alreadyAllocatedElsewhere = Math.max(0, totalAllocated - currentOrderAllocation)
+                          const maxAvailableCartons = totalQcPassed
+                          
+                          return (
+                          <Card key={orderIndex} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+                            <CardContent className="pt-6">
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h4 className="font-medium text-stone-900">
+                                      {orderAllocation.orderId?.orderNumber || `Order ${orderIndex + 1}`}
+                                    </h4>
+                                    <Badge variant="outline" className="text-xs">
+                                      {orderAllocation.paymentType === 'THROUGH_ME' ? 'Through Agent' : 'Direct Payment'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-stone-600 flex items-center">
+                                    <Users className="h-4 w-4 mr-1" />
+                                    Client: {orderAllocation.clientName}
+                                  </p>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => navigate(`/orders/${orderAllocation.orderId?._id || orderAllocation.orderId}`)}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    View Order
+                                  </Button>
+                                  <Button 
+                                    variant="destructive" 
+                                    size="sm"
+                                    onClick={() => handleRemoveOrderAllocation(orderAllocation, orderIndex)}
+                                  >
+                                    <X className="h-4 w-4 mr-1" />
+                                    Remove
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              {/* Editable Order Allocation Summary */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                <div className="bg-blue-50 p-3 rounded-lg text-center">
+                                  <Label className="text-xs text-blue-700 block mb-1">CBM</Label>
+                                  <Input
+                                    type="text"
+                                    value={orderAllocation.cbmShare || 0}
+                                    readOnly
+                                    className="text-center font-bold text-blue-600 border-blue-300 bg-blue-100 cursor-not-allowed"
+                                  />
+                                  <p className="text-xs text-blue-600 mt-1">Cubic Meters</p>
+                                </div>
+                                <div className="bg-green-50 p-3 rounded-lg text-center">
+                                  <Label className="text-xs text-green-700 block mb-1">Weight (kg)</Label>
+                                  <Input
+                                    type="text"
+                                    value={orderAllocation.weightShare || 0}
+                                    readOnly
+                                    className="text-center font-bold text-green-600 border-green-300 bg-green-100 cursor-not-allowed"
+                                  />
+                                  <p className="text-xs text-green-600 mt-1">Kilograms</p>
+                                </div>
+                                <div className="bg-orange-50 p-3 rounded-lg text-center">
+                                  <Label className="text-xs text-orange-700 block mb-1">
+                                    Cartons 🔒 
+                                    <span className="text-xs text-red-600 font-medium">(QC Protected)</span>
+                                  </Label>
+                                  <Input
+                                    type="text"
+                                    value={orderAllocation.cartonShare || ''}
+                                    readOnly
+                                    className="text-center font-bold text-orange-600 border-orange-300 bg-orange-100 cursor-not-allowed"
+                                    placeholder={`QC Passed: ${totalQcPassed}`}
+                                  />
+                                  <p className="text-xs text-orange-600 mt-1">
+                                    Total Cartons
+                                    <br />
+                                    <span className="text-red-600 font-medium">
+                                      Max: {maxAvailableCartons}
+                                    </span>
+                                  </p>
+                                </div>
+                                <div className="bg-purple-50 p-3 rounded-lg text-center">
+                                  <Label className="text-xs text-purple-700 block mb-1">Revenue (₹)</Label>
+                                  <Input
+                                    type="text"
+                                    value={orderAllocation.carryingCharges || 0}
+                                    readOnly
+                                    className="text-center font-bold text-purple-600 border-purple-300 bg-purple-100 cursor-not-allowed"
+                                  />
+                                  <p className="text-xs text-purple-600 mt-1">Carrying Charges</p>
+                                </div>
+                              </div>
+
+                              {/* Editable Item-Level Details */}
+                              {orderAllocation.orderId?.items && orderAllocation.orderId.items.length > 0 && (
+                                <div className="space-y-3">
+                                  <div className="flex justify-between items-center">
+                                    <h5 className="font-medium text-stone-800">Order Items (Editable)</h5>
+                                    <div className="flex space-x-2">
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => autoPopulateItemData(orderIndex)}
+                                        className="text-xs"
+                                      >
+                                        <Zap className="h-3 w-3 mr-1" />
+                                        Auto-Fix Data
+                                      </Button>
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => handleAddNewItemToOrder(orderIndex)}
+                                        className="text-xs"
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add Item
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* QC Validation Summary Panel */}
+                                  {(() => {
+                                    const allItems = orderAllocation.orderId.items || [];
+                                    const itemsWithViolations = allItems.filter(item => (item.cartons || 0) > (item.qcPassedCartons || 0));
+                                    const totalViolations = itemsWithViolations.length;
+                                    const hasAnyViolations = totalViolations > 0;
+                                    
+                                    if (hasAnyViolations) {
+                                      return (
+                                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center text-red-700">
+                                              <AlertTriangle className="h-4 w-4 mr-2" />
+                                              <span className="font-medium">QC Validation Issues Detected</span>
+                                            </div>
+                                            <Badge variant="destructive" className="text-xs">
+                                              {totalViolations} {totalViolations === 1 ? 'Issue' : 'Issues'}
+                                            </Badge>
+                                          </div>
+                                          <div className="text-sm text-red-600 space-y-1">
+                                            {itemsWithViolations.map((item, idx) => {
+                                              const allocated = item.cartons || 0;
+                                              const qcPassed = item.qcPassedCartons || 0;
+                                              const excess = allocated - qcPassed;
+                                              return (
+                                                <div key={idx} className="flex justify-between">
+                                                  <span>• {item.itemCode}: {allocated} allocated, {qcPassed} QC passed</span>
+                                                  <span className="font-medium text-red-700">+{excess} excess</span>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                          <div className="mt-3 flex gap-2">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => {
+                                                // Auto-fix QC violations
+                                                itemsWithViolations.forEach((item, itemIdx) => {
+                                                  const actualItemIndex = allItems.findIndex(i => i._id === item._id);
+                                                  if (actualItemIndex !== -1) {
+                                                    const qcPassed = item.qcPassedCartons || 0;
+                                                    handleUpdateItemInOrder(orderIndex, actualItemIndex, 'cartons', qcPassed);
+                                                  }
+                                                });
+                                                toast.success(`✅ Fixed ${totalViolations} QC ${totalViolations === 1 ? 'issue' : 'issues'}!`);
+                                              }}
+                                              className="text-red-700 border-red-300 hover:bg-red-100"
+                                            >
+                                              <Zap className="h-3 w-3 mr-1" />
+                                              Auto-Fix Issues
+                                            </Button>
+                                            <div className="text-xs text-red-600 flex items-center">
+                                              <span>📝 Fix will set allocations to match QC passed quantities</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    } else {
+                                      return (
+                                        <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded-lg">
+                                          <div className="flex items-center text-green-700">
+                                            <CheckCircle className="h-4 w-4 mr-2" />
+                                            <span className="text-sm font-medium">✅ All allocations respect QC limits</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                  })()}
+                                  <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-700 bg-gray-100 p-2 rounded">
+                                    <div className="col-span-3">Item Code</div>
+                                    <div className="col-span-2 text-center">Qty</div>
+                                    <div className="col-span-2 text-center">
+                                      Cartons 🔒 
+                                      <span className="text-red-600 font-medium">(QC)</span>
+                                    </div>
+                                    <div className="col-span-2 text-center">CBM</div>
+                                    <div className="col-span-2 text-center">Weight (kg)</div>
+                                    <div className="col-span-1 text-center">Actions</div>
+                                  </div>
+                                  
+                                  {/* Editable Items */}
+                                  <div className="space-y-2">
+                                    {orderAllocation.orderId.items.map((item, itemIndex) => {
+                                      // Calculate QC available for this specific item - SIMPLIFIED VALIDATION
+                                      const qcPassed = item.qcPassedCartons || 0;
+                                      const allocated = item.allocatedCartons || 0;
+                                      const currentAllocation = item.cartons || 0;
+                                      
+                                      // Simple calculation: allow up to QC passed quantity
+                                      // Don't restrict based on other allocations since user needs flexibility
+                                      const maxAvailableForItem = qcPassed;
+                                      
+                                      // QC Violation Detection
+                                      const hasQCViolation = currentAllocation > qcPassed;
+                                      const qcViolationAmount = hasQCViolation ? currentAllocation - qcPassed : 0;
+                                      
+                                      return (
+                                      <div key={itemIndex} className={`grid grid-cols-12 gap-2 items-center p-3 border rounded hover:bg-stone-100 transition-colors ${
+                                        hasQCViolation 
+                                          ? 'bg-red-50 border-red-300 shadow-sm' 
+                                          : 'bg-stone-50 border-stone-200'
+                                      }`}>
+                                        <div className="col-span-3">
+                                          <div className="flex items-center gap-2">
+                                            <div>
+                                              <p className="font-medium text-sm">{item.itemCode || 'N/A'}</p>
+                                              <p className="text-xs text-gray-600 truncate">{item.description || 'No description'}</p>
+                                            </div>
+                                            {hasQCViolation && (
+                                              <div className="flex items-center text-red-600">
+                                                <AlertTriangle className="h-4 w-4" />
+                                                <span className="text-xs ml-1 font-medium">QC Issue</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                          {hasQCViolation && (
+                                            <div className="mt-1 text-xs text-red-700 bg-red-100 px-2 py-1 rounded">
+                                              ⚠️ Allocated {qcViolationAmount} more than QC passed
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="col-span-2">
+                                          <Input
+                                            type="text"
+                                            value={item.quantity || ''}
+                                            onChange={(e) => handleUpdateItemInOrder(orderIndex, itemIndex, 'quantity', parseInt(e.target.value) || 0)}
+                                            className="text-center text-sm h-8"
+                                          />
+                                        </div>
+                                        
+                                        <div className="col-span-2">
+                                          <Input
+                                            type="text"
+                                            value={item.cartons || ''}
+                                            onChange={(e) => {
+                                              const value = parseInt(e.target.value) || 0
+                                              
+                                              // QC VALIDATION: Show informative messages but allow input for user flexibility
+                                              if (value > maxAvailableForItem) {
+                                                toast.error(`${item.itemCode}: You're allocating ${value} cartons, but only ${qcPassed} cartons passed QC`, { duration: 4000 })
+                                              }
+                                              
+                                              // QC violation notice (non-blocking)
+                                              if (value > qcPassed) {
+                                                toast.error(`⚠️ QC NOTICE: Allocating ${value} cartons, but only ${qcPassed} passed QC for ${item.itemCode}`, { duration: 4000 })
+                                              }
+                                              
+                                              // Allow any positive value - no restrictions
+                                              handleUpdateItemInOrder(orderIndex, itemIndex, 'cartons', value)
+                                            }}
+                                            className={`text-center text-sm h-8 focus:border-orange-500 ${
+                                              hasQCViolation 
+                                                ? 'border-orange-400 bg-orange-50 text-orange-700' 
+                                                : 'border-orange-300'
+                                            }`}
+                                            placeholder={`QC Passed: ${qcPassed}`}
+                                          />
+                                        </div>
+                                        
+                                        <div className="col-span-2">
+                                          <Input
+                                            type="text"
+                                            value={item.cbm || ''}
+                                            onChange={(e) => handleUpdateItemInOrder(orderIndex, itemIndex, 'cbm', parseFloat(e.target.value) || 0)}
+                                            className="text-center text-sm h-8 border-blue-300 focus:border-blue-500"
+                                          />
+                                        </div>
+                                        
+                                        <div className="col-span-2">
+                                          <Input
+                                            type="text"
+                                            value={item.weight || ''}
+                                            onChange={(e) => handleUpdateItemInOrder(orderIndex, itemIndex, 'weight', parseFloat(e.target.value) || 0)}
+                                            className="text-center text-sm h-8 border-green-300 focus:border-green-500"
+                                          />
+                                        </div>
+                                        
+                                        <div className="col-span-1 text-center">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleRemoveItemFromOrder(orderIndex, itemIndex)}
+                                            className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )})}
+                                  </div>
+                                  
+                                  {/* Items Summary */}
+                                  <div className="bg-stone-100 p-3 rounded-lg">
+                                    <div className="grid grid-cols-4 gap-4 text-sm">
+                                      <div className="text-center">
+                                        <p className="font-medium text-blue-600">
+                                          {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.quantity || 0), 0)}
+                                        </p>
+                                        <p className="text-xs text-gray-600">Total Quantity</p>
+                                      </div>
+                                      <div className="text-center">
+                                        <p className="font-medium text-orange-600">
+                                          {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.cartons || 0), 0)}
+                                        </p>
+                                        <p className="text-xs text-gray-600">Total Cartons</p>
+                                      </div>
+                                      <div className="text-center">
+                                        <p className="font-medium text-blue-600">
+                                          {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.cbm || 0), 0).toFixed(2)}
+                                        </p>
+                                        <p className="text-xs text-gray-600">Total CBM</p>
+                                      </div>
+                                      <div className="text-center">
+                                        <p className="font-medium text-green-600">
+                                          {orderAllocation.orderId.items.reduce((sum, item) => sum + (item.weight || 0), 0).toFixed(1)}
+                                        </p>
+                                        <p className="text-xs text-gray-600">Total Weight (kg)</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                        
+                        {/* Container Utilization After Changes */}
+                        <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200">
+                          <CardContent className="pt-6">
+                            <h4 className="font-semibold text-green-900 mb-4 flex items-center">
+                              <BarChart3 className="h-5 w-5 mr-2" />
+                              Real-Time Container Utilization
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="text-center p-4 bg-white rounded-lg border border-green-200">
+                                <p className="text-2xl font-bold text-green-800">
+                                  {((container.orders?.reduce((sum, order) => sum + (order.cbmShare || 0), 0) || 0) / (container?.maxCbm || 67) * 100).toFixed(1)}%
+                                </p>
+                                <p className="text-sm text-green-600">CBM Utilization</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {(container.orders?.reduce((sum, order) => sum + (order.cbmShare || 0), 0) || 0).toFixed(1)} / {container?.maxCbm || 67} CBM
+                                </p>
+                              </div>
+                              <div className="text-center p-4 bg-white rounded-lg border border-green-200">
+                                <p className="text-2xl font-bold text-green-800">
+                                  {((container.orders?.reduce((sum, order) => sum + (order.weightShare || 0), 0) || 0) / (container?.maxWeight || 30000) * 100).toFixed(1)}%
+                                </p>
+                                <p className="text-sm text-green-600">Weight Utilization</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {(container.orders?.reduce((sum, order) => sum + (order.weightShare || 0), 0) || 0).toLocaleString()} / {(container?.maxWeight || 30000).toLocaleString()} kg
+                                </p>
+                              </div>
+                              <div className="text-center p-4 bg-white rounded-lg border border-green-200">
+                                <p className="text-2xl font-bold text-green-800">
+                                  ₹{(container.orders?.reduce((sum, order) => sum + (order.carryingCharges || 0), 0) || 0).toLocaleString()}
+                                </p>
+                                <p className="text-sm text-green-600">Total Revenue</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {container.orders?.length || 0} orders allocated
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        {/* Add More Orders Button */}
+                        <div className="flex justify-center pt-4">
+                          <Button 
+                            onClick={handleAddNewOrderAllocation}
+                            className="px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add More Orders
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Package className="h-16 w-16 text-stone-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-stone-900 mb-2">No Orders Allocated</h3>
+                        <p className="text-stone-500 mb-6">This container doesn't have any orders allocated yet.</p>
+                        <Button onClick={handleAddNewOrderAllocation}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Orders to Container
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -2327,19 +2944,19 @@ const ContainerEdit = () => {
           </div>
         )}
 
-        {/* Order Search Dialog */}
+        {/* Enhanced Order Search Dialog - Like Warehouse Allocation */}
         {showOrderSearch && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
+            <Card className="w-full max-w-7xl mx-4 max-h-[90vh] overflow-hidden">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="flex items-center">
                       <Search className="h-5 w-5 mr-2" />
-                      Add QC-Ready Orders to Container
+                      Select Orders for Container Allocation
                     </CardTitle>
                     <CardDescription>
-                      Select orders that have completed QC inspection for allocation
+                      Item-level selection with quantity controls - like warehouse allocation interface
                     </CardDescription>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setShowOrderSearch(false)}>
@@ -2348,241 +2965,301 @@ const ContainerEdit = () => {
                 </div>
               </CardHeader>
               <CardContent className="overflow-y-auto max-h-[70vh]">
-                <div className="space-y-4">
-                  {/* Container Capacity Status */}
-                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-900 mb-3 flex items-center">
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Current Container Status
-                    </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="text-center">
-                        <p className="font-bold text-blue-600 text-lg">
-                          {((container?.currentCbm || 0) / (container?.maxCbm || 67) * 100).toFixed(1)}%
-                        </p>
-                        <p className="text-blue-700">CBM Used</p>
-                        <p className="text-xs text-blue-600">
-                          {(container?.currentCbm || 0).toFixed(1)} / {container?.maxCbm || 67} m³
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-green-600 text-lg">
-                          {((container?.currentWeight || 0) / (container?.maxWeight || 30000) * 100).toFixed(1)}%
-                        </p>
-                        <p className="text-green-700">Weight Used</p>
-                        <p className="text-xs text-green-600">
-                          {(container?.currentWeight || 0).toLocaleString()} / {(container?.maxWeight || 30000).toLocaleString()} kg
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-purple-600 text-lg">
-                          {((container?.maxCbm || 67) - (container?.currentCbm || 0)).toFixed(1)}
-                        </p>
-                        <p className="text-purple-700">Available CBM</p>
-                        <p className="text-xs text-purple-600">
-                          Remaining space
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-orange-600 text-lg">
-                          {container?.orders?.length || 0}
-                        </p>
-                        <p className="text-orange-700">Current Orders</p>
-                        <p className="text-xs text-orange-600">
-                          Already allocated
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Search and Filter */}
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Search orders by number, client name..."
-                        value={orderSearchTerm}
-                        onChange={(e) => setOrderSearchTerm(e.target.value)}
-                        className="w-full"
-                      />
-                    </div>
-                    <Button variant="outline" onClick={fetchQCReadyOrders} disabled={searchingOrders}>
-                      {searchingOrders ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                      ) : (
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                      )}
-                      Refresh
-                    </Button>
-                  </div>
-
-                  {/* Available Orders */}
-                  {searchingOrders ? (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                      <p>Loading QC-ready orders...</p>
-                    </div>
-                  ) : availableOrders.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Package className="h-12 w-12 text-stone-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-stone-900 mb-2">No QC-Ready Orders</h3>
-                      <p className="text-stone-500">No additional orders available for allocation</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {availableOrders
-                        .filter(order => 
-                          orderSearchTerm === '' ||
-                          order.orderNumber?.toLowerCase().includes(orderSearchTerm.toLowerCase()) ||
-                          order.clientName?.toLowerCase().includes(orderSearchTerm.toLowerCase())
-                        )
-                        .map(order => {
-                          const isSelected = selectedOrdersForAllocation.find(o => o._id === order._id)
-                          return (
+                <div className="grid grid-cols-12 gap-6">
+                  {/* Left Panel - Orders & Items */}
+                  <div className="col-span-8 space-y-4">
+                    {/* Container Capacity Status */}
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle className="flex items-center">
+                              <Ship className="h-5 w-5 mr-2" />
+                              Container: {container?.maxCbm || 67} CBM
+                            </CardTitle>
+                            <p className="text-sm text-gray-600">
+                              Used: {utilizationStats.usedCbm.toFixed(1)} CBM • Remaining: {utilizationStats.remainingCbm.toFixed(1)} CBM
+                            </p>
+                          </div>
+                          <Button onClick={autoFillBestItems} className="bg-green-600 hover:bg-green-700">
+                            <Calculator className="h-4 w-4 mr-2" />
+                            Auto Fill Best
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Utilization</span>
+                            <span>{utilizationStats.utilizationPercent.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-3">
                             <div 
-                              key={order._id}
-                              className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                                isSelected ? 'border-blue-500 bg-blue-50' : 'border-stone-200 hover:border-stone-300'
+                              className={`h-3 rounded-full transition-all ${
+                                utilizationStats.utilizationPercent > 100 ? 'bg-red-500' :
+                                utilizationStats.utilizationPercent > 95 ? 'bg-green-500' :
+                                utilizationStats.utilizationPercent > 50 ? 'bg-blue-500' : 'bg-gray-400'
                               }`}
-                              onClick={() => handleSelectOrderForAllocation(order)}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={!!isSelected}
-                                      onChange={() => handleSelectOrderForAllocation(order)}
-                                      className="h-4 w-4 text-blue-600"
-                                    />
-                                    <h4 className="font-medium text-stone-900">{order.orderNumber}</h4>
-                                    <Badge variant="outline">{order.status}</Badge>
-                                  </div>
-                                  <p className="text-sm text-stone-600 mb-2">
-                                    Client: {order.clientName} | Items: {order.items?.length || 0}
-                                  </p>
-                                  <div className="grid grid-cols-4 gap-4 text-sm">
-                                    <div>
-                                      <span className="text-stone-500">CBM:</span>
-                                      <span className="font-medium ml-1">
-                                        {order.allocationSummary?.totalAvailableCbm?.toFixed(1) || 0}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-stone-500">Weight:</span>
-                                      <span className="font-medium ml-1">
-                                        {order.allocationSummary?.totalAvailableWeight?.toLocaleString() || 0} kg
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-stone-500">Cartons:</span>
-                                      <span className="font-medium ml-1">
-                                        {order.allocationSummary?.totalAvailableCartons || 0}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-stone-500">Revenue:</span>
-                                      <span className="font-medium ml-1">
-                                        ₹{order.allocationSummary?.totalCarryingCharges?.toLocaleString() || 0}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })
-                      }
-                    </div>
-                  )}
+                              style={{ width: `${Math.min(utilizationStats.utilizationPercent, 100)}%` }}
+                            />
+                          </div>
+                          
+                          {utilizationStats.utilizationPercent > 100 && (
+                            <Alert className="mt-2">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertDescription>
+                                Over capacity! Reduce selection by {(utilizationStats.usedCbm - (container?.maxCbm || 67)).toFixed(1)} CBM
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                  {/* Selected Orders Summary */}
-                  {selectedOrdersForAllocation.length > 0 && (
-                    <div className="border-t pt-4">
-                      <h4 className="font-medium text-stone-900 mb-3">
-                        Selected Orders ({selectedOrdersForAllocation.length})
-                      </h4>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="grid grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <span className="text-blue-700">Total CBM:</span>
-                            <span className="font-bold ml-1">
-                              {selectedOrdersForAllocation.reduce((sum, order) => 
-                                sum + (order.allocationSummary?.totalAvailableCbm || 0), 0
-                              ).toFixed(1)}
-                            </span>
+                    {/* Search and Filter */}
+                    <div className="flex items-center space-x-4">
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Search orders by number, client name..."
+                          value={orderSearchTerm}
+                          onChange={(e) => setOrderSearchTerm(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      <Button variant="outline" onClick={fetchQCReadyOrders} disabled={searchingOrders}>
+                        {searchingOrders ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                        )}
+                        Refresh
+                      </Button>
+                    </div>
+
+                    {/* Available Orders & Items */}
+                    {searchingOrders ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p>Loading QC-ready orders...</p>
+                      </div>
+                    ) : availableOrders.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Package className="h-12 w-12 text-stone-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-stone-900 mb-2">No QC-Ready Orders</h3>
+                        <p className="text-stone-500">No additional orders available for allocation</p>
+                      </div>
+                    ) : (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center">
+                            <Package className="h-5 w-5 mr-2" />
+                            Available Orders
+                          </CardTitle>
+                          <p className="text-sm text-gray-600">Select items to fill your container (cannot exceed {(container?.maxCbm || 67)} CBM)</p>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-6">
+                            {availableOrders
+                              .filter(order => 
+                                orderSearchTerm === '' ||
+                                order.orderNumber?.toLowerCase().includes(orderSearchTerm.toLowerCase()) ||
+                                order.clientName?.toLowerCase().includes(orderSearchTerm.toLowerCase())
+                              )
+                              .map(order => {
+                                const orderTotal = order.items?.reduce((sum, item) => {
+                                  const key = `${order._id}_${item._id}`
+                                  const selection = selectedOrderItems[key]
+                                  const cbm = selection ? (parseFloat(selection.cbm) || 0) : 0
+                                  return sum + cbm
+                                }, 0) || 0
+                                
+                                return (
+                                  <div key={order._id} className="border rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div>
+                                        <h3 className="font-semibold text-lg">{order.orderNumber}</h3>
+                                        <p className="text-sm text-gray-600">{order.clientName}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <Badge variant="outline">{order.items?.length || 0} items</Badge>
+                                        {orderTotal > 0 && (
+                                          <p className="text-sm text-green-600 mt-1">{orderTotal.toFixed(1)} CBM selected</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-3">
+                                      {order.items?.map(item => {
+                                        const key = `${order._id}_${item._id}`
+                                        const selection = selectedOrderItems[key]
+                                        
+                                        // Use correct property names from API response
+                                        const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+                                        const cbmPerCarton = item.unitCbm || 0
+                                        const weightPerCarton = item.unitWeight || 0
+                                        const carryingChargePerCarton = item.carryingCharge?.rate || 0
+                                        
+                                        const selected = selection?.quantity || 0
+                                        const maxCbm = (container?.maxCbm || 67) - utilizationStats.usedCbm
+                                        const currentTotal = Object.values(selectedOrderItems).reduce((sum, sel) => {
+                                          return sum + (parseFloat(sel.cbm) || 0)
+                                        }, 0)
+                                        
+                                        const maxCanAdd = cbmPerCarton > 0 ? Math.floor((maxCbm + (selected * cbmPerCarton)) / cbmPerCarton) : maxAvailable
+                                        const actualMax = Math.min(maxAvailable, maxCanAdd)
+                                        
+                                        return (
+                                          <div key={item._id} className="bg-gray-50 rounded p-3">
+                                            <div className="grid grid-cols-12 items-center gap-3">
+                                              <div className="col-span-4">
+                                                <p className="font-medium">{item.itemCode}</p>
+                                                <p className="text-xs text-gray-600">{item.description}</p>
+                                              </div>
+                                              
+                                              <div className="col-span-2 text-center">
+                                                <p className="text-sm font-medium">{cbmPerCarton > 0 ? cbmPerCarton.toFixed(2) : '0.00'} CBM</p>
+                                                <p className="text-xs text-gray-600">per carton</p>
+                                              </div>
+                                              
+                                              <div className="col-span-2 text-center">
+                                                <p className="text-sm font-medium">{maxAvailable}</p>
+                                                <p className="text-xs text-gray-600">available</p>
+                                              </div>
+                                              
+                                              <div className="col-span-3">
+                                                <div className="flex items-center gap-2">
+                                                  <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => updateItemSelection(order._id, item._id, selected - 1)}
+                                                    disabled={selected <= 0}
+                                                  >
+                                                    <Minus className="h-3 w-3" />
+                                                  </Button>
+                                                  
+                                                  <Input
+                                                    type="text"
+                                                    value={selected}
+                                                    onChange={(e) => updateItemSelection(order._id, item._id, parseInt(e.target.value) || 0)}
+                                                    className="w-16 text-center"
+                                                    max={actualMax}
+                                                  />
+                                                  
+                                                  <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => updateItemSelection(order._id, item._id, selected + 1)}
+                                                    disabled={selected >= actualMax}
+                                                  >
+                                                    <Plus className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
+                                                {actualMax < maxAvailable && (
+                                                  <p className="text-xs text-red-600 mt-1">CBM limit: max {actualMax}</p>
+                                                )}
+                                              </div>
+                                              
+                                              <div className="col-span-1 text-right">
+                                                {selected > 0 && (
+                                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                                )}
+                                              </div>
+                                            </div>
+                                            
+                                            {selected > 0 && (
+                                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                                <div className="grid grid-cols-3 gap-4 text-xs text-gray-600">
+                                                  <div>CBM: {(selected * cbmPerCarton).toFixed(2)}</div>
+                                                  <div>Weight: {(selected * weightPerCarton).toFixed(0)} kg</div>
+                                                  <div>Charges: ₹{(selected * carryingChargePerCarton).toFixed(0)}</div>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )
+                              })
+                            }
                           </div>
-                          <div>
-                            <span className="text-blue-700">Total Weight:</span>
-                            <span className="font-bold ml-1">
-                              {selectedOrdersForAllocation.reduce((sum, order) => 
-                                sum + (order.allocationSummary?.totalAvailableWeight || 0), 0
-                              ).toLocaleString()} kg
-                            </span>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+
+                  {/* Right Panel - Selection Summary */}
+                  <div className="col-span-4 space-y-6">
+                    {/* Selection Summary */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Selection Summary</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                              <p className="text-lg font-bold text-blue-600">{Object.keys(selectedOrderItems).length}</p>
+                              <p className="text-xs text-gray-600">Items Selected</p>
+                            </div>
+                            <div>
+                              <p className="text-lg font-bold text-green-600">
+                                {Object.values(selectedOrderItems).reduce((sum, sel) => sum + sel.quantity, 0)}
+                              </p>
+                              <p className="text-xs text-gray-600">Total Cartons</p>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-blue-700">Total Cartons:</span>
-                            <span className="font-bold ml-1">
-                              {selectedOrdersForAllocation.reduce((sum, order) => 
-                                sum + (order.allocationSummary?.totalAvailableCartons || 0), 0
-                              )}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-blue-700">Total Revenue:</span>
-                            <span className="font-bold ml-1">
-                              ₹{selectedOrdersForAllocation.reduce((sum, order) => 
-                                sum + (order.allocationSummary?.totalCarryingCharges || 0), 0
-                              ).toLocaleString()}
-                            </span>
+                          
+                          <Separator />
+                          
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span>Total CBM:</span>
+                              <span className="font-medium">
+                                {Object.values(selectedOrderItems).reduce((sum, sel) => sum + (parseFloat(sel.cbm) || 0), 0).toFixed(1)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Total Weight:</span>
+                              <span className="font-medium">
+                                {Object.values(selectedOrderItems).reduce((sum, sel) => sum + (parseFloat(sel.weight) || 0), 0).toFixed(0)} kg
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Total Charges:</span>
+                              <span className="font-medium">
+                                ₹{Object.values(selectedOrderItems).reduce((sum, sel) => sum + (parseFloat(sel.charges) || 0), 0).toFixed(0)}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Action Buttons */}
-                  <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t">
-                    <div className="flex items-center space-x-3">
+                      </CardContent>
+                    </Card>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-3">
                       <Button 
-                        variant="secondary"
-                        onClick={() => {
-                          // Auto-select orders that would fit optimally
-                          const optimalOrders = calculateOptimalAllocation(availableOrders)
-                          const selectedIds = optimalOrders.map(alloc => alloc.orderId)
-                          const autoSelectedOrders = availableOrders.filter(order => selectedIds.includes(order._id))
-                          setSelectedOrdersForAllocation(autoSelectedOrders)
-                          toast.success(`Auto-selected ${autoSelectedOrders.length} optimal orders`)
-                        }}
-                        disabled={searchingOrders || availableOrders.length === 0}
-                        className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white"
-                      >
-                        <Zap className="h-4 w-4 mr-2" />
-                        Auto-Select Optimal
-                      </Button>
-                      
-                      <span className="text-sm text-stone-500">
-                        {availableOrders.length} orders available
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <Button variant="outline" onClick={() => setShowOrderSearch(false)}>
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={applySelectedOrderAllocations}
-                        disabled={selectedOrdersForAllocation.length === 0 || saving}
+                        onClick={applySelectedItemsToContainer}
+                        disabled={Object.keys(selectedOrderItems).length === 0 || utilizationStats.utilizationPercent > 100 || saving}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        size="lg"
                       >
                         {saving ? (
                           <>
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Allocating...
+                            Adding to Container...
                           </>
                         ) : (
                           <>
-                            <Zap className="h-4 w-4 mr-2" />
-                            Allocate Selected Orders
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Selected Items to Container
                           </>
                         )}
+                      </Button>
+                      
+                      <Button variant="outline" onClick={() => setShowOrderSearch(false)} className="w-full">
+                        Cancel
                       </Button>
                     </div>
                   </div>

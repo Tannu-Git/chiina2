@@ -83,7 +83,7 @@ const DashboardLayout = ({ children }) => {
       current: location.pathname.startsWith('/containers')
     },
     {
-      name: 'Companies',
+      name: 'Transport Companies',
       href: '/companies-management',
       icon: Building2,
       current: location.pathname.startsWith('/companies-management')

@@ -66,7 +66,13 @@ const shippingCompanySchema = new mongoose.Schema({
   contactInfo: {
     email: String,
     phone: String,
-    address: String
+    address: {
+      street: String,
+      city: String,
+      state: String,
+      country: String,
+      zipCode: String
+    }
   },
   rates: {
     oceanFreight: Number,
@@ -573,7 +579,7 @@ containerSchema.methods.allocateOrderSafely = async function(orderAllocation, se
       allocatedCartons: 0,
       totalCartons: 0
     },
-    paymentType: paymentType || 'CLIENT_DIRECT',
+    paymentType: paymentType || 'THROUGH_ME',
     carryingCharges: carryingCharges || 0,
     allocatedAt: new Date()
   };

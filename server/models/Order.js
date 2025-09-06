@@ -373,6 +373,21 @@ function calculateItemCarryingCharge(basis, rate, item) {
 
 // Pre-save middleware to calculate totals with carton-based tracking as primary
 orderSchema.pre('save', function(next) {
+  // CRITICAL FIX: Check for validation bypass flags first
+  const bypassOrderValidation = this._bypassAllocationValidation;
+  const hasItemBypass = this.items && this.items.some(item => item._bypassAllocationValidation);
+  
+  if (bypassOrderValidation || hasItemBypass) {
+    console.log(`🚫 [ORDER PRE-SAVE] Bypassing allocation validation for order ${this.orderNumber}`);
+    // Clear bypass flags after use
+    this._bypassAllocationValidation = undefined;
+    if (this.items) {
+      this.items.forEach(item => {
+        item._bypassAllocationValidation = undefined;
+      });
+    }
+  }
+  
   if (this.items && this.items.length > 0) {
     // CARTON-BASED TRACKING: Primary system for logistics operations
     this.items.forEach((item, index) => {
@@ -382,7 +397,16 @@ orderSchema.pre('save', function(next) {
       // Normalize carton-based tracking (PRIMARY)
       const qcPassedCtn = Math.max(0, Math.min(expectedCtn, item.qcPassedCartons || 0));
       const loopBackCtn = Math.max(0, Math.min(expectedCtn - qcPassedCtn, item.loopBackCartons || 0));
-      const allocatedCtn = Math.max(0, Math.min(qcPassedCtn, item.allocatedCartons || 0));
+      
+      // CRITICAL FIX: Skip allocation validation if bypass flag is set
+      let allocatedCtn;
+      if (bypassOrderValidation || item._bypassAllocationValidation) {
+        // Allow any allocation value when bypassing (for container deletion cleanup)
+        allocatedCtn = Math.max(0, item.allocatedCartons || 0);
+      } else {
+        // Normal validation: allocation cannot exceed QC passed
+        allocatedCtn = Math.max(0, Math.min(qcPassedCtn, item.allocatedCartons || 0));
+      }
       
       // Update normalized values
       item.qcPassedCartons = qcPassedCtn;
@@ -602,6 +626,157 @@ orderSchema.methods.updateWithLock = async function(updateData, expectedVersion)
 
 orderSchema.statics.findByIdWithLock = function(id) {
   return this.findById(id).select('+__v');
+};
+
+// CRITICAL FIX: Static method to detect and fix orphaned allocations
+orderSchema.statics.findOrphanedAllocations = async function(options = {}) {
+  const { dryRun = false, autoFix = false } = options;
+  
+  console.log('🔍 [ORPHANED ALLOCATION CHECK] Starting comprehensive scan...');
+  
+  // Find orders with item-level allocations but no container assignment
+  const orphanedOrders = await this.find({
+    $and: [
+      { containerId: { $exists: false } },
+      { 'items.allocatedCartons': { $gt: 0 } }
+    ]
+  });
+  
+  const issues = [];
+  
+  for (const order of orphanedOrders) {
+    const orderIssues = {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemIssues: []
+    };
+    
+    order.items.forEach((item, index) => {
+      const allocatedCartons = item.allocatedCartons || 0;
+      const allocatedQuantity = item.allocatedQuantity || 0;
+      const containerId = item.containerId;
+      
+      if (allocatedCartons > 0 || allocatedQuantity > 0 || containerId) {
+        orderIssues.itemIssues.push({
+          itemIndex: index,
+          itemCode: item.itemCode,
+          allocatedCartons,
+          allocatedQuantity,
+          containerId,
+          qcPassedCartons: item.qcPassedCartons || 0,
+          availableCartons: Math.max(0, (item.qcPassedCartons || 0) - allocatedCartons)
+        });
+      }
+    });
+    
+    if (orderIssues.itemIssues.length > 0) {
+      issues.push(orderIssues);
+    }
+  }
+  
+  if (dryRun) {
+    console.log(`📋 [ORPHANED ALLOCATION CHECK] Found ${issues.length} orders with orphaned allocations (DRY RUN)`);
+    return { issues, totalOrders: issues.length, totalItems: issues.reduce((sum, o) => sum + o.itemIssues.length, 0) };
+  }
+  
+  if (autoFix && issues.length > 0) {
+    console.log(`🔧 [ORPHANED ALLOCATION FIX] Auto-fixing ${issues.length} orders...`);
+    
+    let fixedOrders = 0;
+    let fixedItems = 0;
+    
+    for (const orderIssue of issues) {
+      try {
+        const order = await this.findById(orderIssue.orderId);
+        if (order) {
+          let hasChanges = false;
+          
+          order.items.forEach(item => {
+            if ((item.allocatedCartons || 0) > 0 || (item.allocatedQuantity || 0) > 0 || item.containerId) {
+              item.allocatedCartons = 0;
+              item.allocatedQuantity = 0;
+              item.containerId = null;
+              item._bypassAllocationValidation = true;
+              hasChanges = true;
+              fixedItems++;
+            }
+          });
+          
+          if (hasChanges) {
+            order._bypassAllocationValidation = true;
+            await order.save();
+            fixedOrders++;
+            console.log(`✅ [ORPHANED ALLOCATION FIX] Fixed order ${order.orderNumber}`);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [ORPHANED ALLOCATION FIX] Failed to fix order ${orderIssue.orderNumber}:`, error.message);
+      }
+    }
+    
+    console.log(`✅ [ORPHANED ALLOCATION FIX] Completed: ${fixedOrders} orders, ${fixedItems} items fixed`);
+    return { 
+      issues, 
+      totalOrders: issues.length, 
+      totalItems: issues.reduce((sum, o) => sum + o.itemIssues.length, 0),
+      fixedOrders,
+      fixedItems
+    };
+  }
+  
+  console.log(`⚠️ [ORPHANED ALLOCATION CHECK] Found ${issues.length} orders with orphaned allocations`);
+  return { issues, totalOrders: issues.length, totalItems: issues.reduce((sum, o) => sum + o.itemIssues.length, 0) };
+};
+
+// Static method to validate allocation consistency across the system
+orderSchema.statics.validateAllocationConsistency = async function() {
+  console.log('🔍 [ALLOCATION CONSISTENCY CHECK] Starting system-wide validation...');
+  
+  const issues = [];
+  
+  // Check for negative available quantities (data integrity issues)
+  const negativeAvailabilityOrders = await this.find({
+    'items': {
+      $elemMatch: {
+        $expr: {
+          $lt: [
+            { $subtract: ['$qcPassedCartons', '$allocatedCartons'] },
+            0
+          ]
+        }
+      }
+    }
+  });
+  
+  for (const order of negativeAvailabilityOrders) {
+    const orderIssue = {
+      type: 'NEGATIVE_AVAILABILITY',
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      itemIssues: []
+    };
+    
+    order.items.forEach((item, index) => {
+      const available = (item.qcPassedCartons || 0) - (item.allocatedCartons || 0);
+      if (available < 0) {
+        orderIssue.itemIssues.push({
+          itemIndex: index,
+          itemCode: item.itemCode,
+          qcPassedCartons: item.qcPassedCartons || 0,
+          allocatedCartons: item.allocatedCartons || 0,
+          negativeAvailable: available,
+          severity: 'CRITICAL'
+        });
+      }
+    });
+    
+    if (orderIssue.itemIssues.length > 0) {
+      issues.push(orderIssue);
+    }
+  }
+  
+  console.log(`📋 [ALLOCATION CONSISTENCY CHECK] Found ${issues.length} orders with data integrity issues`);
+  return { issues, totalIssues: issues.length };
 };
 
 module.exports = mongoose.model('Order', orderSchema);

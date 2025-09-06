@@ -1,4 +1,7 @@
 const express = require('express');
+const mongoose = require('mongoose');
+const { body, validationResult } = require('express-validator');
+const { PaymentTransaction, AccountBalance, Invoice } = require('../models/Payment');
 const Order = require('../models/Order');
 const Container = require('../models/Container');
 const ShippingCompany = require('../models/ShippingCompany');
@@ -369,6 +372,238 @@ router.get('/profit-report', auth, authorize('admin'), async (req, res) => {
   } catch (error) {
     console.error('Profit report error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/financials/comprehensive-dashboard
+// @desc    Get comprehensive financial dashboard with client-wise, supplier-wise, and transport-wise breakdowns
+// @access  Private (Admin/Staff only)
+router.get('/comprehensive-dashboard', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { period = '30' } = req.query;
+    const daysAgo = parseInt(period);
+    
+    const dateFilter = {
+      createdAt: {
+        $gte: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+      }
+    };
+
+    // Get all orders and containers with populated data
+    const orders = await Order.find({ 
+      ...dateFilter, 
+      isLoopBack: { $ne: true },
+      status: { $ne: 'cancelled' }
+    }).populate('containerId', 'realContainerId clientFacingId baseCharges shippingCompany');
+    
+    const containers = await Container.find(dateFilter)
+      .populate('orders.orderId', 'orderNumber items');
+
+    // CLIENT-WISE FINANCIAL BREAKDOWN
+    const clientFinancials = {};
+    
+    orders.forEach(order => {
+      const clientId = order.clientId;
+      if (!clientFinancials[clientId]) {
+        clientFinancials[clientId] = {
+          clientId,
+          clientName: order.clientName,
+          totalOrderValue: 0,
+          totalCarryingCharges: 0,
+          paymentBreakdown: {
+            throughMe: { amount: 0, orders: 0 },
+            direct: { amount: 0, orders: 0 }
+          },
+          gstCharges: 0,
+          orders: [],
+          containers: new Set()
+        };
+      }
+      
+      const client = clientFinancials[clientId];
+      client.totalOrderValue += order.totalAmount || 0;
+      client.totalCarryingCharges += order.totalCarryingCharges || 0;
+      client.orders.push({
+        orderNumber: order.orderNumber,
+        amount: order.totalAmount || 0,
+        carryingCharges: order.totalCarryingCharges || 0,
+        status: order.status
+      });
+      
+      if (order.containerId) {
+        client.containers.add(order.containerId.realContainerId || order.containerId.clientFacingId);
+        // Add GST from container base charges
+        const container = order.containerId;
+        if (container.baseCharges) {
+          client.gstCharges += (container.baseCharges.gst || 0) / container.orders.length; // Proportional GST
+        }
+      }
+    });
+    
+    // Process containers for payment type breakdown
+    containers.forEach(container => {
+      container.orders.forEach(containerOrder => {
+        const clientId = containerOrder.clientId;
+        if (clientFinancials[clientId]) {
+          const client = clientFinancials[clientId];
+          const carryingCharges = containerOrder.carryingCharges || 0;
+          
+          if (containerOrder.paymentType === 'THROUGH_ME') {
+            client.paymentBreakdown.throughMe.amount += carryingCharges;
+            client.paymentBreakdown.throughMe.orders++;
+          } else if (containerOrder.paymentType === 'CLIENT_DIRECT') {
+            client.paymentBreakdown.direct.amount += carryingCharges;
+            client.paymentBreakdown.direct.orders++;
+          }
+        }
+      });
+    });
+    
+    // Convert containers Set to Array for JSON serialization
+    Object.values(clientFinancials).forEach(client => {
+      client.containers = Array.from(client.containers);
+    });
+
+    // SUPPLIER-WISE FINANCIAL BREAKDOWN
+    const supplierFinancials = {};
+    
+    orders.forEach(order => {
+      if (order.items) {
+        order.items.forEach(item => {
+          if (item.supplier && item.supplier.name) {
+            const supplierId = item.supplier.name;
+            if (!supplierFinancials[supplierId]) {
+              supplierFinancials[supplierId] = {
+                supplierId,
+                supplierName: item.supplier.name,
+                totalProductValue: 0,
+                paymentBreakdown: {
+                  throughMe: { amount: 0, orders: 0 },
+                  direct: { amount: 0, orders: 0 }
+                },
+                orders: [],
+                contact: item.supplier.contact || item.supplier.email
+              };
+            }
+            
+            const supplier = supplierFinancials[supplierId];
+            const productValue = (item.totalPrice || 0);
+            supplier.totalProductValue += productValue;
+            
+            supplier.orders.push({
+              orderNumber: order.orderNumber,
+              productValue,
+              paymentType: item.paymentType,
+              itemDescription: item.description
+            });
+            
+            if (item.paymentType === 'THROUGH_ME') {
+              supplier.paymentBreakdown.throughMe.amount += productValue;
+              supplier.paymentBreakdown.throughMe.orders++;
+            } else if (item.paymentType === 'CLIENT_DIRECT') {
+              supplier.paymentBreakdown.direct.amount += productValue;
+              supplier.paymentBreakdown.direct.orders++;
+            }
+          }
+        });
+      }
+    });
+
+    // TRANSPORT COMPANY-WISE FINANCIAL BREAKDOWN
+    const transportFinancials = {};
+    
+    containers.forEach(container => {
+      if (container.shippingCompany && container.shippingCompany.name) {
+        const transportId = container.shippingCompany.id || container.shippingCompany.name;
+        if (!transportFinancials[transportId]) {
+          transportFinancials[transportId] = {
+            transportId,
+            companyName: container.shippingCompany.name,
+            totalShippingCosts: 0,
+            totalContainers: 0,
+            containers: [],
+            contactInfo: container.shippingCompany.contactInfo
+          };
+        }
+        
+        const transport = transportFinancials[transportId];
+        const shippingCosts = (container.shippingCompany.rates?.oceanFreight || 0) + 
+                            (container.shippingCompany.rates?.localCharges || 0);
+        
+        transport.totalShippingCosts += shippingCosts;
+        transport.totalContainers++;
+        transport.containers.push({
+          containerId: container.realContainerId || container.clientFacingId,
+          shippingCosts,
+          status: container.status
+        });
+      }
+    });
+
+    // OVERALL GST AND CHARGES BREAKDOWN
+    const chargesBreakdown = {
+      totalGST: 0,
+      totalDuty: 0,
+      totalMisc: 0,
+      totalExtraCharges: 0,
+      containerCount: containers.length
+    };
+    
+    containers.forEach(container => {
+      if (container.baseCharges) {
+        chargesBreakdown.totalGST += container.baseCharges.gst || 0;
+        chargesBreakdown.totalDuty += container.baseCharges.duty || 0;
+        chargesBreakdown.totalMisc += container.baseCharges.misc || 0;
+        chargesBreakdown.totalExtraCharges += container.baseCharges.extraCharge || 0;
+      }
+    });
+
+    // PROFIT CALCULATION (Carrying Charges - GST - Duty - Misc - Extra Charges)
+    const totalCarryingCharges = Object.values(clientFinancials)
+      .reduce((sum, client) => sum + client.totalCarryingCharges, 0);
+    
+    const totalCharges = chargesBreakdown.totalGST + chargesBreakdown.totalDuty + 
+                        chargesBreakdown.totalMisc + chargesBreakdown.totalExtraCharges;
+    
+    const totalProfit = totalCarryingCharges - totalCharges;
+    const profitMargin = totalCarryingCharges > 0 ? (totalProfit / totalCarryingCharges) * 100 : 0;
+
+    // PAYMENT FLOW SUMMARY
+    const paymentFlowSummary = {
+      throughMe: {
+        clientPayments: Object.values(clientFinancials)
+          .reduce((sum, client) => sum + client.paymentBreakdown.throughMe.amount, 0),
+        supplierPayments: Object.values(supplierFinancials)
+          .reduce((sum, supplier) => sum + supplier.paymentBreakdown.throughMe.amount, 0)
+      },
+      direct: {
+        clientPayments: Object.values(clientFinancials)
+          .reduce((sum, client) => sum + client.paymentBreakdown.direct.amount, 0),
+        supplierPayments: Object.values(supplierFinancials)
+          .reduce((sum, supplier) => sum + supplier.paymentBreakdown.direct.amount, 0)
+      }
+    };
+
+    res.json({
+      period: `${period} days`,
+      summary: {
+        totalCarryingCharges,
+        totalCharges,
+        totalProfit,
+        profitMargin: parseFloat(profitMargin.toFixed(2)),
+        totalOrders: orders.length,
+        totalContainers: containers.length
+      },
+      clientFinancials: Object.values(clientFinancials),
+      supplierFinancials: Object.values(supplierFinancials),
+      transportFinancials: Object.values(transportFinancials),
+      chargesBreakdown,
+      paymentFlowSummary,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Comprehensive dashboard error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

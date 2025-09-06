@@ -857,7 +857,7 @@ const Warehouse = () => {
                                     <label className="block text-sm font-medium text-green-700 mb-1">QC Passed</label>
                                     <Input
                                       type="number"
-                                      min="0"
+                                       
                                       max={expectedQty}
                                       defaultValue={qcPassedQty}
                                       id={`qc-passed-${loopBack._id}-${itemIndex}`}
@@ -873,7 +873,7 @@ const Warehouse = () => {
                                     <label className="block text-sm font-medium text-orange-700 mb-1">Loop-back</label>
                                     <Input
                                       type="number"
-                                      min="0"
+                                       
                                       max={expectedQty}
                                       defaultValue={loopBackQty}
                                       id={`loop-back-${loopBack._id}-${itemIndex}`}

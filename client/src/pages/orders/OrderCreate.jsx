@@ -533,9 +533,20 @@ const OrderCreate = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-stone-700 mb-2">
-                  Client Name *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-stone-700">
+                    Client Name *
+                  </label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/clients')}
+                    className="text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Manage Clients
+                  </Button>
+                </div>
                 <ClientSelector
                   value={orderData.clientName}
                   onChange={(clientName, clientData) => {
@@ -556,6 +567,11 @@ const OrderCreate = () => {
                   placeholder="Enter or select client name"
                   className="w-full"
                 />
+                {orderData.clientId && (
+                  <div className="text-xs text-green-600 mt-1">
+                    ✓ Client ID: {orderData.clientId}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-2">

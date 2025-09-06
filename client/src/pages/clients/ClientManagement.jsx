@@ -99,6 +99,7 @@ const ClientManagement = () => {
   }
 
   const fetchData = async () => {
+    console.log('🔄 [CLIENT MANAGEMENT] fetchData called - starting data fetch...')
     try {
       setLoading(true)
       
@@ -116,15 +117,74 @@ const ClientManagement = () => {
       const containersResponse = await axios.get('/api/containers')
       const containers = containersResponse.data.containers || []
       
+      // IMPORTANT: Also fetch registered clients from User model
+      const registeredClientsResponse = await axios.get('/api/clients/recent', {
+        params: { limit: 100 } // Get all registered clients
+      })
+      const registeredClients = registeredClientsResponse.data.clients || []
+      
+      console.log('📊 [CLIENT MANAGEMENT] Data fetched:', {
+        orders: orders.length,
+        containers: containers.length,
+        registeredClients: registeredClients.length,
+        sampleRegisteredClient: registeredClients[0]
+      })
+      
+      // Add detailed logging for registered clients
+      console.log('🔍 [CLIENT MANAGEMENT] All registered clients:')
+      registeredClients.forEach((client, index) => {
+        console.log(`  ${index + 1}. ${client.name} (ID: ${client.clientId}, Type: ${client.type})`, client)
+      })
+      
       // Process client data with focus on manufacturing and shipping progress
       const clientMap = new Map()
       const supplierMap = new Map()
       
-      // Analyze orders for practical business metrics
+      // FIRST: Add all registered clients to ensure they appear even without orders
+      console.log('🔍 [CLIENT MANAGEMENT] Processing registered clients:', registeredClients.length)
+      registeredClients.forEach((regClient, index) => {
+        // All clients from /api/clients/recent should be registered clients
+        // Check if client has proper data structure
+        if (regClient.name) {
+          const clientId = regClient.clientId || `user-${regClient._id}`
+          console.log(`📝 [CLIENT MANAGEMENT] Adding registered client ${index + 1}:`, {
+            name: regClient.name,
+            clientId: clientId,
+            type: regClient.type,
+            isRegistered: regClient.isRegistered
+          })
+          
+          clientMap.set(clientId, {
+            clientId: clientId,
+            clientName: regClient.name,
+            company: regClient.company || regClient.name,
+            email: regClient.email || '',
+            phone: regClient.phone || '',
+            totalOrders: 0,
+            pendingOrders: 0,
+            readyOrders: 0,
+            shippedOrders: 0,
+            deliveredOrders: 0,
+            toCollect: 0,
+            containers: new Set(),
+            containerDetails: [],
+            suppliers: new Set(),
+            lastActivity: null,
+            isRegistered: true // Mark as registered client
+          })
+        } else {
+          console.warn('⚠️ [CLIENT MANAGEMENT] Skipping client with missing name:', regClient)
+        }
+      })
+      
+      console.log('✅ [CLIENT MANAGEMENT] Total registered clients added to map:', clientMap.size)
+      
+      // SECOND: Process orders to add business metrics to existing clients
       orders.forEach(order => {
         const clientId = order.clientId || 'unknown'
         const clientName = order.clientName || 'Unknown Client'
         
+        // Use existing registered client or create new one for orders without clientId
         if (!clientMap.has(clientId)) {
           clientMap.set(clientId, {
             clientId,
@@ -138,7 +198,8 @@ const ClientManagement = () => {
             containers: new Set(),
             containerDetails: [],
             suppliers: new Set(),
-            lastActivity: null
+            lastActivity: null,
+            isRegistered: false // Mark as order-only client
           })
         }
         
@@ -353,6 +414,40 @@ const ClientManagement = () => {
     fetchData()
   }, [])
 
+  // Listen for client registration events
+  useEffect(() => {
+    const handleClientRegistered = (event) => {
+      console.log('🎉 [CLIENT MANAGEMENT] Client registered event detected:', event.detail)
+      console.log('🔄 [CLIENT MANAGEMENT] Refreshing client data...')
+      // Add a small delay to ensure backend has processed the registration
+      setTimeout(() => {
+        fetchData()
+      }, 500)
+    }
+
+    // Add global debugging listener
+    const globalDebugListener = (event) => {
+      console.log('🌎 [GLOBAL] clientRegistered event detected globally:', event.detail)
+    }
+
+    // Listen for custom events
+    window.addEventListener('clientRegistered', handleClientRegistered)
+    window.addEventListener('clientRegistered', globalDebugListener)
+    
+    console.log('🔊 [CLIENT MANAGEMENT] Event listeners registered')
+    
+    return () => {
+      window.removeEventListener('clientRegistered', handleClientRegistered)
+      window.removeEventListener('clientRegistered', globalDebugListener)
+      console.log('🔇 [CLIENT MANAGEMENT] Event listeners removed')
+    }
+  }, [])
+
+  // Refresh function to reload data
+  const refreshData = () => {
+    fetchData()
+  }
+
   // Filter clients
   const filteredClients = clients.filter(client => {
     const matchesSearch = searchTerm === '' || 
@@ -408,6 +503,32 @@ const ClientManagement = () => {
                 Client Management
               </h1>
               <p className="text-muted-foreground mt-2">Manufacturing progress, shipping status, and collections</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={refreshData}
+                disabled={loading}
+                className="flex items-center gap-2"
+              >
+                {loading ? (
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-amber-600 rounded-full animate-spin" />
+                ) : (
+                  <Users className="h-4 w-4" />
+                )}
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  console.log('📈 [DEBUG] Current clients state:', clients)
+                  console.log('📈 [DEBUG] Total clients in state:', clients.length)
+                  toast.success(`Debug: ${clients.length} clients in state. Check console for details.`)
+                }}
+              >
+                Debug ({clients.length})
+              </Button>
             </div>
           </div>
         </motion.div>
@@ -521,10 +642,27 @@ const ClientManagement = () => {
                                 <Building2 className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                               </div>
                               <div>
-                                <h3 className="text-lg font-semibold text-foreground">{client.clientName}</h3>
+                                <h3 className="text-lg font-semibold text-foreground flex items-center">
+                                  {client.clientName}
+                                  {client.isRegistered && (
+                                    <span className="inline-flex items-center px-2 py-1 ml-2 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                      Registered
+                                    </span>
+                                  )}
+                                </h3>
                                 <p className="text-sm text-muted-foreground">
                                   {client.totalOrders} total orders • {client.suppliers.length} suppliers
                                 </p>
+                                {client.clientId && client.clientId !== 'unknown' && (
+                                  <p className="text-xs text-green-600 dark:text-green-400">
+                                    ID: {client.clientId}
+                                  </p>
+                                )}
+                                {client.email && (
+                                  <p className="text-xs text-muted-foreground">
+                                    ✉️ {client.email}
+                                  </p>
+                                )}
                                 <p className="text-xs text-muted-foreground">
                                   Status: P:{client.statusBreakdown?.pending} R:{client.statusBreakdown?.ready} S:{client.statusBreakdown?.shipped} D:{client.statusBreakdown?.delivered}
                                 </p>

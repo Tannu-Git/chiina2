@@ -2345,7 +2345,7 @@ async function confirmAllocation(req, res, data) {
         }
         
         // Determine payment type (from first item, assuming consistent per order)
-        const paymentType = orderValidation.items[0]?.allocation.paymentType || 'CLIENT_DIRECT';
+        const paymentType = orderValidation.items[0]?.allocation.paymentType || order.items[0]?.paymentType || 'THROUGH_ME';
         
         // Create order allocation record
         const orderAllocation = {
@@ -2517,7 +2517,7 @@ router.post('/cleanup-containers', auth, authorize('admin'), async (req, res) =>
       const deleteResult = await Container.deleteMany({});
       console.log(`✅ Deleted ${deleteResult.deletedCount} containers`);
       
-      // Reset orders that were allocated to containers
+      // COMPREHENSIVE CLEANUP: Reset orders and clear ALL allocation data
       const orderUpdateResult = await Order.updateMany(
         { containerId: { $exists: true } },
         { 
@@ -2525,11 +2525,31 @@ router.post('/cleanup-containers', auth, authorize('admin'), async (req, res) =>
           $set: { 
             status: 'ready',
             updatedBy: req.user.id,
-            updatedAt: new Date()
+            updatedAt: new Date(),
+            // CRITICAL: Clear item-level allocation data to prevent orphaned references
+            'items.$[].allocatedCartons': 0,
+            'items.$[].allocatedQuantity': 0,
+            'items.$[].containerId': null
           }
         }
       );
-      console.log(`✅ Reset ${orderUpdateResult.modifiedCount} orders to ready status`);
+      console.log(`✅ Reset ${orderUpdateResult.modifiedCount} orders to ready status and cleared all item allocations`);
+      
+      // Additional safety cleanup: Ensure all orphaned item allocations are cleared
+      const additionalCleanup = await Order.updateMany(
+        { 'items.allocatedCartons': { $gt: 0 } },
+        {
+          $set: {
+            'items.$[].allocatedCartons': 0,
+            'items.$[].allocatedQuantity': 0,
+            'items.$[].containerId': null
+          }
+        }
+      );
+      
+      if (additionalCleanup.modifiedCount > 0) {
+        console.log(`✅ Additional cleanup: Reset ${additionalCleanup.modifiedCount} orders with orphaned item allocations`);
+      }
       
       res.json({
         success: true,
@@ -2564,6 +2584,72 @@ router.post('/cleanup-containers', auth, authorize('admin'), async (req, res) =>
   }
 });
 
+// @route   POST /api/warehouse/cleanup-orphaned-allocations
+// @desc    Clean up any orphaned item allocations that may exist
+// @access  Private (Admin only)
+router.post('/cleanup-orphaned-allocations', auth, authorize('admin'), async (req, res) => {
+  try {
+    console.log('🧹 [ORPHANED CLEANUP] Starting comprehensive allocation cleanup...');
+    
+    // ENHANCED FIX: Use the new Order model methods for thorough validation
+    const orphanedResult = await Order.findOrphanedAllocations({ autoFix: true });
+    const consistencyResult = await Order.validateAllocationConsistency();
+    
+    // Also clean up any items with containerId pointing to non-existent containers
+    const validContainerIds = await Container.distinct('_id');
+    
+    const invalidContainerCleanup = await Order.updateMany(
+      {
+        'items.containerId': { 
+          $exists: true,
+          $nin: validContainerIds
+        }
+      },
+      {
+        $set: {
+          'items.$[].allocatedCartons': 0,
+          'items.$[].allocatedQuantity': 0,
+          'items.$[].containerId': null,
+          updatedBy: req.user.id,
+          updatedAt: new Date()
+        }
+      }
+    );
+    
+    console.log(`✅ [ORPHANED CLEANUP] Cleanup completed:`);
+    console.log(`  - Orphaned allocations: ${orphanedResult.fixedOrders || 0} orders, ${orphanedResult.fixedItems || 0} items fixed`);
+    console.log(`  - Invalid container refs: ${invalidContainerCleanup.modifiedCount} orders updated`);
+    console.log(`  - Data integrity issues found: ${consistencyResult.totalIssues}`);
+    
+    res.json({
+      success: true,
+      message: 'Comprehensive orphaned allocation cleanup completed successfully',
+      summary: {
+        orphanedAllocationsCleanup: {
+          ordersFixed: orphanedResult.fixedOrders || 0,
+          itemsFixed: orphanedResult.fixedItems || 0,
+          totalOrphanedFound: orphanedResult.totalOrders || 0
+        },
+        invalidContainerRefsCleanup: invalidContainerCleanup.modifiedCount,
+        dataIntegrityIssues: {
+          totalIssues: consistencyResult.totalIssues,
+          orders: consistencyResult.issues?.length || 0
+        },
+        totalOrdersFixed: (orphanedResult.fixedOrders || 0) + invalidContainerCleanup.modifiedCount
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Enhanced orphaned allocation cleanup error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Enhanced orphaned allocation cleanup failed', 
+      error: error.message 
+    });
+  }
+});
+
 // @route   GET /api/warehouse/currency-rates
 // @desc    Get current exchange rates for financial calculations
 // @access  Private (Admin/Staff only)
@@ -2591,6 +2677,82 @@ router.get('/currency-rates', auth, authorize('admin', 'staff'), async (req, res
   }
 });
 
+// @route   GET /api/warehouse/allocation-diagnostics
+// @desc    Run comprehensive allocation diagnostics (DRY RUN)
+// @access  Private (Admin only)
+router.get('/allocation-diagnostics', auth, authorize('admin'), async (req, res) => {
+  try {
+    console.log('🔍 [ALLOCATION DIAGNOSTICS] Running system-wide allocation diagnostics...');
+    
+    // Run diagnostics without making changes
+    const orphanedResult = await Order.findOrphanedAllocations({ dryRun: true });
+    const consistencyResult = await Order.validateAllocationConsistency();
+    
+    // Check for orders with containers that don't exist
+    const validContainerIds = await Container.distinct('_id');
+    const ordersWithInvalidContainers = await Order.countDocuments({
+      'items.containerId': { 
+        $exists: true,
+        $nin: validContainerIds
+      }
+    });
+    
+    // Calculate summary statistics
+    const totalOrders = await Order.countDocuments({});
+    const ordersWithAllocations = await Order.countDocuments({
+      'items.allocatedCartons': { $gt: 0 }
+    });
+    
+    const ordersInContainers = await Order.countDocuments({
+      containerId: { $exists: true }
+    });
+    
+    console.log(`📋 [ALLOCATION DIAGNOSTICS] Diagnostic results:`);
+    console.log(`  - Total orders: ${totalOrders}`);
+    console.log(`  - Orders with allocations: ${ordersWithAllocations}`);
+    console.log(`  - Orders in containers: ${ordersInContainers}`);
+    console.log(`  - Orphaned allocations: ${orphanedResult.totalOrders}`);
+    console.log(`  - Data integrity issues: ${consistencyResult.totalIssues}`);
+    console.log(`  - Invalid container refs: ${ordersWithInvalidContainers}`);
+    
+    res.json({
+      success: true,
+      message: 'Allocation diagnostics completed',
+      diagnostics: {
+        systemOverview: {
+          totalOrders,
+          ordersWithAllocations,
+          ordersInContainers,
+          allocationRate: totalOrders > 0 ? ((ordersWithAllocations / totalOrders) * 100).toFixed(1) + '%' : '0%',
+          containerizationRate: totalOrders > 0 ? ((ordersInContainers / totalOrders) * 100).toFixed(1) + '%' : '0%'
+        },
+        orphanedAllocations: {
+          totalOrders: orphanedResult.totalOrders,
+          totalItems: orphanedResult.totalItems,
+          details: orphanedResult.issues
+        },
+        dataIntegrityIssues: {
+          totalIssues: consistencyResult.totalIssues,
+          orders: consistencyResult.issues?.length || 0,
+          details: consistencyResult.issues
+        },
+        invalidContainerReferences: {
+          ordersAffected: ordersWithInvalidContainers
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Allocation diagnostics error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Allocation diagnostics failed', 
+      error: error.message 
+    });
+  }
+});
+
 // @route   POST /api/warehouse/new-container-allocation
 // @desc    New simplified container allocation system
 // @access  Private (Admin/Staff only)
@@ -2608,12 +2770,8 @@ router.post('/new-container-allocation', auth, authorize('admin', 'staff'), asyn
       });
     }
 
-    if (!financials?.shippingCompany) {
-      return res.status(400).json({ 
-        message: 'Shipping company selection is required',
-        error: { type: 'VALIDATION_ERROR' }
-      });
-    }
+    // Shipping company is optional - removed validation
+    // Users can proceed without selecting a shipping company
 
     // Get container capacity info - handle custom containers
     let capacityInfo;
@@ -2723,7 +2881,7 @@ router.post('/new-container-allocation', auth, authorize('admin', 'staff'), asyn
         cbmShare: parseFloat(cbmShare) || 0,
         weightShare: parseFloat(weightShare) || 0,
         cartonShare: parseInt(allocatedCartons) || 0,
-        paymentType: order.paymentType || 'CLIENT_DIRECT',
+        paymentType: order.items[0]?.paymentType || 'THROUGH_ME',
         carryingCharges: parseFloat(carryingCharges) || 0,
         partialAllocation: {
           isPartial: allocatedCartons < (item.cartons || 0),
@@ -2778,6 +2936,12 @@ router.post('/new-container-allocation', auth, authorize('admin', 'staff'), asyn
     let container;
     
     try {
+      // Get shipping company name (async operation) - handle optional selection
+      let shippingCompanyName = 'Not Selected';
+      if (financials.shippingCompany) {
+        shippingCompanyName = await getShippingCompanyName(financials.shippingCompany);
+      }
+      
       // Create container data
       const containerData = {
         realContainerId: `CONT-${Date.now()}`,
@@ -2789,8 +2953,8 @@ router.post('/new-container-allocation', auth, authorize('admin', 'staff'), asyn
         status: 'planning',
         orders: orderAllocations,
         shippingCompany: {
-          id: financials.shippingCompany,
-          name: getShippingCompanyName(financials.shippingCompany)
+          id: financials.shippingCompany || null,
+          name: shippingCompanyName
         },
         baseCharges: {
           gst: parseFloat(financials.baseCharges?.gst) || 0,
@@ -2895,14 +3059,345 @@ router.post('/new-container-allocation', auth, authorize('admin', 'staff'), asyn
   }
 });
 
-// Helper function to get shipping company name
-function getShippingCompanyName(companyId) {
-  const companies = {
-    'maersk': 'Maersk Line',
-    'msc': 'Mediterranean Shipping Company',
-    'cosco': 'COSCO Shipping'
-  };
-  return companies[companyId] || companyId;
+// @route   POST /api/warehouse/container-item-allocation
+// @desc    Allocate specific items to existing container with enhanced validation
+// @access  Private (Admin/Staff only)
+router.post('/container-item-allocation', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { containerId, allocations, containerSpecs } = req.body;
+    
+    console.log('🚀 [ITEM ALLOCATION] Starting item-level allocation to container:', containerId);
+    console.log('📋 [ITEM ALLOCATION] Allocations data:', allocations);
+    
+    // Enhanced input validation
+    const validationErrors = [];
+    
+    if (!containerId) {
+      validationErrors.push({
+        field: 'containerId',
+        code: 'REQUIRED_FIELD_MISSING',
+        message: 'Container ID is required'
+      });
+    }
+    
+    if (!allocations || !Array.isArray(allocations) || allocations.length === 0) {
+      validationErrors.push({
+        field: 'allocations',
+        code: 'REQUIRED_FIELD_MISSING',
+        message: 'At least one item allocation is required'
+      });
+    }
+    
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Get container
+    const container = await Container.findById(containerId);
+    if (!container) {
+      return res.status(404).json({
+        success: false,
+        message: 'Container not found'
+      });
+    }
+    
+    console.log('📦 [ITEM ALLOCATION] Container found:', {
+      id: container.realContainerId,
+      currentCbm: container.currentCbm,
+      maxCbm: container.maxCbm,
+      currentOrders: container.orders.length
+    });
+    
+    // Validate and prepare allocation data
+    let totalCbm = 0;
+    let totalWeight = 0;
+    let totalCarryingCharges = 0;
+    const orderUpdates = new Map(); // Track updates per order
+    const validatedAllocations = [];
+    
+    for (const allocation of allocations) {
+      const { orderId, itemId, allocatedCartons, cbmShare, weightShare, carryingCharges } = allocation;
+      
+      // Validate allocation data
+      if (!orderId || !itemId || !allocatedCartons || allocatedCartons <= 0) {
+        validationErrors.push({
+          field: 'allocation',
+          code: 'INVALID_ALLOCATION_DATA',
+          message: `Invalid allocation data for item ${itemId}`,
+          details: { orderId, itemId, allocatedCartons }
+        });
+        continue;
+      }
+      
+      // Verify order and item exist
+      const order = await Order.findById(orderId);
+      if (!order) {
+        validationErrors.push({
+          field: 'orderId',
+          code: 'ORDER_NOT_FOUND',
+          message: `Order ${orderId} not found`
+        });
+        continue;
+      }
+      
+      const item = order.items.id(itemId);
+      if (!item) {
+        validationErrors.push({
+          field: 'itemId',
+          code: 'ITEM_NOT_FOUND',
+          message: `Item ${itemId} not found in order ${order.orderNumber}`
+        });
+        continue;
+      }
+      
+      // Check item availability - FIXED CALCULATION
+      const qcPassedCartons = item.qcPassedCartons || 0;
+      const currentlyAllocated = item.allocatedCartons || 0;
+      const availableCartons = Math.max(0, qcPassedCartons - currentlyAllocated);
+      
+      if (allocatedCartons > availableCartons) {
+        validationErrors.push({
+          field: 'allocatedCartons',
+          code: 'INSUFFICIENT_QUANTITY',
+          message: `Insufficient quantity for item ${item.itemCode}: requested ${allocatedCartons}, available ${availableCartons} (QC passed: ${qcPassedCartons}, already allocated: ${currentlyAllocated})`
+        });
+        continue;
+      }
+      
+      // Add to totals
+      totalCbm += parseFloat(cbmShare) || 0;
+      totalWeight += parseFloat(weightShare) || 0;
+      totalCarryingCharges += parseFloat(carryingCharges) || 0;
+      
+      // Track order updates
+      if (!orderUpdates.has(orderId)) {
+        orderUpdates.set(orderId, {
+          order,
+          itemUpdates: [],
+          totalCbm: 0,
+          totalWeight: 0,
+          totalCarryingCharges: 0
+        });
+      }
+      
+      const orderUpdate = orderUpdates.get(orderId);
+      orderUpdate.itemUpdates.push({
+        itemId,
+        item,
+        allocatedCartons,
+        cbmShare: parseFloat(cbmShare) || 0,
+        weightShare: parseFloat(weightShare) || 0,
+        carryingCharges: parseFloat(carryingCharges) || 0
+      });
+      orderUpdate.totalCbm += parseFloat(cbmShare) || 0;
+      orderUpdate.totalWeight += parseFloat(weightShare) || 0;
+      orderUpdate.totalCarryingCharges += parseFloat(carryingCharges) || 0;
+      
+      validatedAllocations.push(allocation);
+    }
+    
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item allocation validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Validate container capacity
+    const containerMaxCbm = containerSpecs?.maxCbm || container.maxCbm;
+    const containerMaxWeight = containerSpecs?.maxWeight || container.maxWeight;
+    const availableCbm = containerMaxCbm - container.currentCbm;
+    const availableWeight = containerMaxWeight - container.currentWeight;
+    
+    console.log('🔍 [ITEM ALLOCATION] Capacity validation:', {
+      totalCbm: totalCbm.toFixed(2),
+      availableCbm: availableCbm.toFixed(2),
+      totalWeight: totalWeight.toFixed(0),
+      availableWeight: availableWeight.toFixed(0)
+    });
+    
+    if (totalCbm > availableCbm) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient CBM capacity: required ${totalCbm.toFixed(2)}, available ${availableCbm.toFixed(2)}`,
+        error: {
+          type: 'CAPACITY_EXCEEDED',
+          details: {
+            required: totalCbm,
+            available: availableCbm,
+            shortage: totalCbm - availableCbm
+          }
+        }
+      });
+    }
+    
+    if (totalWeight > availableWeight) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient weight capacity: required ${totalWeight.toFixed(0)}kg, available ${availableWeight.toFixed(0)}kg`,
+        error: {
+          type: 'CAPACITY_EXCEEDED',
+          details: {
+            required: totalWeight,
+            available: availableWeight,
+            shortage: totalWeight - availableWeight
+          }
+        }
+      });
+    }
+    
+    // Apply allocations
+    console.log('✅ [ITEM ALLOCATION] Validation passed, applying allocations...');
+    
+    // Update orders with item allocations
+    for (const [orderId, orderUpdate] of orderUpdates) {
+      for (const itemUpdate of orderUpdate.itemUpdates) {
+        try {
+          const updateResult = await Order.updateOne(
+            { _id: orderId, 'items._id': itemUpdate.itemId },
+            {
+              $inc: { 'items.$.allocatedCartons': itemUpdate.allocatedCartons },
+              $set: { 'items.$.lastAllocatedAt': new Date() }
+            }
+          );
+          
+          console.log(`✅ [ITEM ALLOCATION] Updated item ${itemUpdate.item.itemCode}: +${itemUpdate.allocatedCartons} cartons`);
+        } catch (updateError) {
+          console.error(`❌ [ITEM ALLOCATION] Failed to update item ${itemUpdate.itemId}:`, updateError.message);
+          throw updateError;
+        }
+      }
+      
+      // Add or update order allocation in container
+      const existingOrderIndex = container.orders.findIndex(
+        order => order.orderId.toString() === orderId
+      );
+      
+      if (existingOrderIndex >= 0) {
+        // Update existing order allocation
+        container.orders[existingOrderIndex].cbmShare += orderUpdate.totalCbm;
+        container.orders[existingOrderIndex].weightShare += orderUpdate.totalWeight;
+        container.orders[existingOrderIndex].carryingCharges += orderUpdate.totalCarryingCharges;
+        container.orders[existingOrderIndex].cartonShare += orderUpdate.itemUpdates.reduce((sum, item) => sum + item.allocatedCartons, 0);
+        
+        console.log(`📝 [ITEM ALLOCATION] Updated existing order allocation for ${orderUpdate.order.orderNumber}`);
+      } else {
+        // Add new order allocation
+        container.orders.push({
+          orderId: orderUpdate.order._id,
+          clientId: orderUpdate.order.clientId,
+          clientName: orderUpdate.order.clientName,
+          cbmShare: orderUpdate.totalCbm,
+          weightShare: orderUpdate.totalWeight,
+          cartonShare: orderUpdate.itemUpdates.reduce((sum, item) => sum + item.allocatedCartons, 0),
+          carryingCharges: orderUpdate.totalCarryingCharges,
+          paymentType: orderUpdate.order.items[0]?.paymentType || 'THROUGH_ME',
+          partialAllocation: true // Mark as partial since we're doing item-level
+        });
+        
+        console.log(`📝 [ITEM ALLOCATION] Added new order allocation for ${orderUpdate.order.orderNumber}`);
+      }
+    }
+    
+    // Update container utilization
+    container.currentCbm += totalCbm;
+    container.currentWeight += totalWeight;
+    
+    // Recalculate financials
+    container.calculateFinancials();
+    
+    // Save container
+    await container.save();
+    
+    const newUtilization = {
+      cbm: ((container.currentCbm / containerMaxCbm) * 100).toFixed(1),
+      weight: ((container.currentWeight / containerMaxWeight) * 100).toFixed(1)
+    };
+    
+    console.log('🎉 [ITEM ALLOCATION] Item allocation completed successfully:', {
+      container: container.realContainerId,
+      itemsAllocated: validatedAllocations.length,
+      totalCbm: totalCbm.toFixed(2),
+      totalWeight: totalWeight.toFixed(0),
+      utilization: newUtilization
+    });
+    
+    res.json({
+      success: true,
+      message: `Successfully allocated ${validatedAllocations.length} items to container`,
+      container: {
+        id: container._id,
+        realContainerId: container.realContainerId,
+        currentCbm: container.currentCbm,
+        currentWeight: container.currentWeight,
+        maxCbm: containerMaxCbm,
+        maxWeight: containerMaxWeight,
+        utilization: newUtilization,
+        orders: container.orders,
+        totalRevenue: container.totalRevenue
+      },
+      allocation: {
+        itemsAllocated: validatedAllocations.length,
+        totalCbm: totalCbm.toFixed(2),
+        totalWeight: totalWeight.toFixed(0),
+        totalCarryingCharges: totalCarryingCharges.toFixed(0)
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ [ITEM ALLOCATION] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during item allocation',
+      error: {
+        type: 'SERVER_ERROR',
+        details: error.message
+      }
+    });
+  }
+});
+
+// Helper function to get shipping company name from database
+async function getShippingCompanyName(companyId) {
+  try {
+    // First try to find by companyId
+    let company = await ShippingCompany.findOne({ companyId: companyId, isActive: true }).lean();
+    
+    // If not found by companyId, try to find by _id (MongoDB ObjectId)
+    if (!company && mongoose.Types.ObjectId.isValid(companyId)) {
+      company = await ShippingCompany.findOne({ _id: companyId, isActive: true }).lean();
+    }
+    
+    if (company) {
+      return company.companyName;
+    }
+    
+    // Fallback to hardcoded mapping for legacy data
+    const fallbackCompanies = {
+      'maersk': 'Maersk Line',
+      'msc': 'Mediterranean Shipping Company', 
+      'cosco': 'COSCO Shipping'
+    };
+    
+    const fallbackName = fallbackCompanies[companyId];
+    if (fallbackName) {
+      console.warn(`⚠️ [WAREHOUSE] Using fallback company name for ID: ${companyId} -> ${fallbackName}`);
+      return fallbackName;
+    }
+    
+    console.warn(`⚠️ [WAREHOUSE] Company not found for ID: ${companyId}, returning ID as name`);
+    return companyId;
+  } catch (error) {
+    console.error(`❌ [WAREHOUSE] Error fetching company name for ID ${companyId}:`, error.message);
+    
+    // Return the ID as fallback in case of database error
+    return companyId;
+  }
 }
 
 module.exports = router;

@@ -21,6 +21,7 @@
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
+    "axios": "^1.11.0",
     "concurrently": "^8.2.2"
   },
   "dependencies": {

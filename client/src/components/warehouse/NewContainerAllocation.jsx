@@ -28,6 +28,8 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([]); // Selected orders with quantities
+  const [shippingCompanies, setShippingCompanies] = useState([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
   const [containerCapacity, setContainerCapacity] = useState({
     cbm: '',
     weight: '',
@@ -59,14 +61,11 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
     { type: '45ft', name: '45-foot Container', maxCbm: 86, maxWeight: 30000 }
   ];
 
-  const shippingCompanies = [
-    { id: 'maersk', name: 'Maersk Line', code: 'MAEU' },
-    { id: 'msc', name: 'Mediterranean Shipping Company', code: 'MSCU' },
-    { id: 'cosco', name: 'COSCO Shipping', code: 'COSU' }
-  ];
+  // Shipping companies are now fetched from API - removed hardcoded data
 
   useEffect(() => {
     fetchQcReadyOrders();
+    fetchShippingCompanies();
   }, []);
 
   useEffect(() => {
@@ -130,6 +129,61 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
       toast.error('Failed to load orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchShippingCompanies = async () => {
+    setCompaniesLoading(true);
+    try {
+      console.log('🚢 [NEW ALLOCATION] Fetching shipping companies...');
+      console.log('🔑 [NEW ALLOCATION] Using token:', token ? 'Token available' : 'No token');
+      
+      const response = await fetch('/api/companies/transport?status=active', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('📡 [NEW ALLOCATION] Response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [NEW ALLOCATION] API Error Response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('🚢 [NEW ALLOCATION] Companies API Response:', result);
+      
+      // Transform companies to match expected format
+      const transformedCompanies = (result.companies || []).map(company => ({
+        id: company.companyId || company._id,
+        name: company.companyName,
+        shortName: company.shortName,
+        code: company.shortName // Use shortName as code fallback
+      }));
+      
+      console.log('🔄 [NEW ALLOCATION] Transformed companies:', transformedCompanies);
+      setShippingCompanies(transformedCompanies);
+      
+      if (transformedCompanies.length === 0) {
+        console.warn('⚠️ [NEW ALLOCATION] No active shipping companies found');
+        toast.error('No active shipping companies found. Please add companies first.');
+      } else {
+        console.log(`✅ [NEW ALLOCATION] Loaded ${transformedCompanies.length} shipping companies from database`);
+        toast.success(`Loaded ${transformedCompanies.length} shipping companies from database`);
+      }
+    } catch (error) {
+      console.error('❌ [NEW ALLOCATION] Fetch shipping companies error:', error);
+      toast.error(`Failed to load shipping companies: ${error.message}`);
+      
+      // Set empty array to force user to fix the issue instead of using fallback
+      setShippingCompanies([]);
+      
+      console.log('🚨 [NEW ALLOCATION] No fallback used - Please check API endpoint and authentication');
+    } finally {
+      setCompaniesLoading(false);
     }
   };
 
@@ -782,7 +836,7 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                                           value={selected}
                                           onChange={(e) => updateOrderSelection(order._id, item._id, parseInt(e.target.value) || 0)}
                                           className="w-16 text-center"
-                                          min="0"
+                                          
                                           max={actualMax}
                                         />
                                         
@@ -920,7 +974,7 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                         value={financials.baseCharges.gst}
                         onChange={(e) => updateBaseCharge('gst', e.target.value)}
                         placeholder="0"
-                        min="0"
+                        
                         step="0.01"
                       />
                     </div>
@@ -931,7 +985,7 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                         value={financials.baseCharges.duty}
                         onChange={(e) => updateBaseCharge('duty', e.target.value)}
                         placeholder="0"
-                        min="0"
+                        
                         step="0.01"
                       />
                     </div>
@@ -942,7 +996,7 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                         value={financials.baseCharges.misc}
                         onChange={(e) => updateBaseCharge('misc', e.target.value)}
                         placeholder="0"
-                        min="0"
+                        
                         step="0.01"
                       />
                     </div>
@@ -953,7 +1007,7 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                         value={financials.baseCharges.extraCharge}
                         onChange={(e) => updateBaseCharge('extraCharge', e.target.value)}
                         placeholder="0"
-                        min="0"
+                        
                         step="0.01"
                       />
                     </div>
@@ -965,16 +1019,45 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                 {/* Shipping Company */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Shipping Company</h3>
-                  <Select value={financials.shippingCompany} onValueChange={(value) => setFinancials(prev => ({ ...prev, shippingCompany: value }))}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select shipping company (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="maersk">Maersk Line (MAEU)</SelectItem>
-                      <SelectItem value="msc">Mediterranean Shipping Company (MSCU)</SelectItem>
-                      <SelectItem value="cosco">COSCO Shipping (COSU)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {companiesLoading ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-md">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span className="text-sm text-gray-600">Loading shipping companies...</span>
+                    </div>
+                  ) : (
+                    <Select 
+                      value={financials.shippingCompany} 
+                      onValueChange={(value) => setFinancials(prev => ({ ...prev, shippingCompany: value }))}
+                      disabled={shippingCompanies.length === 0}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue 
+                          placeholder={shippingCompanies.length === 0 
+                            ? "No shipping companies available" 
+                            : "Select shipping company (optional)"
+                          } 
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {shippingCompanies.length === 0 ? (
+                          <SelectItem value="" disabled>
+                            No active shipping companies found
+                          </SelectItem>
+                        ) : (
+                          shippingCompanies.map(company => (
+                            <SelectItem key={company.id} value={company.id}>
+                              {company.name} ({company.code || company.shortName})
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {shippingCompanies.length === 0 && !companiesLoading && (
+                    <p className="text-sm text-orange-600 mt-2">
+                      ⚠️ No shipping companies found. You can still proceed with allocation.
+                    </p>
+                  )}
                 </div>
 
                 <Separator />

@@ -462,7 +462,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                               </label>
                               <Input
                                 type="number"
-                                value={currentItem?.expectedCartons || 0}
+                                value={currentItem?.expectedCartons || ''}
                                 disabled
                                 className="bg-stone-50 font-medium text-lg text-center"
                               />
@@ -531,7 +531,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                               </label>
                               <Input
                                 type="number"
-                                value={currentItem?.loopBackCartons || 0}
+                                value={currentItem?.loopBackCartons || ''}
                                 disabled
                                 className="bg-orange-50 font-medium text-lg text-center text-orange-800"
                                 title="Automatically calculated as Expected - QC Passed"
@@ -609,7 +609,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                               </label>
                               <Input
                                 type="number"
-                                value={currentItem?.expectedQuantity || 0}
+                                value={currentItem?.expectedQuantity || ''}
                                 disabled
                                 className="bg-stone-50 text-sm text-center border-stone-200"
                               />
@@ -620,7 +620,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                               </label>
                               <Input
                                 type="number"
-                                value={currentItem?.qcPassedQuantity || 0}
+                                value={currentItem?.qcPassedQuantity || ''}
                                 disabled
                                 className="bg-green-50 text-sm text-center border-green-200"
                                 title="Auto-calculated from carton data"
@@ -632,7 +632,7 @@ const QCInspector = ({ order, onResult, onClose }) => {
                               </label>
                               <Input
                                 type="number"
-                                value={currentItem?.loopBackQuantity || 0}
+                                value={currentItem?.loopBackQuantity || ''}
                                 disabled
                                 className="bg-orange-50 text-sm text-center border-orange-200"
                                 title="Auto-calculated from carton data"
