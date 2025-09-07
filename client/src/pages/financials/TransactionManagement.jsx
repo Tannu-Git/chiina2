@@ -43,12 +43,14 @@ import {
   Filter,
   Calendar,
   ArrowUpRight,
+  ArrowDownLeft,
   Package,
   Truck,
   AlertCircle,
   AlertTriangle,
   Shield,
-  Database
+  Database,
+  Receipt
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuthStore } from '@/stores/authStore'
@@ -124,7 +126,7 @@ const TransactionManagement = () => {
     }
   }
 
-  // Load payment collections data
+  // Load payment collections data using comprehensive API for consistency
   const loadPaymentCollections = async () => {
     try {
       setLoading(true)
@@ -143,15 +145,16 @@ const TransactionManagement = () => {
       
       console.log('📊 [TRANSACTION MANAGEMENT] Loading payment collections for user:', user?.name, 'Role:', user?.role)
       
-      const response = await axios.get('/api/payment-collections', getAuthHeaders())
+      // Use payment collections API for consistent data
+      const paymentsResponse = await axios.get('/api/payment-collections', getAuthHeaders())
       
-      if (response.data) {
+      if (paymentsResponse.data) {
         console.log('✅ [TRANSACTION MANAGEMENT] Payment collections loaded successfully')
-        console.log('🔍 [DEBUG] Raw payment data:', response.data)
+        console.log('🔍 [DEBUG] Raw payment data:', paymentsResponse.data)
         
         // Enhanced data validation and integrity checking
-        if (response.data.clientCollections) {
-          response.data.clientCollections.forEach(client => {
+        if (paymentsResponse.data.clientCollections) {
+          paymentsResponse.data.clientCollections.forEach(client => {
             const hasNegativeAmounts = client.pendingAmount < 0 || client.totalAmount < 0 || client.receivedAmount < 0;
             const isOrphaned = client.isOrphaned || false;
             const hasNegativeBalance = client.hasNegativeBalance || false;
@@ -174,13 +177,16 @@ const TransactionManagement = () => {
           });
         }
         
-        setPaymentCollections(response.data.clientCollections || [])
-        setAllClients(response.data.allClients || [])
+        setPaymentCollections(paymentsResponse.data.clientCollections || [])
+        setAllClients(paymentsResponse.data.allClients || [])
         
-        // Enhanced summary with data integrity information
+        // Enhanced summary with data integrity information - FIXED: Map backend summary fields
         const enhancedSummary = {
-          ...response.data.summary,
-          dataIntegrity: response.data.summary?.dataIntegrity || {
+          totalToCollect: paymentsResponse.data.summary?.totalToCollect || 0,
+          totalReceived: paymentsResponse.data.summary?.totalReceived || 0,
+          totalPending: paymentsResponse.data.summary?.totalPending || 0,
+          clientCount: paymentsResponse.data.summary?.clientCount || 0,
+          dataIntegrity: paymentsResponse.data.summary?.dataIntegrity || {
             systemHealth: { status: 'UNKNOWN' },
             hasNegativeBalances: false,
             hasOrphanedData: false,
@@ -188,7 +194,9 @@ const TransactionManagement = () => {
           }
         };
         
-        setPaymentSummary(enhancedSummary);
+        setPaymentSummary(enhancedSummary)
+        
+        console.log('✅ [TRANSACTION MANAGEMENT] Data successfully loaded and processed')
       }
     } catch (error) {
       console.error('❌ [TRANSACTION MANAGEMENT] Error loading payment collections:', error)
@@ -497,21 +505,44 @@ const TransactionManagement = () => {
     try {
       console.log('🔍 [TRANSACTION MANAGEMENT] Fetching payment history for client:', clientId)
       
+      // FIXED: Use the same API as the transaction details modal
       const response = await axios.get(
-        `/api/payment-collections/history/${clientId}`,
+        `/api/financials-comprehensive/payment-records/${clientId}`,
         getAuthHeaders()
       )
       
       if (response.data) {
+        console.log('✅ [PAYMENT HISTORY] API Response:', response.data)
+        
+        // Transform the comprehensive API response to payment history format
+        const paymentHistory = (response.data.paymentRecords || []).map(record => {
+          return {
+            date: record.date,
+            type: record.type,
+            amount: record.type === 'PAYMENT_RECEIVED' ? record.credit : 
+                   record.type === 'PAYMENT_GIVEN' ? -record.debit : 
+                   record.type === 'ORDER_INVOICE' ? record.debit : 0, // FIXED: Remove negative sign for ORDER_INVOICE
+            description: record.description || record.notes || '',
+            runningBalance: record.balance,
+            reference: record.reference,
+            status: record.status
+          }
+        }).reverse() // Show latest first
+        
         // Update the specific client with payment history
         setPaymentCollections(prevClients => 
           prevClients.map(client => {
             if (client.clientId === clientId) {
               return {
                 ...client,
-                paymentHistory: response.data.paymentHistory || [],
+                paymentHistory: paymentHistory,
                 paymentHistoryLoaded: true,
-                historySummary: response.data.summary
+                historySummary: {
+                  totalInvoiced: response.data.accountSummary?.totalInvoiced || 0,
+                  totalReceived: response.data.accountSummary?.totalReceived || 0,
+                  currentBalance: response.data.accountSummary?.currentBalance || 0,
+                  totalTransactions: response.data.accountSummary?.totalTransactions || 0
+                }
               }
             }
             return client
@@ -520,24 +551,30 @@ const TransactionManagement = () => {
         
         toast({
           title: "Success",
-          description: `Loaded ${response.data.paymentHistory?.length || 0} payment history records`,
+          description: `Loaded ${paymentHistory.length} payment history records`,
           variant: "default"
         })
       }
     } catch (error) {
-      console.error('Error fetching payment history:', error)
+      console.error('❌ [PAYMENT HISTORY] Error fetching payment history:', error)
       
-      // If the new endpoint doesn't exist, fall back to the old method
-      if (error.response?.status === 404) {
-        console.log('Falling back to legacy payment history method')
-        await fetchPaymentHistoryLegacy(clientId)
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to load payment history",
-          variant: "destructive"
-        })
+      // Enhanced error handling
+      let errorMessage = "Failed to load payment history"
+      if (error.response?.status === 401) {
+        errorMessage = "Authentication error. Please log in again."
+      } else if (error.response?.status === 403) {
+        errorMessage = "Access denied. Insufficient permissions."
+      } else if (error.response?.status === 404) {
+        errorMessage = "Client not found or no payment records available."
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
       }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive"
+      })
     }
   }
 
@@ -610,6 +647,7 @@ const TransactionManagement = () => {
       console.warn('⚠️ [TRANSACTION MANAGEMENT] No token available')
     }
     
+    // Use standard payment collections loading for now
     loadPaymentCollections()
   }, [token, isAuthenticated])
 
@@ -893,7 +931,7 @@ const TransactionManagement = () => {
                                 <span className="text-sm font-bold text-green-700 uppercase">WE OWE CLIENT</span>
                               </div>
                               <p className="text-3xl font-bold text-green-800">
-                                {formatCurrency(Math.abs(pendingAmount))}
+                                {formatCurrency(pendingAmount)}
                               </p>
                               <p className="text-xs text-green-600 mt-1 font-medium">
                                 Credit balance to refund
@@ -1233,7 +1271,7 @@ const TransactionManagement = () => {
                                           {history.notes || history.description || '-'}
                                         </td>
                                         <td className="py-2 px-2 text-right font-medium text-gray-800">
-                                          {formatCurrency(Math.abs(history.runningBalance || 0))}
+                                          {formatCurrency(history.runningBalance || 0)}
                                         </td>
                                       </tr>
                                     ))
@@ -1456,7 +1494,7 @@ const TransactionManagement = () => {
                       selectedPartyDetails.accountSummary.currentBalance <= 0 ? 
                       'text-green-600' : 'text-orange-600'
                     }`}>
-                      {formatCurrency(Math.abs(selectedPartyDetails.accountSummary.currentBalance))}
+                      {formatCurrency(selectedPartyDetails.accountSummary.currentBalance)}
                     </p>
                     <p className={`text-sm ${
                       selectedPartyDetails.accountSummary.currentBalance <= 0 ? 
@@ -1473,20 +1511,63 @@ const TransactionManagement = () => {
 
                 {/* Payment Records Ledger */}
                 <div>
-                  <h4 className="text-lg font-semibold mb-4 text-gray-800">Payment Ledger</h4>
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-lg bg-blue-100">
+                      <FileText className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-800">Payment Ledger</h4>
+                      <p className="text-sm text-gray-600">Complete transaction ledger with running balance</p>
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
                     {selectedPartyDetails.paymentRecords && selectedPartyDetails.paymentRecords.length > 0 ? (
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="border-b border-gray-200">
-                              <th className="text-left py-2 px-2 font-medium text-gray-700">Date</th>
-                              <th className="text-left py-2 px-2 font-medium text-gray-700">Type</th>
-                              <th className="text-left py-2 px-2 font-medium text-gray-700">Reference</th>
-                              <th className="text-right py-2 px-2 font-medium text-gray-700">Debit</th>
-                              <th className="text-right py-2 px-2 font-medium text-gray-700">Credit</th>
-                              <th className="text-right py-2 px-2 font-medium text-gray-700">Balance</th>
-                              <th className="text-center py-2 px-2 font-medium text-gray-700">Status</th>
+                            <tr className="border-b-2 border-gray-200 bg-gray-100">
+                              <th className="text-left py-3 px-3 font-semibold text-gray-800">
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  Date
+                                </div>
+                              </th>
+                              <th className="text-left py-3 px-3 font-semibold text-gray-800">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4" />
+                                  Type
+                                </div>
+                              </th>
+                              <th className="text-left py-3 px-3 font-semibold text-gray-800">
+                                <div className="flex items-center gap-2">
+                                  <Package className="h-4 w-4" />
+                                  Reference
+                                </div>
+                              </th>
+                              <th className="text-right py-3 px-3 font-semibold text-gray-800">
+                                <div className="flex items-center justify-end gap-2">
+                                  <ArrowUpRight className="h-4 w-4 text-red-600" />
+                                  Debit
+                                </div>
+                              </th>
+                              <th className="text-right py-3 px-3 font-semibold text-gray-800">
+                                <div className="flex items-center justify-end gap-2">
+                                  <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                                  Credit
+                                </div>
+                              </th>
+                              <th className="text-right py-3 px-3 font-semibold text-gray-800">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Calculator className="h-4 w-4" />
+                                  Balance
+                                </div>
+                              </th>
+                              <th className="text-center py-3 px-3 font-semibold text-gray-800">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Clock className="h-4 w-4" />
+                                  Status
+                                </div>
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1495,35 +1576,71 @@ const TransactionManagement = () => {
                               const isPaymentRecord = record.type === 'PAYMENT_RECEIVED'
                               
                               return (
-                                <tr key={record.id || index} className="border-b border-gray-100 hover:bg-gray-100 transition-colors">
+                                <tr key={record.id || index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                                  isOrderRecord ? 'bg-amber-50/30' : isPaymentRecord ? 'bg-green-50/30' : 'bg-gray-50/20'
+                                }`}>
                                   <td className="py-2 px-2 text-gray-800">
-                                    {new Date(record.date || record.createdAt).toLocaleDateString()}
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-2 h-2 rounded-full ${
+                                        isOrderRecord ? 'bg-amber-500' : isPaymentRecord ? 'bg-green-500' : 'bg-gray-400'
+                                      }`}></div>
+                                      {new Date(record.date || record.createdAt).toLocaleDateString()}
+                                    </div>
                                   </td>
                                   <td className="py-2 px-2">
-                                    <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                                      isOrderRecord ? 'bg-blue-200 text-blue-700' :
-                                      isPaymentRecord ? 'bg-green-200 text-green-700' :
-                                      'bg-gray-200 text-gray-700'
+                                    <Badge variant="outline" className={`text-xs ${
+                                      isOrderRecord ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                      isPaymentRecord ? 'bg-green-50 text-green-700 border-green-200' : 
+                                      'bg-gray-50 text-gray-600 border-gray-200'
                                     }`}>
-                                      {record.type || 'UNKNOWN'}
-                                    </span>
+                                      {record.type === 'ORDER_INVOICE' ? 'INVOICE' : 
+                                       record.type === 'PAYMENT_RECEIVED' ? 'PAYMENT' : 
+                                       record.type || 'UNKNOWN'}
+                                    </Badge>
                                   </td>
                                   <td className="py-2 px-2 text-gray-800 font-medium">
-                                    {record.reference || record.orderNumber || 'N/A'}
+                                    <div className="flex items-center gap-2">
+                                      {isOrderRecord ? (
+                                        <FileText className="h-4 w-4 text-amber-600" />
+                                      ) : isPaymentRecord ? (
+                                        <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                                      ) : (
+                                        <Receipt className="h-4 w-4 text-gray-500" />
+                                      )}
+                                      {record.reference || record.orderNumber || 'N/A'}
+                                    </div>
                                   </td>
-                                  <td className="py-2 px-2 text-right font-medium text-red-600">
-                                    {record.debit ? formatCurrency(Math.abs(record.debit)) : '-'}
+                                  <td className="py-2 px-2 text-right font-mono">
+                                    {record.debit > 0 ? (
+                                      <span className="text-red-600 font-semibold">+{formatCurrency(Math.abs(record.debit))}</span>
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
+                                    )}
                                   </td>
-                                  <td className="py-2 px-2 text-right font-medium text-green-600">
-                                    {record.credit ? formatCurrency(Math.abs(record.credit)) : '-'}
+                                  <td className="py-2 px-2 text-right font-mono">
+                                    {record.credit > 0 ? (
+                                      <span className="text-green-600 font-semibold">-{formatCurrency(Math.abs(record.credit))}</span>
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
+                                    )}
                                   </td>
-                                  <td className="py-2 px-2 text-right font-bold text-gray-800">
-                                    {formatCurrency(Math.abs(record.balance || 0))}
+                                  <td className="py-2 px-2 text-right font-mono font-bold">
+                                    <span className={`${
+                                      record.balance > 0 ? 'text-red-700' : 
+                                      record.balance < 0 ? 'text-green-700' : 
+                                      'text-gray-800'
+                                    }`}>
+                                      {formatCurrency(record.balance || 0)}
+                                    </span>
                                   </td>
                                   <td className="py-2 px-2 text-center">
                                     <Badge 
-                                      variant={record.status === 'RECEIVED' ? 'default' : 'secondary'}
-                                      className="text-xs"
+                                      variant={record.status === 'RECEIVED' || record.status === 'COMPLETE' ? 'default' : 'secondary'}
+                                      className={`text-xs ${
+                                        record.status === 'RECEIVED' || record.status === 'COMPLETE' ? 
+                                          'bg-green-100 text-green-700 border-green-200' : 
+                                          'bg-gray-100 text-gray-600 border-gray-200'
+                                      }`}
                                     >
                                       {record.status || 'PENDING'}
                                     </Badge>
@@ -1532,6 +1649,39 @@ const TransactionManagement = () => {
                               )
                             })}
                           </tbody>
+                          <tfoot>
+                            <tr className="border-t-2 border-gray-300 bg-gray-100">
+                              <td className="py-3 px-3 font-bold text-gray-800" colSpan="3">
+                                <div className="flex items-center gap-2">
+                                  <Calculator className="h-4 w-4" />
+                                  FINAL BALANCE
+                                </div>
+                              </td>
+                              <td className="text-right py-3 px-3 font-bold text-red-600">
+                                <span className="font-mono">
+                                  +{formatCurrency(selectedPartyDetails.accountSummary?.totalInvoiced || 0)}
+                                </span>
+                              </td>
+                              <td className="text-right py-3 px-3 font-bold text-green-600">
+                                <span className="font-mono">
+                                  -{formatCurrency(selectedPartyDetails.accountSummary?.totalReceived || 0)}
+                                </span>
+                              </td>
+                              <td className="text-right py-3 px-3 font-bold">
+                                <span className={`font-mono text-lg ${
+                                  (selectedPartyDetails.accountSummary?.currentBalance || 0) > 0 ? 'text-red-700' :
+                                  (selectedPartyDetails.accountSummary?.currentBalance || 0) < 0 ? 'text-green-700' :
+                                  'text-gray-800'
+                                }`}>
+                                  {formatCurrency(selectedPartyDetails.accountSummary?.currentBalance || 0)}
+                                </span>
+                                <div className="text-xs text-gray-600 mt-1">Outstanding</div>
+                              </td>
+                              <td className="text-center py-3 px-3 font-bold text-gray-700">
+                                {(selectedPartyDetails.accountSummary?.totalTransactions || 0)} records
+                              </td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     ) : (
@@ -1832,22 +1982,11 @@ const TransactionManagement = () => {
                   </div>
                 </div>
               ) : (
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                  <div className="text-center">
-                    <AlertCircle className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                    <h4 className="font-medium text-gray-600 mb-2">Complete Required Fields</h4>
-                    <div className="space-y-1 text-sm text-gray-500">
-                      <div className={`flex items-center justify-center gap-2 ${
-                        manualTransaction.clientName ? 'text-green-600' : 'text-red-500'
-                      }`}>
-                        {manualTransaction.clientName ? '✓' : '✗'} Client: {manualTransaction.clientName || 'Not selected'}
-                      </div>
-                      <div className={`flex items-center justify-center gap-2 ${
-                        manualTransaction.amount ? 'text-green-600' : 'text-red-500'
-                      }`}>
-                        {manualTransaction.amount ? '✓' : '✗'} Amount: {manualTransaction.amount ? `₹${parseFloat(manualTransaction.amount).toLocaleString('en-IN')}` : 'Not entered'}
-                      </div>
-                    </div>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
+                  <div className="text-center text-gray-500">
+                    <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-lg font-medium mb-2">Transaction Preview</p>
+                    <p className="text-sm">Complete the form above to see transaction details</p>
                   </div>
                 </div>
               )}

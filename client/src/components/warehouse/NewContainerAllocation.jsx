@@ -222,7 +222,8 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
       return;
     }
     
-    const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0);
+    // FIXED: Use backend-calculated availableCartons directly, no double subtraction
+    const maxAvailable = item.availableCartons || Math.max(0, (item.qcPassedCartons || 0) - (item.allocatedCartons || 0));
     const validQuantity = Math.max(0, Math.min(quantity, maxAvailable));
     
     console.log('Update order selection:', {
@@ -338,7 +339,8 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
     const allItems = [];
     orders.forEach(order => {
       order.items?.forEach(item => {
-        const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0);
+        // FIXED: Use backend-calculated availableCartons directly, no double subtraction
+        const maxAvailable = item.availableCartons || Math.max(0, (item.qcPassedCartons || 0) - (item.allocatedCartons || 0));
         const cbmPerCarton = item.unitCbm || 0;
         const weightPerCarton = item.unitWeight || 0;
         const chargePerCarton = item.carryingCharge?.rate || 0;
@@ -779,8 +781,8 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                               const key = `${order._id}_${item._id}`;
                               const selection = selectedOrders[key];
                               
-                              // Use correct property names from API response
-                              const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0);
+                              // FIXED: Use backend-calculated availableCartons directly, no double subtraction
+                              const maxAvailable = item.availableCartons || Math.max(0, (item.qcPassedCartons || 0) - (item.allocatedCartons || 0));
                               const cbmPerCarton = item.unitCbm || 0;
                               const weightPerCarton = item.unitWeight || 0;
                               const carryingChargePerCarton = item.carryingCharge?.rate || 0;
@@ -1040,7 +1042,7 @@ const NewContainerAllocation = ({ onComplete, onCancel }) => {
                       </SelectTrigger>
                       <SelectContent>
                         {shippingCompanies.length === 0 ? (
-                          <SelectItem value="" disabled>
+                          <SelectItem value="no-companies" disabled>
                             No active shipping companies found
                           </SelectItem>
                         ) : (

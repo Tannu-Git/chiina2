@@ -219,11 +219,21 @@ const Warehouse = () => {
     try {
       const { qcPassedQuantity, loopBackQuantity } = newQuantities
       
-      await axios.patch(`/api/warehouse/loopback/${orderId}/item/${itemIndex}`, {
+      console.log('🔄 [FRONTEND] Updating loop-back quantities:', {
+        orderId,
+        itemIndex,
+        qcPassedQuantity,
+        loopBackQuantity,
+        apiUrl: `/api/warehouse/loopback/${orderId}/item/${itemIndex}`
+      })
+      
+      const response = await axios.patch(`/api/warehouse/loopback/${orderId}/item/${itemIndex}`, {
         qcPassedQuantity,
         loopBackQuantity,
         notes: 'Updated via Warehouse Dashboard'
       })
+      
+      console.log('✅ [FRONTEND] Update response:', response.data)
       
       toast.success('Loop-back quantities updated successfully!')
       
@@ -233,8 +243,13 @@ const Warehouse = () => {
       // Clear editing state
       setEditingLoopBack(null)
     } catch (error) {
-      console.error('Error updating loop-back quantities:', error)
+      console.error('❌ [FRONTEND] Error updating loop-back quantities:', error)
       const errorMessage = error.response?.data?.message || 'Failed to update loop-back quantities'
+      console.error('❌ [FRONTEND] Error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: errorMessage
+      })
       toast.error(errorMessage)
     }
   }
@@ -646,9 +661,9 @@ const Warehouse = () => {
                   <div className="bg-orange-50 px-3 py-1 rounded-lg border border-orange-200">
                     <span className="text-orange-700 font-medium">
                       Total Units: {loopBackOrders.reduce((sum, lb) => {
-                        // Calculate ACTUAL remaining quantities by checking current item quantities
+                        // Calculate ACTUAL remaining loop-back quantities
                         const activeUnits = lb.status !== 'cancelled' && lb.status !== 'completed' ? 
-                          (lb.items?.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0) || 0) : 0
+                          (lb.totalLoopBackQuantity || 0) : 0
                         return sum + activeUnits
                       }, 0)}
                     </span>

@@ -302,8 +302,6 @@ const containerSchema = new mongoose.Schema({
 });
 
 // Enhanced indexes for financial queries
-containerSchema.index({ realContainerId: 1 });
-containerSchema.index({ clientFacingId: 1 });
 containerSchema.index({ status: 1 });
 containerSchema.index({ 'orders.clientId': 1 });
 containerSchema.index({ 'orders.paymentType': 1 });

@@ -173,7 +173,8 @@ const ContainerEdit = () => {
       return
     }
     
-    const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+    // FIXED: Use backend-calculated availableCartons directly, no double subtraction
+    const maxAvailable = item.availableCartons || Math.max(0, (item.qcPassedCartons || 0) - (item.allocatedCartons || 0))
     const validQuantity = Math.max(0, Math.min(quantity, maxAvailable))
     
     setSelectedOrderItems(prev => {
@@ -228,7 +229,8 @@ const ContainerEdit = () => {
     const allItems = []
     availableOrders.forEach(order => {
       order.items?.forEach(item => {
-        const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+        // FIXED: Use backend-calculated availableCartons directly, no double subtraction
+        const maxAvailable = item.availableCartons || Math.max(0, (item.qcPassedCartons || 0) - (item.allocatedCartons || 0))
         const cbmPerCarton = item.unitCbm || 0
         const weightPerCarton = item.unitWeight || 0
         const chargePerCarton = item.carryingCharge?.rate || 0
@@ -2155,7 +2157,8 @@ const ContainerEdit = () => {
                                           const key = `${order._id}_${item._id}`
                                           const selection = selectedOrderItems[key]
                                           
-                                          const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+                                          // FIXED: Use backend-calculated availableCartons directly, no double subtraction
+                                          const maxAvailable = item.availableCartons || Math.max(0, (item.qcPassedCartons || 0) - (item.allocatedCartons || 0))
                                           const cbmPerCarton = item.unitCbm || 0
                                           const weightPerCarton = item.unitWeight || 0
                                           const carryingChargePerCarton = item.carryingCharge?.rate || 0
@@ -3093,8 +3096,8 @@ const ContainerEdit = () => {
                                         const key = `${order._id}_${item._id}`
                                         const selection = selectedOrderItems[key]
                                         
-                                        // Use correct property names from API response
-                                        const maxAvailable = (item.availableCartons || item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+                                        // FIXED: Use backend-calculated availableCartons directly, no double subtraction
+                                        const maxAvailable = item.availableCartons || Math.max(0, (item.qcPassedCartons || 0) - (item.allocatedCartons || 0))
                                         const cbmPerCarton = item.unitCbm || 0
                                         const weightPerCarton = item.unitWeight || 0
                                         const carryingChargePerCarton = item.carryingCharge?.rate || 0

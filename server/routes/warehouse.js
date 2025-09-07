@@ -150,6 +150,14 @@ router.patch('/loopback/:orderId/item/:itemIndex', auth, authorize('admin', 'sta
     const { orderId, itemIndex } = req.params;
     const { qcPassedQuantity, loopBackQuantity, notes } = req.body;
     
+    console.log('🔍 [BACKEND] Received loop-back update request:', {
+      orderId,
+      itemIndex,
+      qcPassedQuantity,
+      loopBackQuantity,
+      notes
+    });
+    
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -183,9 +191,41 @@ router.patch('/loopback/:orderId/item/:itemIndex', auth, authorize('admin', 'sta
       });
     }
 
+    // Store old values before updating
+    const oldQcPassed = item.qcPassedQuantity || 0;
+    const oldLoopBack = item.loopBackQuantity || 0;
+    
     // Update item quantities
     item.qcPassedQuantity = newQcPassed;
     item.loopBackQuantity = newLoopBack;
+    
+    // CRITICAL: Also update carton values to keep them in sync for order-level calculations
+    // Calculate equivalent carton values based on quantity updates
+    const expectedCartons = item.cartons || 0;
+    
+    if (expectedQuantity > 0 && expectedCartons > 0) {
+      const piecesPerCarton = expectedQuantity / expectedCartons;
+      
+      // Convert quantities to carton equivalents
+      const newQcPassedCartons = Math.round(newQcPassed / piecesPerCarton);
+      const newLoopBackCartons = Math.round(newLoopBack / piecesPerCarton);
+      
+      // Update carton values for order-level total calculations
+      item.qcPassedCartons = newQcPassedCartons;
+      item.loopBackCartons = newLoopBackCartons;
+      
+      console.log('🔄 [BACKEND] Syncing carton values for order totals:', {
+        itemCode: item.itemCode,
+        piecesPerCarton: piecesPerCarton.toFixed(2),
+        newQcPassed,
+        newQcPassedCartons,
+        newLoopBack,
+        newLoopBackCartons
+      });
+    }
+    
+    // CRITICAL: Set bypass flag to prevent pre-save middleware from overriding our direct quantity updates
+    item._bypassQuantityRecalculation = true;
     
     // Update loop-back metadata
     if (newLoopBack > 0) {
@@ -215,15 +255,25 @@ router.patch('/loopback/:orderId/item/:itemIndex', auth, authorize('admin', 'sta
     }
 
     order.updatedBy = req.user.id;
-    await order.save();
-
-    console.log('Loop-back quantity updated:', {
+    const saveResult = await order.save();
+    
+    // Verify the save operation by re-querying the database
+    const verifyOrder = await Order.findById(orderId);
+    const verifyItem = verifyOrder.items[itemIdx];
+    
+    console.log('✅ [BACKEND] Loop-back quantity updated:', {
       orderNumber: order.orderNumber,
       itemCode: item.itemCode,
-      oldQcPassed: (item.qcPassedQuantity || 0),
+      oldQcPassed,
       newQcPassed,
-      oldLoopBack: (item.loopBackQuantity || 0),
-      newLoopBack
+      oldLoopBack,
+      newLoopBack,
+      saveSuccessful: !!saveResult,
+      savedToDb: true,
+      // Verification from database
+      verifiedQcPassed: verifyItem.qcPassedQuantity,
+      verifiedLoopBack: verifyItem.loopBackQuantity,
+      dataConsistent: verifyItem.qcPassedQuantity === newQcPassed && verifyItem.loopBackQuantity === newLoopBack
     });
 
     res.json({
@@ -316,6 +366,25 @@ router.patch('/loopback/:orderId/bulk', auth, authorize('admin', 'staff'), async
       
       item.qcPassedQuantity = update.newQcPassed;
       item.loopBackQuantity = update.newLoopBack;
+      
+      // CRITICAL: Also update carton values to keep them in sync for order-level calculations
+      const expectedQuantity = item.quantity || 0;
+      const expectedCartons = item.cartons || 0;
+      
+      if (expectedQuantity > 0 && expectedCartons > 0) {
+        const piecesPerCarton = expectedQuantity / expectedCartons;
+        
+        // Convert quantities to carton equivalents
+        const newQcPassedCartons = Math.round(update.newQcPassed / piecesPerCarton);
+        const newLoopBackCartons = Math.round(update.newLoopBack / piecesPerCarton);
+        
+        // Update carton values for order-level total calculations
+        item.qcPassedCartons = newQcPassedCartons;
+        item.loopBackCartons = newLoopBackCartons;
+      }
+      
+      // CRITICAL: Set bypass flag to prevent pre-save middleware from overriding our direct quantity updates
+      item._bypassQuantityRecalculation = true;
       
       // Update loop-back metadata
       if (update.newLoopBack > 0) {
@@ -818,15 +887,67 @@ router.post('/container-allocation', auth, authorize('admin', 'staff'), async (r
 });
 
 // @route   POST /api/warehouse/allocate-container
-// @desc    Allocate order to container
+// @desc    Allocate order to container with STRICT availability validation
 // @access  Private (Admin/Staff only)
 router.post('/allocate-container', auth, authorize('admin', 'staff'), async (req, res) => {
   try {
-    const { orderId, containerId, allocatedCbm, allocatedWeight, allocatedCartons } = req.body;
+    const { orderId, containerId, allocatedCbm, allocatedWeight, allocatedCartons, itemAllocations } = req.body;
+
+    console.log('🔍 [ALLOCATION] Starting allocation request:', {
+      orderId,
+      containerId,
+      allocatedCartons,
+      itemAllocations: itemAllocations?.length || 0
+    });
 
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // CRITICAL VALIDATION: Check available quantities for each item
+    const availabilityIssues = [];
+    let totalAvailableCartons = 0;
+    
+    // Calculate current availability
+    order.items.forEach((item, index) => {
+      const qcPassedCartons = item.qcPassedCartons || 0;
+      const currentAllocatedCartons = item.allocatedCartons || 0;
+      const availableCartons = qcPassedCartons - currentAllocatedCartons;
+      totalAvailableCartons += availableCartons;
+      
+      console.log(`📊 [ALLOCATION] Item ${index} (${item.itemCode}):`, {
+        qcPassed: qcPassedCartons,
+        allocated: currentAllocatedCartons,
+        available: availableCartons
+      });
+    });
+    
+    // Validate requested allocation against availability
+    if (allocatedCartons > totalAvailableCartons) {
+      console.error('❌ [ALLOCATION] Insufficient availability:', {
+        requested: allocatedCartons,
+        available: totalAvailableCartons,
+        shortage: allocatedCartons - totalAvailableCartons
+      });
+      
+      return res.status(400).json({
+        message: 'Allocation request exceeds available quantities',
+        error: 'INSUFFICIENT_AVAILABILITY',
+        details: {
+          orderNumber: order.orderNumber,
+          requestedCartons: allocatedCartons,
+          availableCartons: totalAvailableCartons,
+          shortage: allocatedCartons - totalAvailableCartons,
+          breakdown: order.items.map((item, index) => ({
+            itemIndex: index,
+            itemCode: item.itemCode,
+            qcPassed: item.qcPassedCartons || 0,
+            allocated: item.allocatedCartons || 0,
+            available: (item.qcPassedCartons || 0) - (item.allocatedCartons || 0)
+          }))
+        }
+      });
     }
 
     let container;
@@ -852,38 +973,211 @@ router.post('/allocate-container', auth, authorize('admin', 'staff'), async (req
       }
     }
 
-    // Add order to container
-    container.orders.push({
-      orderId: order._id,
-      allocatedCbm,
-      allocatedWeight,
+    // Process allocation without transactions (for standalone MongoDB compatibility)
+    // Save order and container separately with proper error handling
+    
+    try {
+      // First, update order item allocations
+      const totalQcPassedCartons = order.items.reduce((sum, item) => 
+        sum + (item.qcPassedCartons || 0), 0);
+      
+      if (totalQcPassedCartons > 0) {
+        order.items.forEach(item => {
+          const itemQcPassed = item.qcPassedCartons || 0;
+          const itemCurrentAllocated = item.allocatedCartons || 0;
+          const itemAvailable = itemQcPassed - itemCurrentAllocated;
+          
+          if (itemAvailable > 0) {
+            // Allocate proportionally based on availability
+            const itemShare = itemAvailable / totalAvailableCartons;
+            const itemAllocatedCartons = Math.floor(allocatedCartons * itemShare);
+            
+            // Calculate quantity equivalent
+            const expectedCartons = item.cartons || 0;
+            const expectedQuantity = item.quantity || 0;
+            let allocatedQuantity = 0;
+            
+            if (expectedCartons > 0 && expectedQuantity > 0) {
+              const piecesPerCarton = expectedQuantity / expectedCartons;
+              allocatedQuantity = Math.round(itemAllocatedCartons * piecesPerCarton);
+            }
+            
+            // Update item allocation
+            item.allocatedCartons = itemCurrentAllocated + itemAllocatedCartons;
+            item.allocatedQuantity = (item.allocatedQuantity || 0) + allocatedQuantity;
+            item.containerId = container._id;
+            
+            console.log(`✅ [ALLOCATION] Updated item ${item.itemCode}:`, {
+              allocated: itemAllocatedCartons,
+              newTotal: item.allocatedCartons,
+              remaining: itemQcPassed - item.allocatedCartons
+            });
+          }
+        });
+      }
+
+      // Update order status
+      const newTotalAllocated = order.items.reduce((sum, item) => 
+        sum + (item.allocatedCartons || 0), 0);
+      const totalQcPassed = order.items.reduce((sum, item) => 
+        sum + (item.qcPassedCartons || 0), 0);
+      
+      if (newTotalAllocated >= totalQcPassed) {
+        order.status = 'allocated';
+      } else {
+        order.status = 'partial_allocated';
+      }
+      
+      order.containerId = container._id;
+      
+      // Mark items array as modified for Mongoose
+      order.markModified('items');
+      
+      // Save order first
+      await order.save();
+      console.log('✅ [ALLOCATION] Order saved successfully');
+
+      // Add order to container
+      container.orders.push({
+        orderId: order._id,
+        clientId: order.clientId,
+        clientName: order.clientName,
+        cbmShare: allocatedCbm,
+        weightShare: allocatedWeight,
+        cartonShare: allocatedCartons,
+        partialAllocation: {
+          isPartial: allocatedCartons < totalAvailableCartons,
+          allocatedQuantity: allocatedCartons,
+          totalQuantity: order.totalCartons,
+          allocatedCartons: allocatedCartons,
+          totalCartons: order.totalCartons
+        },
+        paymentType: order.items[0]?.paymentType || 'THROUGH_ME',
+        carryingCharges: allocatedCbm * 100, // Simplified calculation
+        allocatedAt: new Date()
+      });
+
+      // Update container metrics
+      container.currentCbm += allocatedCbm;
+      container.currentWeight += allocatedWeight;
+      container.currentCartons = (container.currentCartons || 0) + allocatedCartons;
+
+      // Save container
+      await container.save();
+      console.log('✅ [ALLOCATION] Container saved successfully');
+      
+    } catch (saveError) {
+      console.error('❌ [ALLOCATION] Save operation failed:', saveError);
+      throw new Error(`Allocation save failed: ${saveError.message}`);
+    }
+
+    // Calculate new availability after allocation
+    const newAvailableCartons = totalAvailableCartons - allocatedCartons;
+
+    console.log('🎯 [ALLOCATION] Allocation completed:', {
+      orderNumber: order.orderNumber,
       allocatedCartons,
-      allocatedAt: new Date()
+      remainingAvailable: newAvailableCartons
     });
-
-    // Update container metrics
-    container.currentCbm += allocatedCbm;
-    container.currentWeight += allocatedWeight;
-    container.currentCartons += allocatedCartons;
-
-    // Update order status
-    order.status = 'allocated';
-    order.containerId = container._id;
-
-    await Promise.all([container.save(), order.save()]);
 
     res.json({
       message: 'Order allocated to container successfully',
+      allocation: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        containerId: container._id,
+        containerNumber: container.realContainerId,
+        allocatedCartons,
+        totalAvailableCartons,
+        remainingAvailable: newAvailableCartons
+      },
       container: {
         id: container._id,
         clientFacingId: container.clientFacingId,
         currentCbm: container.currentCbm,
-        maxCbm: container.maxCbm
+        maxCbm: container.maxCbm,
+        utilization: `${((container.currentCbm / container.maxCbm) * 100).toFixed(1)}%`
       }
     });
   } catch (error) {
     console.error('Container allocation error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error.message,
+      details: 'Allocation failed due to system error'
+    });
+  }
+});
+
+// @route   GET /api/warehouse/order-availability/:orderId
+// @desc    Get real-time availability for order items
+// @access  Private (Admin/Staff only)
+router.get('/order-availability/:orderId', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    const availability = {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      qcStatus: order.qcStatus,
+      items: [],
+      totals: {
+        qcPassed: 0,
+        allocated: 0,
+        available: 0
+      }
+    };
+    
+    order.items.forEach((item, index) => {
+      const qcPassedCartons = item.qcPassedCartons || 0;
+      const allocatedCartons = item.allocatedCartons || 0;
+      const availableCartons = qcPassedCartons - allocatedCartons;
+      
+      const itemAvailability = {
+        itemIndex: index,
+        itemCode: item.itemCode,
+        description: item.description,
+        totalCartons: item.cartons || 0,
+        qcPassedCartons,
+        allocatedCartons,
+        availableCartons,
+        allocationPercentage: qcPassedCartons > 0 ? 
+          Math.round((allocatedCartons / qcPassedCartons) * 100) : 0,
+        containerId: item.containerId,
+        canAllocate: availableCartons > 0
+      };
+      
+      availability.items.push(itemAvailability);
+      
+      // Update totals
+      availability.totals.qcPassed += qcPassedCartons;
+      availability.totals.allocated += allocatedCartons;
+      availability.totals.available += availableCartons;
+    });
+    
+    availability.totals.allocationPercentage = availability.totals.qcPassed > 0 ?
+      Math.round((availability.totals.allocated / availability.totals.qcPassed) * 100) : 0;
+    
+    console.log(`📊 [AVAILABILITY] Order ${order.orderNumber}:`, {
+      totalAvailable: availability.totals.available,
+      allocationPercentage: availability.totals.allocationPercentage
+    });
+    
+    res.json({
+      message: 'Order availability retrieved successfully',
+      availability,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Get order availability error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

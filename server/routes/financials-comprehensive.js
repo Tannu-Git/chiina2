@@ -517,38 +517,38 @@ router.get('/payment-records/:clientId', auth, authorize('admin', 'staff'), asyn
     const paymentRecords = [];
     let runningBalance = 0;
     
-    // Process orders chronologically
-    orders.forEach(order => {
-      // Get actual product cost from items or calculate it
-      const productCost = order.items ? 
-        order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) : 
-        Math.max(0, (order.totalAmount || 0) - (order.totalCarryingCharges || 0));
-      
-      const carryingCharges = order.totalCarryingCharges || 0;
-      const totalOrderAmount = productCost + carryingCharges;
-      
-      // Add to running balance (debit - money owed to us)
-      runningBalance += totalOrderAmount;
-      
-      paymentRecords.push({
-        id: order._id,
-        date: order.createdAt,
-        type: 'ORDER_INVOICE',
-        reference: order.orderNumber,
-        description: `Order Invoice - ${order.orderNumber}`,
-        particulars: {
-          productDescription: order.items?.map(item => item.description).join(', ') || 'Product',
-          productCost: productCost,
-          carryingCharges: carryingCharges,
-          container: order.containerId?.realContainerId || order.containerId?.clientFacingId || 'Not Allocated'
-        },
-        debit: totalOrderAmount, // Money owed to us
-        credit: 0,
-        balance: runningBalance,
-        status: order.status?.toUpperCase() || 'PENDING',
-        paymentType: 'THROUGH_ME',
-        notes: `${order.items?.length || 0} items ordered`
-      });
+    // FIXED: For clients with payment collections that include order obligations,
+    // use the payment collection totalAmount as the invoice amount, not order amounts
+    // This prevents double-counting of invoices and payments
+    
+    // Create invoice records from payment collections instead of orders
+    paymentCollections.forEach(paymentCollection => {
+      if (paymentCollection.paymentType !== 'MANUAL' && paymentCollection.totalAmount > 0) {
+        // This is an actual invoice (order obligation)
+        runningBalance += paymentCollection.totalAmount;
+        
+        const relatedOrder = orders.find(o => o._id.toString() === (paymentCollection.orderId?.toString() || ''));
+        
+        paymentRecords.push({
+          id: `inv-${paymentCollection._id}`,
+          date: paymentCollection.createdAt,
+          type: 'ORDER_INVOICE',
+          reference: relatedOrder?.orderNumber || 'N/A',
+          description: paymentCollection.description || `Invoice for order`,
+          particulars: {
+            orderId: paymentCollection.orderId,
+            containerId: paymentCollection.containerId,
+            paymentType: paymentCollection.paymentType,
+            invoiceAmount: paymentCollection.totalAmount
+          },
+          debit: paymentCollection.totalAmount, // Money owed to us
+          credit: 0,
+          balance: runningBalance,
+          status: 'PENDING',
+          paymentType: paymentCollection.paymentType,
+          notes: paymentCollection.description || 'Invoice created'
+        });
+      }
     });
     
     // Process payment collections chronologically
@@ -556,54 +556,97 @@ router.get('/payment-records/:clientId', auth, authorize('admin', 'staff'), asyn
       // Process each individual payment in payment history
       if (paymentCollection.paymentHistory && paymentCollection.paymentHistory.length > 0) {
         paymentCollection.paymentHistory.forEach(payment => {
-          // Subtract from running balance (credit - money received from client)
-          runningBalance -= payment.amount;
+          // FIXED: Validate payment amount before processing
+          const paymentAmount = payment.amount || 0;
+          
+          if (paymentAmount === 0) {
+            console.warn(`⚠️ Zero payment amount found for client ${clientId}, payment ID: ${payment._id}`);
+            console.warn(`   PaymentCollection ID: ${paymentCollection._id}`);
+            console.warn(`   Payment details:`, payment);
+            // Skip zero-amount payments to prevent phantom transactions
+            return;
+          }
+          
+          // FIXED: Handle negative amounts properly (manual payments given to clients)
+          let debitAmount = 0;
+          let creditAmount = 0;
+          
+          if (paymentAmount > 0) {
+            // Positive amount = money received from client (credit)
+            creditAmount = paymentAmount;
+            runningBalance -= paymentAmount;
+          } else {
+            // Negative amount = money given to client (debit to them, credit to us gets reduced)
+            debitAmount = Math.abs(paymentAmount);
+            runningBalance += Math.abs(paymentAmount);
+          }
           
           paymentRecords.push({
             id: `${paymentCollection._id}-${payment._id}`,
             date: payment.receivedDate,
-            type: 'PAYMENT_RECEIVED',
+            type: paymentAmount > 0 ? 'PAYMENT_RECEIVED' : 'PAYMENT_GIVEN',
             reference: `Payment #${payment._id?.toString().slice(-6) || 'N/A'}`,
-            description: `Payment received from ${clientName}`,
+            description: paymentAmount > 0 ? 
+              `Payment received from ${clientName}` : 
+              `Payment given to ${clientName}`,
             particulars: {
               paymentMethod: payment.paymentMethod || 'Not specified',
               bankReference: payment.bankReference || 'N/A',
-              notes: payment.notes || 'Payment received',
-              totalDue: paymentCollection.totalAmount
+              notes: payment.notes || (paymentAmount > 0 ? 'Payment received' : 'Payment given'),
+              totalDue: paymentCollection.totalAmount,
+              actualAmount: paymentAmount // Debug info
             },
-            debit: 0,
-            credit: payment.amount, // Money received from client
+            debit: debitAmount, // Money we gave to client (increases their balance)
+            credit: creditAmount, // Money we received from client (decreases their balance)
             balance: runningBalance,
             status: 'RECEIVED',
             paymentType: paymentCollection.paymentType || 'THROUGH_ME',
-            notes: payment.notes || 'Payment received'
+            notes: payment.notes || (paymentAmount > 0 ? 'Payment received' : 'Payment given')
           });
         });
-      } else {
-        // If no detailed payment history, create a single payment record
-        if (paymentCollection.receivedAmount > 0) {
-          runningBalance -= paymentCollection.receivedAmount;
-          
-          paymentRecords.push({
-            id: paymentCollection._id,
-            date: paymentCollection.createdAt,
-            type: 'PAYMENT_RECEIVED',
-            reference: `Payment #${paymentCollection._id.toString().slice(-6)}`,
-            description: `Payment received from ${clientName}`,
-            particulars: {
-              totalAmount: paymentCollection.totalAmount,
-              receivedAmount: paymentCollection.receivedAmount,
-              pendingAmount: (paymentCollection.totalAmount || 0) - (paymentCollection.receivedAmount || 0),
-              paymentMethod: 'Not specified'
-            },
-            debit: 0,
-            credit: paymentCollection.receivedAmount,
-            balance: runningBalance,
-            status: paymentCollection.status?.toUpperCase() || 'RECEIVED',
-            paymentType: paymentCollection.paymentType || 'THROUGH_ME',
-            notes: paymentCollection.description || 'Payment received'
+      } else if (paymentCollection.paymentType !== 'MANUAL' && (paymentCollection.receivedAmount || 0) > 0) {
+        // If no detailed payment history, create a single payment record ONLY for non-manual transactions
+        // FIXED: Skip manual transactions without payment history to avoid double-counting
+        const receivedAmount = paymentCollection.receivedAmount || 0;
+        
+        if (receivedAmount === 0) {
+          console.warn(`⚠️ Zero received amount in payment collection for client ${clientId}`);
+          console.warn(`   PaymentCollection ID: ${paymentCollection._id}`);
+          console.warn(`   Collection details:`, {
+            totalAmount: paymentCollection.totalAmount,
+            receivedAmount: paymentCollection.receivedAmount,
+            pendingAmount: paymentCollection.pendingAmount,
+            description: paymentCollection.description
           });
+          // Skip zero-amount collections to prevent phantom transactions
+          return;
         }
+        
+        runningBalance -= receivedAmount;
+        
+        paymentRecords.push({
+          id: paymentCollection._id,
+          date: paymentCollection.createdAt,
+          type: 'PAYMENT_RECEIVED',
+          reference: `Payment #${paymentCollection._id.toString().slice(-6)}`,
+          description: `Payment received from ${clientName}`,
+          particulars: {
+            totalAmount: paymentCollection.totalAmount,
+            receivedAmount: receivedAmount,
+            pendingAmount: (paymentCollection.totalAmount || 0) - receivedAmount,
+            paymentMethod: 'Not specified',
+            actualAmount: receivedAmount // Debug info
+          },
+          debit: 0,
+          credit: receivedAmount,
+          balance: runningBalance,
+          status: paymentCollection.status?.toUpperCase() || 'RECEIVED',
+          paymentType: paymentCollection.paymentType || 'THROUGH_ME',
+          notes: paymentCollection.description || 'Payment received'
+        });
+      } else {
+        // For manual transactions without payment history, log but don't create duplicate records
+        console.log(`📋 Skipping manual payment collection ${paymentCollection._id} - already processed via payment history or no transactions`);
       }
     });
     
@@ -617,14 +660,38 @@ router.get('/payment-records/:clientId', auth, authorize('admin', 'staff'), asyn
         recalculatedBalance += record.debit;
       } else if (record.type === 'PAYMENT_RECEIVED') {
         recalculatedBalance -= record.credit;
+      } else if (record.type === 'PAYMENT_GIVEN') {
+        recalculatedBalance += record.debit; // Payment given increases client balance (we owe them)
       }
       record.balance = recalculatedBalance;
     });
     
-    // Calculate totals
+    // Calculate totals - FIXED: Use proper debit/credit accounting
     const totalDebits = paymentRecords.reduce((sum, record) => sum + (record.debit || 0), 0);
     const totalCredits = paymentRecords.reduce((sum, record) => sum + (record.credit || 0), 0);
-    const currentBalance = totalDebits - totalCredits;
+    
+    // FIXED: Calculate balance based on the payment collections pending amount logic
+    // For manual-only clients like ASDA, use the sum of payment collection pending amounts
+    const manualClientBalance = paymentCollections.reduce((sum, pc) => sum + (pc.pendingAmount || 0), 0);
+    
+    // If this is primarily a manual transaction client (no order invoices), use manual balance
+    const hasOrderInvoices = paymentRecords.some(record => record.type === 'ORDER_INVOICE');
+    const currentBalance = hasOrderInvoices ? (totalDebits - totalCredits) : manualClientBalance;
+    
+    console.log(`📊 Balance calculation for ${clientName}:`);
+    console.log(`   Has order invoices: ${hasOrderInvoices}`);
+    console.log(`   Debit/Credit balance: ₹${(totalDebits - totalCredits).toFixed(2)}`);
+    console.log(`   Manual client balance: ₹${manualClientBalance.toFixed(2)}`);
+    console.log(`   Using balance: ₹${currentBalance.toFixed(2)}`);
+    
+    // FIXED: For display purposes, separate invoiced vs received amounts properly
+    const actualTotalReceived = paymentRecords
+      .filter(record => record.type === 'PAYMENT_RECEIVED')
+      .reduce((sum, record) => sum + (record.credit || 0), 0);
+    
+    const actualTotalInvoiced = paymentRecords
+      .filter(record => record.type === 'ORDER_INVOICE')
+      .reduce((sum, record) => sum + (record.debit || 0), 0);
     
     // Get container information
     const containerInfo = containers.map(container => ({
@@ -639,9 +706,9 @@ router.get('/payment-records/:clientId', auth, authorize('admin', 'staff'), asyn
       clientId,
       clientName,
       accountSummary: {
-        totalInvoiced: totalDebits, // Total amount invoiced (orders)
-        totalReceived: totalCredits, // Total payments received
-        currentBalance: currentBalance, // Outstanding amount
+        totalInvoiced: actualTotalInvoiced, // Only actual order invoices
+        totalReceived: actualTotalReceived, // Only actual payments received
+        currentBalance: currentBalance, // Proper balance calculation
         totalTransactions: paymentRecords.length,
         totalOrders: orders.length,
         totalPaymentCollections: paymentCollections.length
@@ -652,7 +719,8 @@ router.get('/payment-records/:clientId', auth, authorize('admin', 'staff'), asyn
         generatedAt: new Date().toISOString(),
         period: 'All Time',
         currency: 'INR',
-        recordType: 'PAYMENT_LEDGER'
+        recordType: 'PAYMENT_LEDGER',
+        calculationMethod: hasOrderInvoices ? 'DEBIT_CREDIT' : 'MANUAL_BALANCE'
       }
     };
     

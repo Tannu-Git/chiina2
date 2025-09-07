@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Container = require('../models/Container');
 const Order = require('../models/Order');
 const { auth, authorize, maskContainerIds, maskFinancialData } = require('../middleware/auth');
@@ -272,58 +273,118 @@ router.delete('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
       const orderIds = container.orders.map(order => order.orderId).filter(Boolean);
       
       if (orderIds.length > 0) {
-        // COMPREHENSIVE CLEANUP: Clear both order-level and item-level allocation data
-        const updateResult = await Order.updateMany(
-          { _id: { $in: orderIds } },
-          { 
-            $unset: { containerId: 1 },
-            $set: { 
-              status: 'ready',
-              updatedBy: req.user.id,
-              updatedAt: new Date()
-            }
-          }
-        );
+        console.log(`🔄 [DELETE CONTAINER] Clearing allocations for ${orderIds.length} orders`);
         
-        // CRITICAL FIX: Use proper MongoDB syntax for clearing item allocations
+        // Process each order individually with proper error handling
+        // Note: Using individual saves instead of transactions for standalone MongoDB
+        const clearResults = [];
+        
         for (const orderId of orderIds) {
           try {
-            await Order.updateOne(
-              { _id: orderId },
-              {
-                $set: {
-                  'items.$[].allocatedCartons': 0,
-                  'items.$[].allocatedQuantity': 0,
-                  'items.$[].containerId': null
-                }
+            const order = await Order.findById(orderId);
+            if (order && order.items) {
+              // Store original values for rollback if needed
+              const originalAllocations = order.items.map(item => ({
+                allocatedCartons: item.allocatedCartons || 0,
+                allocatedQuantity: item.allocatedQuantity || 0,
+                containerId: item.containerId
+              }));
+              
+              // Clear item-level allocations
+              order.items.forEach(item => {
+                console.log(`🔄 [DELETE CONTAINER] Clearing item ${item.itemCode}: ${item.allocatedCartons} -> 0`);
+                item.allocatedCartons = 0;
+                item.allocatedQuantity = 0;
+                item.containerId = null;
+                
+                // Set bypass flag to prevent middleware interference
+                item._bypassQuantityRecalculation = true;
+              });
+              
+              // Update order status and clear container reference
+              order.status = 'ready';
+              order.containerId = null;
+              order.updatedBy = req.user.id;
+              order.updatedAt = new Date();
+              
+              // Set bypass flag for order-level save
+              order._bypassAllocationValidation = true;
+              
+              // Mark the items array as modified for Mongoose
+              order.markModified('items');
+              
+              await order.save();
+              
+              // Verify the save was successful
+              const verifyOrder = await Order.findById(orderId);
+              const totalAllocated = verifyOrder.items.reduce((sum, item) => 
+                sum + (item.allocatedCartons || 0), 0);
+              
+              if (totalAllocated === 0 && !verifyOrder.containerId) {
+                console.log(`✅ [DELETE CONTAINER] Successfully cleared order ${order.orderNumber}`);
+                clearResults.push({ orderId, orderNumber: order.orderNumber, success: true });
+              } else {
+                console.error(`❌ [DELETE CONTAINER] Verification failed for order ${order.orderNumber}`);
+                clearResults.push({ orderId, orderNumber: order.orderNumber, success: false, 
+                  issue: 'Verification failed - allocations not properly cleared' });
               }
-            );
-            console.log(`✅ [DELETE CONTAINER] Cleared item allocations for order ${orderId}`);
-          } catch (itemError) {
-            console.warn(`⚠️ [DELETE CONTAINER] Failed to clear item allocations for order ${orderId}:`, itemError.message);
-            
-            // Fallback: Manual item clearing
-            try {
-              const order = await Order.findById(orderId);
-              if (order && order.items) {
-                order.items.forEach(item => {
-                  item.allocatedCartons = 0;
-                  item.allocatedQuantity = 0;
-                  item.containerId = null;
-                });
-                await order.save();
-                console.log(`✅ [DELETE CONTAINER] Fallback clearing successful for order ${orderId}`);
-              }
-            } catch (fallbackError) {
-              console.error(`❌ [DELETE CONTAINER] Fallback clearing failed for order ${orderId}:`, fallbackError.message);
+              
+            } else {
+              console.warn(`⚠️ [DELETE CONTAINER] Order ${orderId} not found or has no items`);
+              clearResults.push({ orderId, success: false, issue: 'Order not found or has no items' });
             }
+          } catch (orderError) {
+            console.error(`❌ [DELETE CONTAINER] Failed to clear order ${orderId}:`, orderError.message);
+            clearResults.push({ orderId, success: false, error: orderError.message });
           }
+        }
+        
+        // Check if all orders were successfully cleared
+        const successfulClears = clearResults.filter(result => result.success);
+        const failedClears = clearResults.filter(result => !result.success);
+        
+        console.log(`📊 [DELETE CONTAINER] Cleanup summary:`, {
+          total: clearResults.length,
+          successful: successfulClears.length,
+          failed: failedClears.length
+        });
+        
+        if (failedClears.length > 0) {
+          console.error(`⚠️ [DELETE CONTAINER] Some orders failed to clear:`, failedClears);
+          // Continue with container deletion but warn about partial cleanup
+        }
+        
+        // Final verification check
+        console.log(`🔍 [DELETE CONTAINER] Final verification check...`);
+        const finalVerification = await Order.find({ _id: { $in: orderIds } });
+        const stillAllocated = finalVerification.filter(order => {
+          const totalAllocated = order.items.reduce((sum, item) => sum + (item.allocatedCartons || 0), 0);
+          return totalAllocated > 0 || order.containerId;
+        });
+        
+        if (stillAllocated.length > 0) {
+          console.warn(`⚠️ [DELETE CONTAINER] ${stillAllocated.length} orders still have allocations:`, 
+            stillAllocated.map(o => o.orderNumber));
+        } else {
+          console.log(`✅ [DELETE CONTAINER] All allocations successfully cleared`);
         }
       }
     }
 
     // Delete the container
     await Container.findByIdAndDelete(req.params.id);
+
+    // CRITICAL FIX: Clean up orphaned payment collection records
+    console.log(`🧹 [DELETE CONTAINER] Cleaning up payment collection records...`);
+    const PaymentCollection = mongoose.model('PaymentCollection');
+    
+    try {
+      const deletePaymentResult = await PaymentCollection.deleteMany({ containerId: req.params.id });
+      console.log(`✅ [DELETE CONTAINER] Deleted ${deletePaymentResult.deletedCount} payment collection records`);
+    } catch (paymentError) {
+      console.error(`⚠️ [DELETE CONTAINER] Failed to clean payment records:`, paymentError.message);
+      // Don't fail the whole operation, just log the error
+    }
 
     console.log(`✅ [DELETE CONTAINER] Container ${container.realContainerId} deleted successfully`);
 

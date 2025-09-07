@@ -197,8 +197,7 @@ const orderSchema = new mongoose.Schema({
   },
   clientId: {
     type: String,
-    required: true,
-    index: true
+    required: true
   },
   clientName: {
     type: String,
@@ -414,7 +413,18 @@ orderSchema.pre('save', function(next) {
       item.allocatedCartons = allocatedCtn;
       
       // Calculate derived quantity values for compatibility (SECONDARY)
-      if (expectedCtn > 0 && expectedQty > 0) {
+      // CRITICAL: Only recalculate if not bypassing (direct quantity updates)
+      if (item._bypassQuantityRecalculation) {
+        // Keep the directly set values, don't recalculate
+        console.log(`🚫 [ORDER PRE-SAVE] Bypassing quantity recalculation for item ${item.itemCode || index}`);
+        // BUT still ensure carton values are properly set for order-level calculations
+        // (They should already be set in the route handler, but let's ensure consistency)
+        if (expectedCtn > 0) {
+          item.qcPassedCartons = item.qcPassedCartons || 0;
+          item.loopBackCartons = item.loopBackCartons || 0;
+        }
+        item._bypassQuantityRecalculation = undefined; // Clear flag
+      } else if (expectedCtn > 0 && expectedQty > 0) {
         const piecesPerCarton = expectedQty / expectedCtn;
         item.qcPassedQuantity = Math.round(qcPassedCtn * piecesPerCarton);
         item.loopBackQuantity = Math.round(loopBackCtn * piecesPerCarton);
@@ -518,15 +528,18 @@ orderSchema.pre('save', function(next) {
       }
     }
     
-    console.log('Order carton-based tracking calculated:', {
+    console.log('📊 [ORDER PRE-SAVE] Order carton-based tracking calculated:', {
       orderNumber: this.orderNumber,
       totalOrderCartons,
       totalQcPassedCartons,
       totalLoopBackCartons,
       totalPendingCartons,
+      totalQcPassedQuantity,
+      totalLoopBackQuantity,
       qcCompletionPercentage: this.qcCompletionPercentage,
       qcStatus: this.qcStatus,
-      status: this.status
+      status: this.status,
+      itemsWithBypass: this.items.filter(item => item._bypassQuantityRecalculation).length
     });
   } else {
     // Set defaults if no items
