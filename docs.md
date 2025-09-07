@@ -85,6 +85,71 @@ A comprehensive logistics order management system with warehouse operations, QC 
 
 ---
 
+## 🚨 CRITICAL: API CALCULATION DISCREPANCY DISCOVERED
+
+**Date:** 2025-09-07  
+**Issue:** Comprehensive Dashboard API vs Admin Users API showing different amounts for NLJ client
+
+### **Problem Summary:**
+- **Comprehensive Dashboard API** (`/api/financials-comprehensive/comprehensive-dashboard`): Shows ₹10,000 for NLJ client
+- **Admin Users API** (`/api/users`): Shows ₹6,000 for NLJ client
+- **Root Cause:** Different calculation logic and data source handling
+
+### **Key Differences Identified:**
+
+#### 1. **Data Processing Flow:**
+- **Comprehensive Dashboard:** Processes containers FIRST, then calculates client amounts based on container orders
+- **Admin Users:** Processes orders FIRST, then looks up containers for each order
+
+#### 2. **Calculation Method:**
+- **Comprehensive Dashboard (Lines 94-99):** 
+  ```javascript
+  // Gets ALL orders and containers, then matches them
+  const order = orders.find(o => o.clientId === containerOrder.clientId);
+  const allocatedProductCost = calculateAllocatedProductCost(order, containers);
+  const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, containers);
+  client.paymentBreakdown.throughMe.amount += allocatedProductCost + allocatedCarryingCharges;
+  ```
+
+- **Admin Users (Lines 91-96):**
+  ```javascript
+  // Gets containers for each specific order
+  const containers = await Container.find({ 'orders.orderId': order._id });
+  const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, containers);
+  const allocatedProductCost = calculateAllocatedProductCost(order, containers);
+  allocatedAmount = allocatedProductCost + allocatedCarryingCharges;
+  ```
+
+#### 3. **Payment Collection Handling:**
+- **Comprehensive Dashboard:** Applies payment collections as deductions AFTER calculating gross amounts
+- **Admin Users:** Uses PaymentCollection model directly for balance, separate from allocated calculations
+
+### **Expected vs Actual Results:**
+- **Expected (from comprehensive):** ₹10,000 (shows full allocated amount)
+- **Actual (from users API):** ₹6,000 (shows container-specific allocated amount)
+- **Discrepancy:** ₹4,000 difference suggests different allocation calculation scope
+
+### **Resolution Required:**
+1. **✅ FIXED: Standardized calculation logic** - Admin users API now uses ALL containers like comprehensive dashboard
+2. **✅ FIXED: Used same data fetching pattern** - Both APIs now use comprehensive container scope
+3. **✅ FIXED: Consistent allocation-aware calculations** - Both APIs now pass ALL containers to calculation functions
+4. **Verify payment collection handling** is identical
+
+### **Fix Applied:**
+- **Admin Users API (users.js Lines 84-118):** Modified to fetch ALL containers instead of order-specific containers
+- **Calculation Logic:** Now matches comprehensive dashboard by passing `allContainers` to allocation functions
+- **Expected Result:** Admin users page should now show ₹10,000 for NLJ client (matching comprehensive dashboard)
+
+### **Status:** ⚠️ PARTIALLY RESOLVED - Testing required to verify fix
+
+### **Impact:**
+- **Financial Dashboard** shows one amount
+- **Admin Users page** shows different amount
+- **Data inconsistency** affects business decisions
+- **User confusion** about actual client obligations
+
+---
+
 ## 📊 Current Database State Analysis
 
 ### Orders Collection

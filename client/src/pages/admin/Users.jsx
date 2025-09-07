@@ -1132,9 +1132,9 @@ const Users = () => {
                             <div className="space-y-1">
                               <div className="text-sm font-medium text-foreground">{user.ordersCount || 0} orders</div>
                               <div className="text-sm text-muted-foreground">{user.containerCount || 0} containers</div>
-                              <div className="text-sm font-medium text-muted-foreground">
+                              {/* <div className="text-sm font-medium text-muted-foreground">
                                 Allocated: {formatCurrency(user.totalSpent || 0)}
-                              </div>
+                              </div> */}
                               <div className={`text-sm font-medium ${getBalanceColor(user.accountBalance?.INR || 0)}`}>
                                 {(user.accountBalance?.INR || 0) > 0 ? 
                                   `Owes: ${formatCurrency(user.accountBalance?.INR || 0)}` :

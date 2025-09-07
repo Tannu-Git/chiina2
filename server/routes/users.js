@@ -80,37 +80,105 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
           // Calculate allocation-aware total spent
           let totalAllocatedAmount = 0;
           
+          console.log(`\n🔍 [USER STATS] Starting calculation for client: ${user.name} (${user.clientId})`);
+          console.log(`📋 [USER STATS] Found ${orders.length} orders for this client`);
+          
           for (const order of orders) {
             try {
-              // Get containers for this order to calculate allocated amounts
-              const containers = await Container.find({
-                'orders.orderId': order._id
-              }).lean();
+              console.log(`\n📦 [USER STATS] Processing Order: ${order.orderNumber}`);
               
-              if (containers.length > 0) {
-                // Use allocation-aware calculations
-                const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, containers);
+              // FIXED: Get ALL containers (not just order-specific) to match comprehensive dashboard logic
+              const allContainers = await Container.find({}).lean();
+              console.log(`🗂️ [USER STATS] Total containers in system: ${allContainers.length}`);
+              
+              // Filter containers that have this client's orders
+              const clientContainers = allContainers.filter(container => 
+                container.orders.some(containerOrder => containerOrder.clientId === user.clientId)
+              );
+              console.log(`📋 [USER STATS] Client containers found: ${clientContainers.length}`);
+              
+              if (clientContainers.length > 0) {
+                console.log(`💰 [USER STATS] Using comprehensive dashboard logic with ALL containers...`);
+                
+                // Debug: Show raw order data
+                console.log(`📋 [USER STATS] Raw Order Data:`);
+                console.log(`   Order ID: ${order._id}`);
+                console.log(`   Order Number: ${order.orderNumber}`);
+                console.log(`   Total Carrying Charges: ₹${order.totalCarryingCharges || 0}`);
+                console.log(`   Items Count: ${order.items?.length || 0}`);
+                
+                if (order.items && order.items.length > 0) {
+                  order.items.forEach((item, index) => {
+                    console.log(`   Item ${index + 1}:`);
+                    console.log(`     Description: ${item.description || 'N/A'}`);
+                    console.log(`     Total Price: ₹${item.totalPrice || 0}`);
+                    console.log(`     Cartons: ${item.cartons || 0}`);
+                    // console.log(`     Allocated Cartons: ${item.allocatedCartons || 0}`);
+                    console.log(`     Payment Type: ${item.paymentType || 'N/A'}`);
+                    console.log(`     Carrying Charge Amount: ₹${item.carryingCharge?.amount || 0}`);
+                  });
+                }
+                
+                // Debug: Show relevant containers
+                console.log(`🗂️ [USER STATS] Relevant Container Data:`);
+                clientContainers.forEach((container, index) => {
+                  console.log(`   Container ${index + 1}: ${container.realContainerId || container.clientFacingId}`);
+                  const clientOrders = container.orders.filter(co => co.clientId === user.clientId);
+                  console.log(`     Client Orders in this container: ${clientOrders.length}`);
+                  clientOrders.forEach(co => {
+                    console.log(`       Order: ${co.orderId} - Carrying Charges: ₹${co.carryingCharges || 0} - Payment: ${co.paymentType}`);
+                  });
+                });
+                
+                // Use allocation-aware calculations with ALL containers (matching comprehensive dashboard)
+                const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, allContainers);
+                console.log(`🚛 [USER STATS] Allocated carrying charges: ₹${allocatedCarryingCharges}`);
+                
                 let allocatedAmount = allocatedCarryingCharges;
                 
                 // Add product cost for THROUGH_ME orders
-                if (order.paymentType === 'THROUGH_ME') {
-                  const allocatedProductCost = calculateAllocatedProductCost(order, containers);
+                const paymentType = order.items[0]?.paymentType || 'THROUGH_ME';
+                console.log(`💳 [USER STATS] Payment type: ${paymentType}`);
+                
+                if (paymentType === 'THROUGH_ME') {
+                  const allocatedProductCost = calculateAllocatedProductCost(order, allContainers);
+                  console.log(`📦 [USER STATS] Allocated product cost: ₹${allocatedProductCost}`);
+                  
+                  // Debug: Show product cost calculation breakdown
+                  console.log(`🔍 [USER STATS] Product Cost Calculation Breakdown:`);
+                  if (order.items) {
+                    order.items.forEach((item, index) => {
+                      const totalPrice = item.totalPrice || 0;
+                      const totalCartons = item.cartons || 0;
+                      const allocatedCartons = item.allocatedCartons || 0;
+                      const allocationRatio = totalCartons > 0 ? allocatedCartons / totalCartons : 0;
+                      const itemAllocatedCost = totalPrice * allocationRatio;
+                      console.log(`     Item ${index + 1}: ₹${totalPrice} × (${allocatedCartons}/${totalCartons}) = ₹${itemAllocatedCost}`);
+                    });
+                  }
+                  
                   allocatedAmount += allocatedProductCost;
                 }
                 
+                console.log(`💯 [USER STATS] Total allocated amount for order: ₹${allocatedAmount}`);
                 totalAllocatedAmount += allocatedAmount;
-                console.log(`[USER STATS] Order ${order.orderNumber}: Allocated amount = ${allocatedAmount}`);
+                console.log(`📊 [USER STATS] Running total: ₹${totalAllocatedAmount}`);
+                
+                console.log(`✅ [USER STATS] Order ${order.orderNumber}: Allocated amount = ₹${allocatedAmount} (using comprehensive logic)`);
               } else {
                 // No containers allocated yet - count as 0 (allocation-aware)
-                console.log(`[USER STATS] Order ${order.orderNumber}: No containers allocated, amount = 0`);
+                console.log(`⚠️ [USER STATS] Order ${order.orderNumber}: No containers allocated, amount = ₹0`);
               }
             } catch (orderError) {
-              console.error(`[USER STATS] Error calculating for order ${order._id}:`, orderError);
+              console.error(`❌ [USER STATS] Error calculating for order ${order._id}:`, orderError);
             }
           }
           
           computedFields.totalSpent = totalAllocatedAmount;
-          console.log(`[USER STATS] Total allocated spending for ${user.clientId}: ${totalAllocatedAmount}`);
+          console.log(`\n🏆 [USER STATS] FINAL RESULT for ${user.name} (${user.clientId}):`); 
+          console.log(`   💰 Total Allocated Amount: ₹${totalAllocatedAmount}`);
+          console.log(`   📊 This should match comprehensive dashboard API`);
+          console.log(`   🔍 Total allocated spending for ${user.clientId}: ₹${totalAllocatedAmount}\n`);
 
           // Get container count (containers where this client has orders)
           computedFields.containerCount = await Container.countDocuments({ 
@@ -119,32 +187,52 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
           
           console.log(`[USER STATS] Container count for ${user.clientId}: ${computedFields.containerCount}`);
 
-          // Get account balance using comprehensive financial API approach
+          // Get account balance using the same approach as comprehensive financial API
           try {
-            // Use local module import instead of axios HTTP call to avoid circular dependency
-            const financialRoutes = require('./financials-comprehensive');
+            // FIXED: Use direct MongoDB collection query instead of non-existent model
+            const PaymentCollectionModel = mongoose.connection.collection('paymentcollections');
+            const paymentCollections = await PaymentCollectionModel.find({ clientId: user.clientId }).toArray();
             
-            // Alternative: Use direct database query for balance
-            const PaymentCollection = require('../models/PaymentCollection');
-            const paymentRecord = await PaymentCollection.findOne({ clientId: user.clientId });
+            console.log(`💰 [USER STATS] Found ${paymentCollections.length} payment collections for ${user.clientId}`);
             
-            if (paymentRecord) {
+            if (paymentCollections.length > 0) {
+              // Calculate total received amount from all payment collections
+              const totalReceived = paymentCollections.reduce((sum, payment) => {
+                const receivedAmount = payment.receivedAmount || 0;
+                console.log(`   Payment ID: ${payment._id}, Received: ₹${receivedAmount}, Type: ${payment.paymentType || 'N/A'}`);
+                return sum + receivedAmount;
+              }, 0);
+              
+              console.log(`💰 [USER STATS] Total received payments: ₹${totalReceived}`);
+              console.log(`💰 [USER STATS] Total allocated amount before payments: ₹${totalAllocatedAmount}`);
+              
+              // Calculate net balance (what client still owes)
+              const netBalance = totalAllocatedAmount - totalReceived;
+              console.log(`💰 [USER STATS] Net balance after payments: ₹${netBalance}`);
+              
               computedFields.accountBalance = {
-                INR: paymentRecord.pendingAmount || 0,
+                INR: netBalance,
                 USD: 0
               };
-              console.log(`[USER STATS] Account balance for ${user.clientId}: ${paymentRecord.pendingAmount}`);
+              
+              // Also update totalSpent to reflect net amount (like comprehensive API)
+              computedFields.totalSpent = netBalance;
+              
+              console.log(`💰 [USER STATS] Updated account balance for ${user.clientId}: ₹${netBalance}`);
+            } else {
+              console.log(`💰 [USER STATS] No payment collections found for ${user.clientId}`);
+              computedFields.accountBalance = {
+                INR: totalAllocatedAmount, // Full amount owed if no payments
+                USD: 0
+              };
             }
           } catch (balanceError) {
             console.warn(`[USER STATS] Could not fetch account balance for ${user.clientId}:`, balanceError.message);
-            // Fallback to basic balance calculation
-            const accountBalance = await AccountBalance.findOne({ 'party.id': user.clientId });
-            if (accountBalance) {
-              computedFields.accountBalance = {
-                INR: accountBalance.balances.INR.balance || 0,
-                USD: accountBalance.balances.USD.balance || 0
-              };
-            }
+            // Fallback to basic balance calculation using existing transactions
+            computedFields.accountBalance = {
+              INR: totalAllocatedAmount, // Full amount owed if payment query fails
+              USD: 0
+            };
           }
 
           // Get recent payment history
