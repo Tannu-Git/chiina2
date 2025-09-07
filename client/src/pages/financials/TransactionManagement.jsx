@@ -50,7 +50,9 @@ import {
   AlertTriangle,
   Shield,
   Database,
-  Receipt
+  Receipt,
+  CheckCircle,
+  TrendingUp
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuthStore } from '@/stores/authStore'
@@ -110,6 +112,40 @@ const TransactionManagement = () => {
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     })}`
+  }
+
+  // Helper function to get transaction type styling
+  const getTransactionTypeDisplay = (record) => {
+    switch (record.type) {
+      case 'PAYMENT_RECEIVED':
+        return {
+          amountColor: 'text-green-600',
+          icon: '💰',
+          description: 'Money Received',
+          sign: '+'
+        }
+      case 'ORDER_INVOICE':
+        return {
+          amountColor: 'text-amber-600', 
+          icon: '📄',
+          description: 'Invoice/Charges',
+          sign: '+'
+        }
+      case 'PAYMENT_GIVEN':
+        return {
+          amountColor: 'text-red-600',
+          icon: '💸', 
+          description: 'Money Given',
+          sign: '-'
+        }
+      default:
+        return {
+          amountColor: 'text-gray-600',
+          icon: '💼',
+          description: 'Transaction',
+          sign: ''
+        }
+    }
   }
 
   // API headers with authentication
@@ -740,85 +776,141 @@ const TransactionManagement = () => {
           </div>
         </div>
 
-        {/* User-Friendly Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          {/* Money Clients Owe Us */}
-          <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+        {/* Enhanced Allocation-Aware Notice Banner */}
+        <div className="mb-6">
+          <Card className="bg-gradient-to-r from-emerald-50 via-blue-50 to-indigo-50 border-emerald-200 shadow-lg">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-red-700 uppercase tracking-wide">💸 CLIENTS OWE US</p>
-                  <p className="text-3xl font-bold text-red-800">
-                    {formatCurrency(Math.max(0, paymentSummary.totalPending))}
-                  </p>
-                  <p className="text-xs text-red-600 mt-1 font-medium">Money we need to collect</p>
-                  <p className="text-xs text-red-500 mt-1">Action: Follow up for payment</p>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-xl flex items-center justify-center">
+                  <Calculator className="h-6 w-6 text-white" />
                 </div>
-                <div className="bg-red-200 p-3 rounded-full">
-                  <ArrowUpRight className="h-8 w-8 text-red-600" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2">
+                    ✨ Allocation-Aware Financial Calculations
+                    <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
+                      ✅ Active
+                    </Badge>
+                  </h3>
+                  <p className="text-sm text-emerald-700 mt-1 leading-relaxed">
+                    All payment amounts now reflect only <strong>allocated portions</strong> based on container assignments. 
+                    Clients pay only for what's actually allocated to containers, not full order amounts.
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Money We Owe to Clients (only show if applicable) */}
-          {paymentSummary.totalPending < 0 && (
-            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-green-700 uppercase tracking-wide">💰 WE OWE CLIENTS</p>
-                    <p className="text-3xl font-bold text-green-800">
-                      {formatCurrency(Math.abs(Math.min(0, paymentSummary.totalPending)))}
-                    </p>
-                    <p className="text-xs text-green-600 mt-1 font-medium">Credit balances to refund</p>
-                    <p className="text-xs text-green-500 mt-1">Action: Process refunds</p>
-                  </div>
-                  <div className="bg-green-200 p-3 rounded-full">
-                    <DollarSign className="h-8 w-8 text-green-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Money Successfully Collected */}
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-6">
+        {/* Enhanced Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {/* Money Clients Owe Us */}
+          <Card className="overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-red-500 to-red-600 p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-blue-700 uppercase tracking-wide">✅ MONEY RECEIVED</p>
-                  <p className="text-3xl font-bold text-blue-800">
-                    {formatCurrency(paymentSummary.totalReceived)}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">💸</span>
+                    <p className="text-sm font-bold uppercase tracking-wide opacity-90">CLIENTS OWE US</p>
+                  </div>
+                  <p className="text-4xl font-bold mb-2">
+                    {formatCurrency(Math.max(0, paymentSummary.totalPending))}
                   </p>
-                  <p className="text-xs text-blue-600 mt-1 font-medium">Successfully collected</p>
-                  <p className="text-xs text-blue-500 mt-1">Status: Completed payments</p>
+                  <p className="text-sm opacity-90 font-medium">Money we need to collect</p>
+                  <p className="text-xs opacity-75 mt-1">Action: Follow up for payment</p>
                 </div>
-                <div className="bg-blue-200 p-3 rounded-full">
-                  <DollarSign className="h-8 w-8 text-blue-600" />
+                <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                  <ArrowUpRight className="h-8 w-8 text-white" />
                 </div>
               </div>
-            </CardContent>
+            </div>
+          </Card>
+
+          {/* Money Successfully Collected */}
+          <Card className="overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">✅</span>
+                    <p className="text-sm font-bold uppercase tracking-wide opacity-90">MONEY RECEIVED</p>
+                  </div>
+                  <p className="text-4xl font-bold mb-2">
+                    {formatCurrency(paymentSummary.totalReceived)}
+                  </p>
+                  <p className="text-sm opacity-90 font-medium">Successfully collected</p>
+                  <p className="text-xs opacity-75 mt-1">Status: Completed payments</p>
+                </div>
+                <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                  <CheckCircle className="h-8 w-8 text-white" />
+                </div>
+              </div>
+            </div>
           </Card>
 
           {/* Total Active Clients */}
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardContent className="p-6">
+          <Card className="overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-purple-700 uppercase tracking-wide">👥 ACTIVE CLIENTS</p>
-                  <p className="text-3xl font-bold text-purple-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">👥</span>
+                    <p className="text-sm font-bold uppercase tracking-wide opacity-90">ACTIVE CLIENTS</p>
+                  </div>
+                  <p className="text-4xl font-bold mb-2">
                     {paymentSummary.clientCount}
                   </p>
-                  <p className="text-xs text-purple-600 mt-1 font-medium">Total client accounts</p>
-                  <p className="text-xs text-purple-500 mt-1">Manage their payments below</p>
+                  <p className="text-sm opacity-90 font-medium">Total client accounts</p>
+                  <p className="text-xs opacity-75 mt-1">Manage</p>
                 </div>
-                <div className="bg-purple-200 p-3 rounded-full">
-                  <Users className="h-8 w-8 text-purple-600" />
+                <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                  <Users className="h-8 w-8 text-white" />
                 </div>
               </div>
-            </CardContent>
+            </div>
           </Card>
+
+          {/* Money We Owe to Clients (conditional) */}
+          {paymentSummary.totalPending < 0 ? (
+            <Card className="overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+              <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-2xl">💰</span>
+                      <p className="text-sm font-bold uppercase tracking-wide opacity-90">WE OWE CLIENTS</p>
+                    </div>
+                    <p className="text-4xl font-bold mb-2">
+                      {formatCurrency(Math.abs(Math.min(0, paymentSummary.totalPending)))}
+                    </p>
+                    <p className="text-sm opacity-90 font-medium">Credit balances to refund</p>
+                    <p className="text-xs opacity-75 mt-1">Action: Process refunds</p>
+                  </div>
+                  <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                    <ArrowDownLeft className="h-8 w-8 text-white" />
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <Card className="overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+              <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-2xl">📊</span>
+                      <p className="text-sm font-bold uppercase tracking-wide opacity-90">SYSTEM STATUS</p>
+                    </div>
+                    <p className="text-4xl font-bold mb-2">HEALTHY</p>
+                    <p className="text-sm opacity-90 font-medium">All balances positive</p>
+                    <p className="text-xs opacity-75 mt-1">No refunds needed</p>
+                  </div>
+                  <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                    <TrendingUp className="h-8 w-8 text-white" />
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
 
         {/* Client Accounts - Easy to Understand */}
@@ -1612,14 +1704,18 @@ const TransactionManagement = () => {
                                   </td>
                                   <td className="py-2 px-2 text-right font-mono">
                                     {record.debit > 0 ? (
-                                      <span className="text-red-600 font-semibold">+{formatCurrency(Math.abs(record.debit))}</span>
+                                      <span className={`font-semibold ${
+                                        record.type === 'ORDER_INVOICE' ? 'text-amber-600' : 'text-red-600'
+                                      }`}>+{formatCurrency(Math.abs(record.debit))}</span>
                                     ) : (
                                       <span className="text-gray-400">—</span>
                                     )}
                                   </td>
                                   <td className="py-2 px-2 text-right font-mono">
                                     {record.credit > 0 ? (
-                                      <span className="text-green-600 font-semibold">-{formatCurrency(Math.abs(record.credit))}</span>
+                                      <span className={`font-semibold ${
+                                        record.type === 'PAYMENT_RECEIVED' ? 'text-green-600' : 'text-blue-600'
+                                      }`}>+{formatCurrency(Math.abs(record.credit))}</span>
                                     ) : (
                                       <span className="text-gray-400">—</span>
                                     )}
@@ -1657,14 +1753,14 @@ const TransactionManagement = () => {
                                   FINAL BALANCE
                                 </div>
                               </td>
-                              <td className="text-right py-3 px-3 font-bold text-red-600">
+                              <td className="text-right py-3 px-3 font-bold text-amber-600">
                                 <span className="font-mono">
                                   +{formatCurrency(selectedPartyDetails.accountSummary?.totalInvoiced || 0)}
                                 </span>
                               </td>
                               <td className="text-right py-3 px-3 font-bold text-green-600">
                                 <span className="font-mono">
-                                  -{formatCurrency(selectedPartyDetails.accountSummary?.totalReceived || 0)}
+                                  +{formatCurrency(selectedPartyDetails.accountSummary?.totalReceived || 0)}
                                 </span>
                               </td>
                               <td className="text-right py-3 px-3 font-bold">

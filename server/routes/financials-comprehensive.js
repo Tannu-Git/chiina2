@@ -6,6 +6,11 @@ const Order = require('../models/Order');
 const Container = require('../models/Container');
 const ShippingCompany = require('../models/ShippingCompany');
 const { auth, authorize } = require('../middleware/auth');
+const {
+  calculateAllocatedProductCost,
+  calculateAllocatedCarryingCharges,
+  getOrderAllocationSummary
+} = require('../utils/financialCalculationHelpers');
 
 const router = express.Router();
 
@@ -86,12 +91,15 @@ router.get('/comprehensive-dashboard', auth, authorize('admin', 'staff'), async 
           client.containers.add(container.realContainerId || container.clientFacingId);
           
           if (containerOrder.paymentType === 'THROUGH_ME') {
-            // Through Me: Client pays you BOTH product cost AND carrying charges
+            // FIXED: Through Me - Use ALLOCATED amounts only (allocated product cost + allocated carrying charges)
             const order = orders.find(o => o.clientId === containerOrder.clientId);
-            const productCost = order && order.items ? 
-              order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) : 0;
             
-            client.paymentBreakdown.throughMe.amount += productCost + carryingCharges; // Total amount from client
+            // Calculate allocated amounts using allocation ratios
+            const allocatedProductCost = calculateAllocatedProductCost(order, containers);
+            const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, containers);
+            
+            // Client pays you only the ALLOCATED portion (not full order)
+            client.paymentBreakdown.throughMe.amount += allocatedProductCost + allocatedCarryingCharges;
             client.paymentBreakdown.throughMe.orders++;
           } else if (containerOrder.paymentType === 'CLIENT_DIRECT') {
             // Direct: Client pays you only carrying charges (product goes directly to supplier)
@@ -133,7 +141,7 @@ router.get('/comprehensive-dashboard', auth, authorize('admin', 'staff'), async 
       }
     });
 
-    // SUPPLIER-WISE FINANCIAL BREAKDOWN
+    // SUPPLIER-WISE FINANCIAL BREAKDOWN - FIXED: Use allocated amounts
     const supplierFinancials = {};
     
     orders.forEach(order => {
@@ -156,21 +164,28 @@ router.get('/comprehensive-dashboard', auth, authorize('admin', 'staff'), async 
             }
             
             const supplier = supplierFinancials[supplierId];
-            const productValue = (item.totalPrice || 0);
-            supplier.totalProductValue += productValue;
+            
+            // FIXED: Calculate allocated product value instead of full product value
+            const totalPrice = item.totalPrice || 0;
+            const totalCartons = item.cartons || 0;
+            const allocatedCartons = item.allocatedCartons || 0;
+            const allocationRatio = totalCartons > 0 ? allocatedCartons / totalCartons : 0;
+            const allocatedProductValue = totalPrice * allocationRatio;
+            
+            supplier.totalProductValue += allocatedProductValue;
             
             supplier.orders.push({
               orderNumber: order.orderNumber,
-              productValue,
+              productValue: allocatedProductValue,
               paymentType: item.paymentType,
               itemDescription: item.description
             });
             
             if (item.paymentType === 'THROUGH_ME') {
-              supplier.paymentBreakdown.throughMe.amount += productValue;
+              supplier.paymentBreakdown.throughMe.amount += allocatedProductValue;
               supplier.paymentBreakdown.throughMe.orders++;
             } else if (item.paymentType === 'CLIENT_DIRECT') {
-              supplier.paymentBreakdown.direct.amount += productValue;
+              supplier.paymentBreakdown.direct.amount += allocatedProductValue;
               supplier.paymentBreakdown.direct.orders++;
             }
           }
@@ -371,27 +386,31 @@ router.get('/payment-collections', auth, authorize('admin', 'staff'), async (req
         });
 
         if (containerOrder.paymentType === 'THROUGH_ME') {
-          // Through me: client pays you everything (product + carrying), you pay supplier product cost
-          const productCost = order.items ? order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) : 0;
-          clientCollection.throughMeAmount += productCost + carryingCharges; // Client pays you TOTAL amount
+          // FIXED: Through me - Use ALLOCATED amounts only (allocated product cost + allocated carrying charges)
+          const allocatedProductCost = calculateAllocatedProductCost(order, [container]);
+          const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, [container]);
+          
+          clientCollection.throughMeAmount += allocatedProductCost + allocatedCarryingCharges; // Client pays ALLOCATED amount only
           clientCollection.orders.push({
             orderNumber: order.orderNumber,
-            amount: productCost + carryingCharges, // Total amount client owes you
-            carryingCharges,
-            productCost,
+            amount: allocatedProductCost + allocatedCarryingCharges, // ALLOCATED amount client owes you
+            carryingCharges: allocatedCarryingCharges,
+            productCost: allocatedProductCost,
             type: 'THROUGH_ME',
             status: 'PENDING'
           });
         } else {
-          // Direct: client pays supplier directly for products, pays you carrying charges separately
-          const productCost = order.items ? order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) : 0;
-          clientCollection.directAmount += productCost; // This goes to supplier directly
-          clientCollection.carryingCharges += carryingCharges; // You still get carrying charges
+          // FIXED: Direct - Client pays supplier directly for products, pays you ALLOCATED carrying charges only
+          const allocatedProductCost = calculateAllocatedProductCost(order, [container]);
+          const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, [container]);
+          
+          clientCollection.directAmount += allocatedProductCost; // This goes to supplier directly (allocated portion)
+          clientCollection.carryingCharges += allocatedCarryingCharges; // You get allocated carrying charges
           clientCollection.orders.push({
             orderNumber: order.orderNumber,
-            amount: carryingCharges, // You only collect carrying charges
-            carryingCharges,
-            productCost,
+            amount: allocatedCarryingCharges, // You only collect allocated carrying charges
+            carryingCharges: allocatedCarryingCharges,
+            productCost: allocatedProductCost,
             type: 'DIRECT',
             status: 'PENDING'
           });
@@ -399,7 +418,7 @@ router.get('/payment-collections', auth, authorize('admin', 'staff'), async (req
 
         clientCollection.totalAmount = clientCollection.throughMeAmount + clientCollection.carryingCharges;
 
-        // SUPPLIER PAYMENTS (What we need to pay for THROUGH_ME orders)
+        // SUPPLIER PAYMENTS (What we need to pay for THROUGH_ME orders - ALLOCATED amounts only)
         if (order.items && containerOrder.paymentType === 'THROUGH_ME') {
           order.items.forEach(item => {
             if (item.supplier && item.supplier.name) {
@@ -414,11 +433,17 @@ router.get('/payment-collections', auth, authorize('admin', 'staff'), async (req
                 };
               }
 
-              const productValue = item.totalPrice || 0;
-              supplierPayments[supplierId].totalAmount += productValue;
+              // FIXED: Use allocated amount for supplier payments instead of full product value
+              const totalPrice = item.totalPrice || 0;
+              const totalCartons = item.cartons || 0;
+              const allocatedCartons = item.allocatedCartons || 0;
+              const allocationRatio = totalCartons > 0 ? allocatedCartons / totalCartons : 0;
+              const allocatedProductValue = totalPrice * allocationRatio;
+              
+              supplierPayments[supplierId].totalAmount += allocatedProductValue;
               supplierPayments[supplierId].orders.push({
                 orderNumber: order.orderNumber,
-                productValue,
+                productValue: allocatedProductValue,
                 itemDescription: item.description,
                 status: 'PENDING'
               });
@@ -480,6 +505,214 @@ router.get('/payment-collections', auth, authorize('admin', 'staff'), async (req
     res.json(paymentCollections);
   } catch (error) {
     console.error('Payment collections error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/financials-comprehensive/client-order-breakdown/:clientId
+// @desc    Get detailed order breakdown with carrying charges and product costs
+// @access  Private (Admin/Staff only)
+router.get('/client-order-breakdown/:clientId', auth, authorize('admin', 'staff'), async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    
+    console.log(`📋 Fetching order breakdown for client: ${clientId}`);
+    
+    // Get all orders for this client with container allocation data
+    const orders = await Order.find({ 
+      clientId,
+      isLoopBack: { $ne: true },
+      status: { $ne: 'cancelled' }
+    }).populate('containerId', 'realContainerId clientFacingId baseCharges orders').sort({ createdAt: -1 });
+    
+    // Get containers that have this client's orders
+    const containers = await Container.find({
+      'orders.clientId': clientId
+    }).sort({ createdAt: -1 });
+    
+    const clientName = orders.length > 0 ? orders[0].clientName : 'Unknown Client';
+    
+    // Build detailed order breakdown
+    const orderBreakdowns = [];
+    
+    orders.forEach(order => {
+      const relatedContainers = containers.filter(container => 
+        container.orders.some(containerOrder => 
+          containerOrder.orderId.toString() === order._id.toString()
+        )
+      );
+      
+      // Calculate allocation-aware amounts using our helper functions
+      const allocatedProductCost = calculateAllocatedProductCost(order, relatedContainers);
+      const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, relatedContainers);
+      const allocationSummary = getOrderAllocationSummary(order, relatedContainers);
+      
+      // Get payment type from first item (assuming consistent per order)
+      const paymentType = order.items[0]?.paymentType || 'THROUGH_ME';
+      
+      // Build item-level breakdown
+      const itemBreakdowns = order.items.map(item => {
+        const totalPrice = item.totalPrice || 0;
+        const totalCartons = item.cartons || 0;
+        const allocatedCartons = item.allocatedCartons || 0;
+        const carryingChargeAmount = item.carryingCharge?.amount || 0;
+        
+        const allocationRatio = totalCartons > 0 ? allocatedCartons / totalCartons : 0;
+        const itemAllocatedProductCost = totalPrice * allocationRatio;
+        const itemAllocatedCarryingCharges = carryingChargeAmount * allocationRatio;
+        
+        return {
+          itemCode: item.itemCode,
+          description: item.description,
+          totalCartons: totalCartons,
+          allocatedCartons: allocatedCartons,
+          allocationRatio: Math.round(allocationRatio * 10000) / 100, // Percentage
+          
+          // Full amounts (original order values)
+          fullProductCost: totalPrice,
+          fullCarryingCharges: carryingChargeAmount,
+          fullTotalAmount: totalPrice + carryingChargeAmount,
+          
+          // Allocated amounts (what client actually owes)
+          allocatedProductCost: itemAllocatedProductCost,
+          allocatedCarryingCharges: itemAllocatedCarryingCharges,
+          allocatedTotalAmount: itemAllocatedProductCost + itemAllocatedCarryingCharges,
+          
+          paymentType: item.paymentType || 'THROUGH_ME',
+          supplier: item.supplier || null
+        };
+      });
+      
+      // Calculate what client owes based on payment type
+      let clientOwes = 0;
+      if (paymentType === 'THROUGH_ME') {
+        // Client pays: allocated product cost + allocated carrying charges
+        clientOwes = allocatedProductCost + allocatedCarryingCharges;
+      } else {
+        // CLIENT_DIRECT: Client pays only allocated carrying charges
+        clientOwes = allocatedCarryingCharges;
+      }
+      
+      // Get container allocation info
+      const containerAllocations = relatedContainers.map(container => {
+        const containerOrder = container.orders.find(co => 
+          co.orderId.toString() === order._id.toString()
+        );
+        
+        return {
+          containerId: container.realContainerId || container.clientFacingId,
+          allocatedCarryingCharges: containerOrder?.carryingCharges || 0,
+          paymentType: containerOrder?.paymentType || 'THROUGH_ME',
+          status: container.status || 'active'
+        };
+      });
+      
+      orderBreakdowns.push({
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        orderDate: order.createdAt,
+        status: order.status,
+        paymentType: paymentType,
+        
+        // Full order amounts (original values)
+        fullOrderAmounts: {
+          productCost: order.items ? order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) : 0,
+          carryingCharges: order.totalCarryingCharges || 0,
+          totalAmount: order.totalAmount || 0
+        },
+        
+        // Allocated amounts (allocation-aware)
+        allocatedAmounts: {
+          productCost: allocatedProductCost,
+          carryingCharges: allocatedCarryingCharges,
+          totalAmount: allocatedProductCost + allocatedCarryingCharges
+        },
+        
+        // What client actually owes (depends on payment type)
+        clientObligations: {
+          amount: clientOwes,
+          description: paymentType === 'THROUGH_ME' ? 
+            `Product Cost: ₹${allocatedProductCost.toLocaleString()} + Carrying Charges: ₹${allocatedCarryingCharges.toLocaleString()}` :
+            `Carrying Charges Only: ₹${allocatedCarryingCharges.toLocaleString()} (Product paid directly to supplier)`
+        },
+        
+        // Allocation summary
+        allocationInfo: {
+          totalCartons: allocationSummary.totalCartons,
+          allocatedCartons: allocationSummary.allocatedCartons,
+          allocationRatio: allocationSummary.allocationRatio,
+          isPartiallyAllocated: allocationSummary.isPartiallyAllocated,
+          isFullyAllocated: allocationSummary.isFullyAllocated,
+          isUnallocated: allocationSummary.isUnallocated
+        },
+        
+        // Item-level breakdown
+        items: itemBreakdowns,
+        
+        // Container allocation info
+        containers: containerAllocations
+      });
+    });
+    
+    // Calculate totals
+    const totals = {
+      totalOrders: orderBreakdowns.length,
+      
+      fullAmounts: {
+        productCost: orderBreakdowns.reduce((sum, order) => sum + order.fullOrderAmounts.productCost, 0),
+        carryingCharges: orderBreakdowns.reduce((sum, order) => sum + order.fullOrderAmounts.carryingCharges, 0),
+        totalAmount: orderBreakdowns.reduce((sum, order) => sum + order.fullOrderAmounts.totalAmount, 0)
+      },
+      
+      allocatedAmounts: {
+        productCost: orderBreakdowns.reduce((sum, order) => sum + order.allocatedAmounts.productCost, 0),
+        carryingCharges: orderBreakdowns.reduce((sum, order) => sum + order.allocatedAmounts.carryingCharges, 0),
+        totalAmount: orderBreakdowns.reduce((sum, order) => sum + order.allocatedAmounts.totalAmount, 0)
+      },
+      
+      clientTotalObligations: orderBreakdowns.reduce((sum, order) => sum + order.clientObligations.amount, 0),
+      
+      allocationSummary: {
+        totalCartons: orderBreakdowns.reduce((sum, order) => sum + order.allocationInfo.totalCartons, 0),
+        allocatedCartons: orderBreakdowns.reduce((sum, order) => sum + order.allocationInfo.allocatedCartons, 0),
+        overallAllocationRatio: 0 // Will calculate below
+      }
+    };
+    
+    // Calculate overall allocation ratio
+    if (totals.allocationSummary.totalCartons > 0) {
+      totals.allocationSummary.overallAllocationRatio = 
+        Math.round((totals.allocationSummary.allocatedCartons / totals.allocationSummary.totalCartons) * 10000) / 100;
+    }
+    
+    // Get unique containers
+    const uniqueContainers = [...new Set(orderBreakdowns.flatMap(order => 
+      order.containers.map(container => container.containerId)
+    ))];
+    
+    console.log(`✅ Order breakdown for ${clientName}:`);
+    console.log(`   Orders: ${totals.totalOrders}`);
+    console.log(`   Containers: ${uniqueContainers.length}`);
+    console.log(`   Full Amount: ₹${totals.fullAmounts.totalAmount.toLocaleString()}`);
+    console.log(`   Allocated Amount: ₹${totals.allocatedAmounts.totalAmount.toLocaleString()}`);
+    console.log(`   Client Owes: ₹${totals.clientTotalObligations.toLocaleString()}`);
+    console.log(`   Allocation Ratio: ${totals.allocationSummary.overallAllocationRatio}%`);
+    
+    res.json({
+      clientId,
+      clientName,
+      orderBreakdowns,
+      totals,
+      containers: uniqueContainers,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        period: 'all-time',
+        currency: 'INR'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Client order breakdown error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

@@ -155,121 +155,16 @@ const Users = () => {
       
     } catch (error) {
       console.error('Error fetching users:', error)
-      console.log('Falling back to demo data due to fetch error')
-      toast.error('Failed to load users from server, showing demo data')
+      toast.error('Failed to load users from server. Please check your connection.')
       
-      // Fallback to demo data structure for development
-      const demoUsers = generateDemoUsers()
-      console.log('Generated demo users:', demoUsers)
-      setUsers(demoUsers)
+      // Set empty state instead of demo data
+      setUsers([])
       setTotalPages(1)
-      setTotalUsers(demoUsers.length)
+      setTotalUsers(0)
       setCurrentPage(1)
     } finally {
       setLoading(false)
     }
-  }
-  
-  // Generate demo users that match the expected structure
-  const generateDemoUsers = () => {
-    return [
-      {
-        _id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId
-        name: 'Admin User',
-        email: 'admin@demo.com',
-        role: 'admin',
-        status: 'active',
-        company: 'Logistics OMS Corp',
-        phone: '+91-9876543210',
-        clientId: null,
-        ordersCount: 0,
-        totalSpent: 0,
-        containerCount: 0,
-        lastOrderDate: null,
-        accountBalance: { INR: 0, USD: 0 },
-        paymentHistory: [],
-        lastLogin: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        address: {
-          street: '123 Admin Street',
-          city: 'Mumbai',
-          state: 'Maharashtra',
-          country: 'India',
-          zipCode: '400001'
-        },
-        permissions: ['view_all_orders', 'edit_financials', 'view_profits', 'create_users']
-      },
-      {
-        _id: '507f1f77bcf86cd799439012', // Valid MongoDB ObjectId
-        name: 'Rajesh Patel',
-        email: 'rajesh@abctrading.com',
-        role: 'client',
-        status: 'active',
-        company: 'ABC Trading Co.',
-        phone: '+91-9876543216',
-        clientId: 'CLI-ABC12345',
-        ordersCount: 15,
-        totalSpent: 2850000,
-        containerCount: 8,
-        lastOrderDate: new Date().toISOString(),
-        accountBalance: { INR: 125000, USD: 0 },
-        paymentHistory: [
-          {
-            type: 'PAYMENT_RECEIVED',
-            amount: 125000,
-            currency: 'INR',
-            status: 'COMPLETED',
-            paymentDate: new Date().toISOString(),
-            description: 'Payment for Container ABC-001'
-          }
-        ],
-        lastLogin: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        address: {
-          street: '456 Commerce Road',
-          city: 'Delhi',
-          state: 'Delhi',
-          country: 'India',
-          zipCode: '110001'
-        },
-        permissions: []
-      },
-      {
-        _id: '507f1f77bcf86cd799439013', // Valid MongoDB ObjectId
-        name: 'Priya Sharma',
-        email: 'priya@xyzimports.com',
-        role: 'client',
-        status: 'active',
-        company: 'XYZ Imports Ltd.',
-        phone: '+91-9876543217',
-        clientId: 'CLI-XYZ67890',
-        ordersCount: 8,
-        totalSpent: 1620000,
-        containerCount: 4,
-        lastOrderDate: new Date(Date.now() - 86400000).toISOString(),
-        accountBalance: { INR: -45000, USD: 0 },
-        paymentHistory: [
-          {
-            type: 'PAYMENT_MADE',
-            amount: 45000,
-            currency: 'INR',
-            status: 'COMPLETED',
-            paymentDate: new Date().toISOString(),
-            description: 'Payment to supplier for goods'
-          }
-        ],
-        lastLogin: new Date(Date.now() - 3600000).toISOString(),
-        createdAt: new Date(Date.now() - 7776000000).toISOString(),
-        address: {
-          street: '789 Trade Center',
-          city: 'Bangalore',
-          state: 'Karnataka',
-          country: 'India',
-          zipCode: '560001'
-        },
-        permissions: []
-      }
-    ]
   }
   
   useEffect(() => {
@@ -359,8 +254,10 @@ const Users = () => {
   }
   
   const getBalanceColor = (balance) => {
-    if (balance > 0) return 'text-green-600 dark:text-green-400'
-    if (balance < 0) return 'text-red-600 dark:text-red-400'
+    // RED: When balance > 0 (client OWES you money - you need to TAKE from them)
+    if (balance > 0) return 'text-red-600 dark:text-red-400'
+    // GREEN: When balance < 0 (you OWE client money - you need to GIVE to them)
+    if (balance < 0) return 'text-green-600 dark:text-green-400'
     return 'text-muted-foreground'
   }
 
@@ -1235,11 +1132,16 @@ const Users = () => {
                             <div className="space-y-1">
                               <div className="text-sm font-medium text-foreground">{user.ordersCount || 0} orders</div>
                               <div className="text-sm text-muted-foreground">{user.containerCount || 0} containers</div>
-                              <div className="text-sm font-medium text-green-600 dark:text-green-400">
-                                {formatCurrency(user.totalSpent || 0)}
+                              <div className="text-sm font-medium text-muted-foreground">
+                                Allocated: {formatCurrency(user.totalSpent || 0)}
                               </div>
-                              <div className={`text-xs ${getBalanceColor(user.accountBalance?.INR || 0)}`}>
-                                Balance: {formatCurrency(user.accountBalance?.INR || 0)}
+                              <div className={`text-sm font-medium ${getBalanceColor(user.accountBalance?.INR || 0)}`}>
+                                {(user.accountBalance?.INR || 0) > 0 ? 
+                                  `Owes: ${formatCurrency(user.accountBalance?.INR || 0)}` :
+                                  (user.accountBalance?.INR || 0) < 0 ? 
+                                    `Credit: ${formatCurrency(Math.abs(user.accountBalance?.INR || 0))}` :
+                                    'Settled: ₹0'
+                                }
                               </div>
                             </div>
                           ) : (

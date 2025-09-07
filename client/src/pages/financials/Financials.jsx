@@ -755,10 +755,12 @@ const Financials = () => {
   }
 
   const getBalanceDisplay = (balance) => {
+    // RED: When balance > 0 (client OWES you money - receivable)
     if (balance > 0) {
-      return { amount: balance, type: 'receivable', color: 'text-green-600', label: 'Receivable' }
+      return { amount: balance, type: 'receivable', color: 'text-red-600', label: 'They Owe Us' }
+    // GREEN: When balance < 0 (you OWE client money - payable)
     } else if (balance < 0) {
-      return { amount: Math.abs(balance), type: 'payable', color: 'text-red-600', label: 'Payable' }
+      return { amount: Math.abs(balance), type: 'payable', color: 'text-green-600', label: 'We Owe Them' }
     } else {
       return { amount: 0, type: 'neutral', color: 'text-stone-600', label: 'Settled' }
     }

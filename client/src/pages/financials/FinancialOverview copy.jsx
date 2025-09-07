@@ -319,14 +319,278 @@ const FinancialOverview = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="clients" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    {/* <TabsTrigger value="profit-summary">Profit Summary</TabsTrigger> */}
+                <Tabs defaultValue="profit-summary" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="profit-summary">Profit Summary</TabsTrigger>
                     <TabsTrigger value="clients">Client-wise</TabsTrigger>
                     <TabsTrigger value="suppliers">Supplier-wise</TabsTrigger>
                     <TabsTrigger value="transport">Transport-wise</TabsTrigger>
                   </TabsList>
-           
+                  
+                  <TabsContent value="profit-summary" className="space-y-8">
+                    {/* Executive Summary Dashboard */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                      {/* Primary Metrics */}
+                      <div className="xl:col-span-2 space-y-6">
+                        {/* Key Performance Indicators */}
+                        <Card className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-white border border-slate-200">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-100/30 to-blue-200/20 rounded-full -translate-y-16 translate-x-16"></div>
+                          <CardHeader className="pb-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="p-3 bg-blue-100 rounded-xl">
+                                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                                </div>
+                                <div>
+                                  <CardTitle className="text-xl text-slate-900">Business Performance</CardTitle>
+                                  <CardDescription className="text-slate-600">Key financial metrics overview</CardDescription>
+                                </div>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              {/* Revenue */}
+                              <div className="text-center">
+                                <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center">
+                                  <TrendingUp className="h-8 w-8 text-white" />
+                                </div>
+                                <p className="text-2xl font-bold text-emerald-700 mb-1">
+                                  {formatCurrency(comprehensiveData.summary.totalCarryingCharges)}
+                                </p>
+                                <p className="text-sm font-medium text-emerald-600 uppercase tracking-wide">Total Revenue</p>
+                                <p className="text-xs text-slate-500 mt-1">Logistics carrying charges</p>
+                              </div>
+                              
+                              {/* Expenses */}
+                              <div className="text-center">
+                                <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-rose-500 to-rose-600 rounded-2xl flex items-center justify-center">
+                                  <ArrowUpRight className="h-8 w-8 text-white" />
+                                </div>
+                                <p className="text-2xl font-bold text-rose-700 mb-1">
+                                  {formatCurrency(comprehensiveData.summary.totalCharges)}
+                                </p>
+                                <p className="text-sm font-medium text-rose-600 uppercase tracking-wide">Total Expenses</p>
+                                <p className="text-xs text-slate-500 mt-1">GST + Duty + Misc + Extra</p>
+                              </div>
+                              
+                              {/* Net Profit */}
+                              <div className="text-center">
+                                <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center">
+                                  <DollarSign className="h-8 w-8 text-white" />
+                                </div>
+                                <p className="text-2xl font-bold text-blue-700 mb-1">
+                                  {formatCurrency(comprehensiveData.summary.totalProfit)}
+                                </p>
+                                <p className="text-sm font-medium text-blue-600 uppercase tracking-wide">Net Profit</p>
+                                <p className="text-xs text-slate-500 mt-1">{comprehensiveData.summary.profitMargin}% margin</p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Cash Flow Visualization */}
+                        <Card className="bg-gradient-to-br from-white to-slate-50 border border-slate-200">
+                          <CardHeader>
+                            <CardTitle className="text-xl text-slate-900 flex items-center gap-3">
+                              <CircleDollarSign className="h-6 w-6 text-emerald-600" />
+                              Cash Flow Analysis
+                            </CardTitle>
+                            <CardDescription className="text-slate-600">
+                              Real-time payment status with collections integrated
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                              {/* Inbound Cash Flow */}
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-3 mb-4">
+                                  <div className="w-4 h-4 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
+                                  <h3 className="text-lg font-semibold text-slate-800">Money Coming In</h3>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                  <div className="group hover:shadow-md transition-all duration-200 p-5 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-semibold text-emerald-900">✅ Already Received</p>
+                                        <p className="text-sm text-emerald-700 mt-1">Successfully collected from clients</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-2xl font-bold text-emerald-800">
+                                          {formatCurrency(paymentSummary.totalReceived.INR)}
+                                        </p>
+                                        <p className="text-xs text-emerald-600 uppercase tracking-wide">Collected</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="group hover:shadow-md transition-all duration-200 p-5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-100 border border-amber-200">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-semibold text-amber-900">⏳ Pending Collection</p>
+                                        <p className="text-sm text-amber-700 mt-1">Outstanding from clients</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-2xl font-bold text-amber-800">
+                                          {formatCurrency(paymentSummary.pendingReceivables.INR)}
+                                        </p>
+                                        <p className="text-xs text-amber-600 uppercase tracking-wide">Pending</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="p-5 rounded-xl bg-gradient-to-r from-emerald-100 to-emerald-200 border-2 border-emerald-300 shadow-lg">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-bold text-emerald-900">💰 Total Revenue Stream</p>
+                                        <p className="text-sm text-emerald-800 mt-1">Collected + Outstanding</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-3xl font-bold text-emerald-900">
+                                          {formatCurrency(paymentSummary.totalReceived.INR + paymentSummary.pendingReceivables.INR)}
+                                        </p>
+                                        <p className="text-xs text-emerald-700 uppercase tracking-wide font-medium">Total Expected</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Outbound Cash Flow */}
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-3 mb-4">
+                                  <div className="w-4 h-4 rounded-full bg-gradient-to-r from-rose-400 to-rose-600"></div>
+                                  <h3 className="text-lg font-semibold text-slate-800">Money Going Out</h3>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                  <div className="group hover:shadow-md transition-all duration-200 p-5 rounded-xl bg-gradient-to-r from-rose-50 to-red-100 border border-rose-200">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-semibold text-rose-900">🏭 Supplier Payments</p>
+                                        <p className="text-sm text-rose-700 mt-1">Product costs (THROUGH_ME orders)</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-2xl font-bold text-rose-800">
+                                          {formatCurrency(paymentSummary.totalPaid.INR)}
+                                        </p>
+                                        <p className="text-xs text-rose-600 uppercase tracking-wide">Due</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="group hover:shadow-md transition-all duration-200 p-5 rounded-xl bg-gradient-to-r from-orange-50 to-yellow-100 border border-orange-200">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-semibold text-orange-900">🏛️ Operating Costs</p>
+                                        <p className="text-sm text-orange-700 mt-1">GST + Duties + Misc charges</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-2xl font-bold text-orange-800">
+                                          {formatCurrency(comprehensiveData.summary.totalCharges)}
+                                        </p>
+                                        <p className="text-xs text-orange-600 uppercase tracking-wide">Expenses</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="p-5 rounded-xl bg-gradient-to-r from-blue-100 to-indigo-200 border-2 border-blue-300 shadow-lg">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-bold text-blue-900">📈 Net Profit Projection</p>
+                                        <p className="text-sm text-blue-800 mt-1">After all obligations</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-3xl font-bold text-blue-900">
+                                          {formatCurrency(Math.max(0, paymentSummary.pendingReceivables.INR - paymentSummary.totalPaid.INR))}
+                                        </p>
+                                        <p className="text-xs text-blue-700 uppercase tracking-wide font-medium">Projected Profit</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* Summary Stats Sidebar */}
+                      <div className="space-y-6">
+                        {/* Quick Stats */}
+                        <Card className="bg-gradient-to-br from-slate-900 to-slate-800 text-white border-slate-700">
+                          <CardHeader className="pb-4">
+                            <CardTitle className="text-lg text-white flex items-center gap-2">
+                              <TrendingUp className="h-5 w-5" />
+                              Quick Stats
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="text-center p-4 rounded-lg bg-white/10 border border-white/20">
+                              <p className="text-2xl font-bold text-emerald-400 mb-1">{comprehensiveData.summary.totalOrders}</p>
+                              <p className="text-sm text-slate-300">Total Orders</p>
+                            </div>
+                            <div className="text-center p-4 rounded-lg bg-white/10 border border-white/20">
+                              <p className="text-2xl font-bold text-blue-400 mb-1">{comprehensiveData.summary.totalContainers}</p>
+                              <p className="text-sm text-slate-300">Containers</p>
+                            </div>
+                            <div className="text-center p-4 rounded-lg bg-white/10 border border-white/20">
+                              <p className="text-2xl font-bold text-amber-400 mb-1">{comprehensiveData.summary.profitMargin}%</p>
+                              <p className="text-sm text-slate-300">Profit Margin</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Expense Breakdown */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-lg text-slate-900">Expense Analysis</CardTitle>
+                            <CardDescription>Breakdown of operational costs</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                                <span className="text-sm font-medium text-orange-800">GST</span>
+                              </div>
+                              <span className="font-bold text-orange-900">
+                                {formatCurrency(comprehensiveData.chargesBreakdown.totalGST)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-purple-50 border border-purple-200">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                                <span className="text-sm font-medium text-purple-800">Duties</span>
+                              </div>
+                              <span className="font-bold text-purple-900">
+                                {formatCurrency(comprehensiveData.chargesBreakdown.totalDuty)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-200">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+                                <span className="text-sm font-medium text-indigo-800">Misc</span>
+                              </div>
+                              <span className="font-bold text-indigo-900">
+                                {formatCurrency(comprehensiveData.chargesBreakdown.totalMisc)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-pink-50 border border-pink-200">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-pink-500"></div>
+                                <span className="text-sm font-medium text-pink-800">Extra</span>
+                              </div>
+                              <span className="font-bold text-pink-900">
+                                {formatCurrency(comprehensiveData.chargesBreakdown.totalExtraCharges)}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+                  
                   <TabsContent value="clients" className="space-y-6">
                     <div className="mb-6">
                       <div className="flex items-center justify-between">

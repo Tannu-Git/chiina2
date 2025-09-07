@@ -39,6 +39,7 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
     const Order = require('../models/Order');
     const Container = require('../models/Container');
     const { PaymentTransaction, AccountBalance } = require('../models/Payment');
+    const { calculateAllocatedCarryingCharges, calculateAllocatedProductCost } = require('../utils/financialCalculationHelpers');
 
     // Enhance users with computed fields
     const enhancedUsers = await Promise.all(users.map(async (user) => {
@@ -53,42 +54,97 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
       };
 
       try {
-        // Get orders count and total spent for clients
+        console.log(`[USER STATS] Computing stats for user: ${user.name} (Role: ${user.role}, ClientId: ${user.clientId})`);
+        
+        // Get orders count and financial data for clients
         if (user.role === 'client' && user.clientId) {
-          const orders = await Order.find({ clientId: user.clientId })
-            .select('createdAt items.totalPrice')
+          // Get all orders for this client
+          const orders = await Order.find({ 
+            $or: [
+              { clientId: user.clientId },
+              { clientName: user.name } // Fallback to name matching
+            ]
+          })
+            .select('createdAt items orderNumber paymentType totalCarryingCharges')
             .sort({ createdAt: -1 })
-            .limit(1)
             .lean();
           
-          computedFields.ordersCount = await Order.countDocuments({ clientId: user.clientId });
+          console.log(`[USER STATS] Found ${orders.length} orders for client ${user.clientId}`);
           
-          // Calculate total spent from all orders
-          const allOrders = await Order.find({ clientId: user.clientId })
-            .select('items.totalPrice')
-            .lean();
-          
-          computedFields.totalSpent = allOrders.reduce((total, order) => {
-            const orderTotal = order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-            return total + orderTotal;
-          }, 0);
+          computedFields.ordersCount = orders.length;
           
           if (orders.length > 0) {
             computedFields.lastOrderDate = orders[0].createdAt;
           }
 
-          // Get container count
+          // Calculate allocation-aware total spent
+          let totalAllocatedAmount = 0;
+          
+          for (const order of orders) {
+            try {
+              // Get containers for this order to calculate allocated amounts
+              const containers = await Container.find({
+                'orders.orderId': order._id
+              }).lean();
+              
+              if (containers.length > 0) {
+                // Use allocation-aware calculations
+                const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, containers);
+                let allocatedAmount = allocatedCarryingCharges;
+                
+                // Add product cost for THROUGH_ME orders
+                if (order.paymentType === 'THROUGH_ME') {
+                  const allocatedProductCost = calculateAllocatedProductCost(order, containers);
+                  allocatedAmount += allocatedProductCost;
+                }
+                
+                totalAllocatedAmount += allocatedAmount;
+                console.log(`[USER STATS] Order ${order.orderNumber}: Allocated amount = ${allocatedAmount}`);
+              } else {
+                // No containers allocated yet - count as 0 (allocation-aware)
+                console.log(`[USER STATS] Order ${order.orderNumber}: No containers allocated, amount = 0`);
+              }
+            } catch (orderError) {
+              console.error(`[USER STATS] Error calculating for order ${order._id}:`, orderError);
+            }
+          }
+          
+          computedFields.totalSpent = totalAllocatedAmount;
+          console.log(`[USER STATS] Total allocated spending for ${user.clientId}: ${totalAllocatedAmount}`);
+
+          // Get container count (containers where this client has orders)
           computedFields.containerCount = await Container.countDocuments({ 
             'orders.clientId': user.clientId 
           });
+          
+          console.log(`[USER STATS] Container count for ${user.clientId}: ${computedFields.containerCount}`);
 
-          // Get account balance
-          const accountBalance = await AccountBalance.findOne({ 'party.id': user.clientId });
-          if (accountBalance) {
-            computedFields.accountBalance = {
-              INR: accountBalance.balances.INR.balance || 0,
-              USD: accountBalance.balances.USD.balance || 0
-            };
+          // Get account balance using comprehensive financial API approach
+          try {
+            // Use local module import instead of axios HTTP call to avoid circular dependency
+            const financialRoutes = require('./financials-comprehensive');
+            
+            // Alternative: Use direct database query for balance
+            const PaymentCollection = require('../models/PaymentCollection');
+            const paymentRecord = await PaymentCollection.findOne({ clientId: user.clientId });
+            
+            if (paymentRecord) {
+              computedFields.accountBalance = {
+                INR: paymentRecord.pendingAmount || 0,
+                USD: 0
+              };
+              console.log(`[USER STATS] Account balance for ${user.clientId}: ${paymentRecord.pendingAmount}`);
+            }
+          } catch (balanceError) {
+            console.warn(`[USER STATS] Could not fetch account balance for ${user.clientId}:`, balanceError.message);
+            // Fallback to basic balance calculation
+            const accountBalance = await AccountBalance.findOne({ 'party.id': user.clientId });
+            if (accountBalance) {
+              computedFields.accountBalance = {
+                INR: accountBalance.balances.INR.balance || 0,
+                USD: accountBalance.balances.USD.balance || 0
+              };
+            }
           }
 
           // Get recent payment history
@@ -100,6 +156,14 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
             .limit(5)
             .lean();
         }
+        
+        console.log(`[USER STATS] Final stats for ${user.name}:`, {
+          ordersCount: computedFields.ordersCount,
+          totalSpent: computedFields.totalSpent,
+          containerCount: computedFields.containerCount,
+          balance: computedFields.accountBalance.INR
+        });
+        
       } catch (computeError) {
         console.error(`Error computing fields for user ${user._id}:`, computeError);
       }
@@ -120,7 +184,7 @@ router.get('/', auth, authorize('admin'), async (req, res) => {
     });
   } catch (error) {
     console.error('Get users error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

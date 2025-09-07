@@ -4,6 +4,11 @@ const { body, validationResult } = require('express-validator');
 const Container = require('../models/Container');
 const Order = require('../models/Order');
 const { auth, authorize } = require('../middleware/auth');
+const {
+  calculateAllocatedProductCost,
+  calculateAllocatedCarryingCharges,
+  getOrderAllocationSummary
+} = require('../utils/financialCalculationHelpers');
 
 const router = express.Router();
 
@@ -217,20 +222,42 @@ router.get('/', auth, authorize('admin', 'staff'), async (req, res) => {
 
         const clientId = containerOrder.clientId;
         // Use container-level carrying charges, not order-level (which might not exist)
-        // FIXED: Use containerOrder carrying charges instead of non-existent order.totalCarryingCharges
-        const carryingCharges = containerOrder.carryingCharges || 0;
+        // FIXED: Use allocation-aware calculations instead of full order amounts
+        const allocatedCarryingCharges = calculateAllocatedCarryingCharges(order, [container]);
         
-        // Calculate total amount owed based on payment type
-        let totalAmount = carryingCharges; // Always get carrying charges
+        // Calculate total amount owed based on payment type using allocation-aware calculations
+        let totalAmount = allocatedCarryingCharges; // Always get allocated carrying charges
         
         if (containerOrder.paymentType === 'THROUGH_ME') {
-          // Through me: carrying charges + product cost
-          const productCost = order && order.items ? 
-            order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) : 0;
-          totalAmount += productCost;
+          // Through me: allocated carrying charges + allocated product cost
+          const allocatedProductCost = calculateAllocatedProductCost(order, [container]);
+          totalAmount += allocatedProductCost;
         }
         
-        if (totalAmount === 0) continue;
+        if (totalAmount === 0) {
+          console.log(`⚠️ Skipping order ${order.orderNumber} - no allocation found (total amount: ₹0)`);
+          continue;
+        }
+        
+        // Debug logging to show allocation-aware calculation impact
+        if (containerOrder.paymentType === 'THROUGH_ME') {
+          const oldProductCost = order && order.items ? 
+            order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) : 0;
+          const oldCarryingCharges = containerOrder.carryingCharges || 0;
+          const oldTotalAmount = oldProductCost + oldCarryingCharges;
+          
+          const allocationSummary = getOrderAllocationSummary(order, [container]);
+          
+          console.log(`📋 Order ${order.orderNumber} financial update:`);
+          console.log(`   OLD (Full Order): Product ₹${oldProductCost.toLocaleString('en-IN')} + Carrying ₹${oldCarryingCharges.toLocaleString('en-IN')} = ₹${oldTotalAmount.toLocaleString('en-IN')}`);
+          console.log(`   NEW (Allocated): Product ₹${(totalAmount - allocatedCarryingCharges).toLocaleString('en-IN')} + Carrying ₹${allocatedCarryingCharges.toLocaleString('en-IN')} = ₹${totalAmount.toLocaleString('en-IN')}`);
+          console.log(`   Allocation Ratio: ${allocationSummary.allocationRatio}% (${allocationSummary.allocatedCartons}/${allocationSummary.totalCartons} cartons)`);
+          
+          const savings = oldTotalAmount - totalAmount;
+          if (savings > 0) {
+            console.log(`   💰 Client saves: ₹${savings.toLocaleString('en-IN')} due to partial allocation`);
+          }
+        }
 
         // Check if payment collection record exists (with orphaned data detection)
         let paymentRecord = await PaymentCollection.findOne({
@@ -253,14 +280,24 @@ router.get('/', auth, authorize('admin', 'staff'), async (req, res) => {
             clientName: containerOrder.clientName,
             orderId: order._id,
             containerId: container._id,
-            totalAmount,
+            totalAmount, // This is now allocation-aware
             paymentType: containerOrder.paymentType,
-            description: `Carrying charges for order ${order.orderNumber}`,
+            description: `Allocated charges for order ${order.orderNumber} - ${containerOrder.paymentType}`,
             createdBy: req.user.id
           });
           await paymentRecord.save();
           validPayments++;
         } else {
+          // Update existing record with allocation-aware amount if it has changed
+          if (Math.abs(paymentRecord.totalAmount - totalAmount) > 0.01) {
+            console.log(`🔄 Updating payment record for ${containerOrder.clientName}:`);
+            console.log(`   Old amount: ₹${paymentRecord.totalAmount.toLocaleString('en-IN')}`);
+            console.log(`   New allocated amount: ₹${totalAmount.toLocaleString('en-IN')}`);
+            
+            paymentRecord.totalAmount = totalAmount;
+            paymentRecord.description = `Allocated charges for order ${order.orderNumber} - ${containerOrder.paymentType}`;
+            await paymentRecord.save();
+          }
           validPayments++;
         }
 
@@ -284,11 +321,20 @@ router.get('/', auth, authorize('admin', 'staff'), async (req, res) => {
           paymentId: paymentRecord._id,
           orderNumber: order.orderNumber,
           containerId: container.realContainerId || container.clientFacingId,
-          totalAmount: paymentRecord.totalAmount,
+          totalAmount: paymentRecord.totalAmount, // This is now allocation-aware
           receivedAmount: paymentRecord.receivedAmount,
           pendingAmount: paymentRecord.pendingAmount,
           paymentType: paymentRecord.paymentType,
           status: paymentRecord.status,
+          description: `Allocation-aware charges (${containerOrder.paymentType})`,
+          allocationInfo: {
+            allocatedCarryingCharges,
+            allocatedProductCost: containerOrder.paymentType === 'THROUGH_ME' ? 
+              calculateAllocatedProductCost(order, [container]) : 0,
+            paymentTypeDescription: containerOrder.paymentType === 'THROUGH_ME' ? 
+              'Product Cost + Carrying Charges (Allocated)' : 
+              'Carrying Charges Only (Allocated)'
+          },
           lastPaymentDate: paymentRecord.paymentHistory.length > 0 ? 
             paymentRecord.paymentHistory[paymentRecord.paymentHistory.length - 1].receivedDate : null
         });

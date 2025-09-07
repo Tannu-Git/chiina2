@@ -6,6 +6,11 @@ const Order = require('../models/Order');
 const Container = require('../models/Container');
 const ShippingCompany = require('../models/ShippingCompany');
 const { auth, authorize } = require('../middleware/auth');
+const {
+  calculateAllocatedProductCost,
+  calculateAllocatedCarryingCharges,
+  getOrderAllocationSummary
+} = require('../utils/financialCalculationHelpers');
 
 const router = express.Router();
 
