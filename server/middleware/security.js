@@ -354,16 +354,23 @@ const corsOptions = {
       'http://localhost:3001', 
       'http://localhost:3002',
       'http://localhost:5173',
-      'http://localhost:5001', // Allow server origin for static files
+      'http://localhost:5174',
+      'http://localhost:5001',
+      'https://k2s0cbxw-3000.inc1.devtunnels.ms', // Fixed: removed trailing slash
       // Add your production domains here
-    ];
+      process.env.CLIENT_URL, // Production frontend URL
+      // Add your Vercel deployment URLs
+      /https:\/\/.*\.vercel\.app$/
+    ].filter(Boolean); // Remove undefined values
 
     // Allow requests with no origin (like mobile apps or curl requests)
     // and allow all localhost origins for development
     if (!origin || allowedOrigins.includes(origin) || 
-        (origin && origin.startsWith('http://localhost:'))) {
+        (origin && origin.startsWith('http://localhost:')) ||
+        (origin && /https:\/\/.*\.vercel\.app$/.test(origin))) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin); // Debug logging
       callback(new Error('Not allowed by CORS'));
     }
   },
