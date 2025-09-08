@@ -376,10 +376,11 @@ router.delete('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
 
     // CRITICAL FIX: Clean up orphaned payment collection records
     console.log(`🧹 [DELETE CONTAINER] Cleaning up payment collection records...`);
-    const PaymentCollection = mongoose.model('PaymentCollection');
     
     try {
-      const deletePaymentResult = await PaymentCollection.deleteMany({ containerId: req.params.id });
+      // Use direct MongoDB collection access (consistent with other APIs)
+      const PaymentCollectionModel = mongoose.connection.collection('paymentcollections');
+      const deletePaymentResult = await PaymentCollectionModel.deleteMany({ containerId: req.params.id });
       console.log(`✅ [DELETE CONTAINER] Deleted ${deletePaymentResult.deletedCount} payment collection records`);
     } catch (paymentError) {
       console.error(`⚠️ [DELETE CONTAINER] Failed to clean payment records:`, paymentError.message);
