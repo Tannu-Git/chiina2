@@ -1347,19 +1347,315 @@ router.put('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
 });
 
 // @route   DELETE /api/orders/:id
-// @desc    Delete order
+// @desc    Delete order and clean up container allocations
 // @access  Private (Admin/Staff only)
 router.delete('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id)
+      .populate('containerId');
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    console.log(`🗑️ [DELETE ORDER] Deleting order: ${order.orderNumber}`);
+    console.log(`📦 [DELETE ORDER] Container ID: ${order.containerId || 'None'}`);
+
+    let containerCleanupResult = null;
+
+    // CRITICAL: Handle container cleanup if order is allocated to a container
+    if (order.containerId) {
+      try {
+        const Container = require('../models/Container');
+        const container = await Container.findById(order.containerId);
+        
+        if (container) {
+          console.log(`🧹 [DELETE ORDER] Cleaning up container: ${container.realContainerId}`);
+          console.log(`📊 [DELETE ORDER] Container has ${container.orders?.length || 0} total orders`);
+          
+          // Remove this order from the container's orders array
+          const orderAllocationIndex = container.orders.findIndex(allocation => 
+            allocation.orderId.toString() === order._id.toString()
+          );
+          
+          if (orderAllocationIndex > -1) {
+            const removedAllocation = container.orders[orderAllocationIndex];
+            console.log(`🔄 [DELETE ORDER] Removing allocation: ${removedAllocation.cbmShare} CBM, ${removedAllocation.weightShare} kg, ${removedAllocation.cartonShare || 0} cartons`);
+            
+            // Remove the order allocation
+            container.orders.splice(orderAllocationIndex, 1);
+            
+            // Recalculate container utilization
+            container.currentCbm = container.orders.reduce((sum, order) => sum + (order.cbmShare || 0), 0);
+            container.currentWeight = container.orders.reduce((sum, order) => sum + (order.weightShare || 0), 0);
+            container.currentCartons = container.orders.reduce((sum, order) => sum + (order.cartonShare || 0), 0);
+            
+            console.log(`📊 [DELETE ORDER] Updated container utilization - CBM: ${container.currentCbm}/${container.maxCbm}, Weight: ${container.currentWeight}/${container.maxWeight}`);
+            
+            // Recalculate container financials
+            if (container.allocateCharges) {
+              container.allocateCharges();
+            }
+            if (container.calculateFinancials) {
+              container.calculateFinancials();
+            }
+            
+            container.updatedBy = req.user.id;
+            await container.save();
+            
+            containerCleanupResult = {
+              containerUpdated: true,
+              containerRealId: container.realContainerId,
+              removedAllocation: removedAllocation,
+              newUtilization: {
+                cbm: `${container.currentCbm}/${container.maxCbm}`,
+                weight: `${container.currentWeight}/${container.maxWeight}`,
+                orders: container.orders.length
+              }
+            };
+            
+            console.log(`✅ [DELETE ORDER] Container updated successfully`);
+            
+            // SPECIAL CASE: If container now has no orders, optionally mark it for cleanup
+            if (container.orders.length === 0) {
+              console.log(`🏗️ [DELETE ORDER] Container ${container.realContainerId} now has no orders - consider deleting it`);
+              
+              // Optional: Auto-delete empty container (can be disabled via flag)
+              const autoDeleteEmptyContainers = process.env.AUTO_DELETE_EMPTY_CONTAINERS === 'true' || true; // Default to true for now
+              
+              if (autoDeleteEmptyContainers) {
+                console.log(`🗑️ [DELETE ORDER] Auto-deleting empty container: ${container.realContainerId}`);
+                
+                // ENHANCED FIX: Convert received payments to manual records before cleanup (same as direct container deletion)
+                try {
+                  const mongoose = require('mongoose');
+                  const PaymentCollectionModel = mongoose.connection.collection('paymentcollections');
+                  
+                  // Find payment records tied to this container
+                  const containerPayments = await PaymentCollectionModel.find({ containerId: container._id }).toArray();
+                  console.log(`🔍 [DELETE ORDER] Found ${containerPayments.length} payment records tied to empty container`);
+                  
+                  let containerPreservedCount = 0;
+                  let containerDeletedCount = 0;
+                  let containerConvertedCount = 0;
+                  
+                  for (const payment of containerPayments) {
+                    // CONVERT order-based payments with received amounts to manual records
+                    if (payment.paymentType !== 'MANUAL' && payment.receivedAmount > 0) {
+                      console.log(`💰 [DELETE ORDER] CONVERTING container payment to manual for ${payment.clientName}: ₹${payment.receivedAmount}`);
+                      
+                      // Create new manual payment record for ONLY the received amount
+                      const manualPayment = {
+                        clientId: payment.clientId,
+                        clientName: payment.clientName,
+                        orderId: null,
+                        containerId: null,
+                        totalAmount: 0,
+                        receivedAmount: payment.receivedAmount,
+                        paymentType: 'MANUAL',
+                        description: `Manual payment received (from container ${container.realContainerId})`,
+                        notes: `Converted from container payment - received amount preserved`,
+                        status: 'RECEIVED',
+                        createdBy: payment.createdBy,
+                        pendingAmount: -payment.receivedAmount, // Negative = credit balance
+                        paymentHistory: payment.paymentHistory || [],
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                        __v: 0
+                      };
+                      
+                      // Insert the new manual payment record
+                      await PaymentCollectionModel.insertOne(manualPayment);
+                      containerConvertedCount++;
+                      console.log(`✅ [DELETE ORDER] Created manual payment record for received ₹${payment.receivedAmount}`);
+                    }
+                    // PRESERVE existing manual payments (don't touch them)
+                    else if (payment.paymentType === 'MANUAL') {
+                      console.log(`💚 [DELETE ORDER] SKIPPING existing manual payment for ${payment.clientName}: ₹${payment.receivedAmount}`);
+                      
+                      // Remove container reference but keep the manual record
+                      await PaymentCollectionModel.updateOne(
+                        { _id: payment._id },
+                        { $unset: { containerId: '', orderId: '' } }
+                      );
+                      
+                      containerPreservedCount++;
+                      continue; // Don't delete this one
+                    }
+                    
+                    // DELETE the original payment record (after conversion or if no received amount)
+                    await PaymentCollectionModel.deleteOne({ _id: payment._id });
+                    containerDeletedCount++;
+                    console.log(`🗑️ [DELETE ORDER] Deleted original ${payment.paymentType} payment record`);
+                  }
+                  
+                  console.log(`✅ [DELETE ORDER] Container payment cleanup complete:`);
+                  console.log(`   - Converted: ${containerConvertedCount} payments to manual records`);
+                  console.log(`   - Preserved: ${containerPreservedCount} existing manual payments`);
+                  console.log(`   - Deleted: ${containerDeletedCount} original payment records`);
+                  
+                } catch (paymentError) {
+                  console.error(`⚠️ [DELETE ORDER] Failed to clean container payment records:`, paymentError.message);
+                }
+                
+                // Delete the empty container
+                await Container.findByIdAndDelete(container._id);
+                
+                containerCleanupResult.containerDeleted = true;
+                console.log(`✅ [DELETE ORDER] Empty container deleted successfully`);
+              } else {
+                containerCleanupResult.emptyContainerWarning = true;
+                console.log(`⚠️ [DELETE ORDER] Container is now empty but auto-deletion is disabled`);
+              }
+            }
+            
+          } else {
+            console.warn(`⚠️ [DELETE ORDER] Order ${order.orderNumber} not found in container ${container.realContainerId} allocations`);
+            containerCleanupResult = {
+              containerUpdated: false,
+              warning: 'Order not found in container allocations'
+            };
+          }
+        } else {
+          console.warn(`⚠️ [DELETE ORDER] Container ${order.containerId} not found`);
+          containerCleanupResult = {
+            containerUpdated: false,
+            warning: 'Referenced container not found'
+          };
+        }
+      } catch (containerError) {
+        console.error(`❌ [DELETE ORDER] Container cleanup failed:`, containerError.message);
+        containerCleanupResult = {
+          containerUpdated: false,
+          error: containerError.message
+        };
+        // Don't fail the order deletion, just log the container cleanup failure
+      }
+    } else {
+      console.log(`📝 [DELETE ORDER] Order ${order.orderNumber} has no container allocation`);
+    }
+
+    // Delete the order
     await order.deleteOne();
 
-    res.json({ message: 'Order deleted successfully' });
+    // ENHANCED FIX: Convert received payments to manual records before cleanup
+    console.log(`🧹 [DELETE ORDER] Converting received payments and cleaning up records for order ${order.orderNumber}...`);
+    try {
+      const mongoose = require('mongoose');
+      const PaymentCollectionModel = mongoose.connection.collection('paymentcollections');
+      
+      // STEP 1: Find payment records tied to this order
+      const orderPayments = await PaymentCollectionModel.find({ orderId: order._id }).toArray();
+      console.log(`🔍 [DELETE ORDER] Found ${orderPayments.length} payment records tied to order`);
+      
+      let preservedCount = 0;
+      let deletedCount = 0;
+      let convertedCount = 0;
+      
+      for (const payment of orderPayments) {
+        // CONVERT order-based payments with received amounts to manual records
+        if (payment.paymentType !== 'MANUAL' && payment.receivedAmount > 0) {
+          console.log(`💰 [DELETE ORDER] CONVERTING received payment to manual for ${payment.clientName}: ₹${payment.receivedAmount}`);
+          
+          // Create new manual payment record for ONLY the received amount
+          const manualPayment = {
+            clientId: payment.clientId,
+            clientName: payment.clientName,
+            orderId: null,
+            containerId: null,
+            totalAmount: 0,
+            receivedAmount: payment.receivedAmount,
+            paymentType: 'MANUAL',
+            description: `Manual payment received (from order ${order.orderNumber})`,
+            notes: `Converted from order payment - received amount preserved`,
+            status: 'RECEIVED',
+            createdBy: payment.createdBy,
+            pendingAmount: -payment.receivedAmount, // Negative = credit balance
+            paymentHistory: payment.paymentHistory || [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            __v: 0
+          };
+          
+          // Insert the new manual payment record
+          await PaymentCollectionModel.insertOne(manualPayment);
+          convertedCount++;
+          console.log(`✅ [DELETE ORDER] Created manual payment record for received ₹${payment.receivedAmount}`);
+        }
+        // PRESERVE existing manual payments (don't touch them)
+        else if (payment.paymentType === 'MANUAL') {
+          console.log(`💚 [DELETE ORDER] SKIPPING existing manual payment for ${payment.clientName}: ₹${payment.receivedAmount}`);
+          
+          // Remove order reference but keep the manual record
+          await PaymentCollectionModel.updateOne(
+            { _id: payment._id },
+            { $unset: { orderId: '', containerId: '' } }
+          );
+          
+          preservedCount++;
+          continue; // Don't delete this one
+        }
+        
+        // DELETE the original payment record (after conversion or if no received amount)
+        await PaymentCollectionModel.deleteOne({ _id: payment._id });
+        deletedCount++;
+        console.log(`🗑️ [DELETE ORDER] Deleted original ${payment.paymentType} payment record`);
+      }
+      
+      console.log(`✅ [DELETE ORDER] Payment cleanup complete:`);
+      console.log(`   - Converted: ${convertedCount} payments to manual records`);
+      console.log(`   - Preserved: ${preservedCount} existing manual payments`);
+      console.log(`   - Deleted: ${deletedCount} original payment records`);
+      
+      if (containerCleanupResult) {
+        containerCleanupResult.paymentRecordsDeleted = deletedCount;
+        containerCleanupResult.paymentRecordsConverted = convertedCount;
+        containerCleanupResult.paymentRecordsPreserved = preservedCount;
+      } else {
+        containerCleanupResult = {
+          containerUpdated: false,
+          paymentRecordsDeleted: deletedCount,
+          paymentRecordsConverted: convertedCount,
+          paymentRecordsPreserved: preservedCount
+        };
+      }
+    } catch (paymentError) {
+      console.error(`⚠️ [DELETE ORDER] Failed to clean payment records:`, paymentError.message);
+      if (containerCleanupResult) {
+        containerCleanupResult.paymentCleanupError = paymentError.message;
+      }
+    }
+
+    console.log(`✅ [DELETE ORDER] Order ${order.orderNumber} deleted successfully`);
+
+    // Add timeline entry for order deletion
+    try {
+      const Timeline = require('../models/Timeline');
+      await Timeline.addEntry(
+        order._id,
+        'ORDER_DELETED',
+        `Order ${order.orderNumber} deleted${containerCleanupResult?.containerUpdated ? ' with container cleanup' : ''}`,
+        req.user,
+        {
+          severity: 'medium',
+          metadata: {
+            orderNumber: order.orderNumber,
+            containerCleanup: containerCleanupResult,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+          }
+        }
+      );
+    } catch (timelineError) {
+      console.error('Timeline entry failed:', timelineError.message);
+      // Don't fail the deletion for timeline errors
+    }
+
+    res.json({
+      message: 'Order deleted successfully',
+      orderNumber: order.orderNumber,
+      containerCleanup: containerCleanupResult
+    });
   } catch (error) {
     console.error('Delete order error:', error);
     res.status(500).json({ message: 'Server error' });

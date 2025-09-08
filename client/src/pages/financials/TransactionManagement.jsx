@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +70,10 @@ const TransactionManagement = () => {
   const [paymentCollections, setPaymentCollections] = useState([])
   const [allClients, setAllClients] = useState([])
   const [showAllClients, setShowAllClients] = useState(false)
+  const [supplierPayments, setSupplierPayments] = useState([])
+  const [allSuppliers, setAllSuppliers] = useState([])
+  const [showAllSuppliers, setShowAllSuppliers] = useState(false)
+  const [activeTab, setActiveTab] = useState('clients')
   const [paymentSummary, setPaymentSummary] = useState({
     totalToCollect: 0,
     totalReceived: 0,
@@ -80,6 +85,13 @@ const TransactionManagement = () => {
       hasOrphanedData: false,
       criticalIssues: 0
     }
+  })
+  
+  const [supplierSummary, setSupplierSummary] = useState({
+    totalToPay: 0,
+    totalPaid: 0,
+    totalPending: 0,
+    supplierCount: 0
   })
 
   // Modal states
@@ -673,6 +685,63 @@ const TransactionManagement = () => {
     }
   }
 
+  // Load supplier payments data
+  const loadSupplierPayments = async () => {
+    try {
+      console.log('📦 [SUPPLIER PAYMENTS] Loading supplier payment data...')
+      
+      // Get supplier data from orders
+      const response = await axios.get('/api/suppliers/recent?limit=50', getAuthHeaders())
+      
+      if (response.data && response.data.suppliers) {
+        console.log('✅ [SUPPLIER PAYMENTS] Supplier data loaded successfully')
+        
+        // Transform supplier data to payment format
+        const supplierPaymentData = response.data.suppliers.map(supplier => {
+          // Calculate amounts based on orders
+          const totalAmount = supplier.totalValue || 0
+          const paidAmount = 0 // Start with 0, will be updated by manual payments
+          const pendingAmount = totalAmount - paidAmount
+          
+          return {
+            supplierId: supplier.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase(),
+            supplierName: supplier.name,
+            contact: supplier.contact,
+            email: supplier.email,
+            totalAmount,
+            paidAmount,
+            pendingAmount,
+            orderCount: supplier.orderCount || 0,
+            lastOrder: supplier.lastUsed,
+            avgPrice: supplier.avgPrice || 0,
+            payments: [] // Will be populated with manual payments
+          }
+        })
+        
+        setSupplierPayments(supplierPaymentData)
+        setAllSuppliers(supplierPaymentData)
+        
+        // Calculate supplier summary
+        const summary = {
+          totalToPay: supplierPaymentData.reduce((sum, s) => sum + s.pendingAmount, 0),
+          totalPaid: supplierPaymentData.reduce((sum, s) => sum + s.paidAmount, 0),
+          totalPending: supplierPaymentData.reduce((sum, s) => sum + s.pendingAmount, 0),
+          supplierCount: supplierPaymentData.length
+        }
+        
+        setSupplierSummary(summary)
+        console.log('📊 [SUPPLIER SUMMARY]', summary)
+      }
+    } catch (error) {
+      console.error('❌ [SUPPLIER PAYMENTS] Error loading supplier data:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load supplier payment data",
+        variant: "destructive"
+      })
+    }
+  }
+
   // Load data on component mount
   useEffect(() => {
     // Set up axios defaults if token is available
@@ -683,8 +752,9 @@ const TransactionManagement = () => {
       console.warn('⚠️ [TRANSACTION MANAGEMENT] No token available')
     }
     
-    // Use standard payment collections loading for now
+    // Load both client and supplier data
     loadPaymentCollections()
+    loadSupplierPayments()
   }, [token, isAuthenticated])
 
   // Loading state

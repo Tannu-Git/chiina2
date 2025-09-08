@@ -374,14 +374,76 @@ router.delete('/:id', auth, authorize('admin', 'staff'), async (req, res) => {
     // Delete the container
     await Container.findByIdAndDelete(req.params.id);
 
-    // CRITICAL FIX: Clean up orphaned payment collection records
-    console.log(`🧹 [DELETE CONTAINER] Cleaning up payment collection records...`);
+    // ENHANCED FIX: Convert received payments to manual records before cleanup
+    console.log(`🧹 [DELETE CONTAINER] Converting received payments and cleaning up records...`);
     
     try {
       // Use direct MongoDB collection access (consistent with other APIs)
       const PaymentCollectionModel = mongoose.connection.collection('paymentcollections');
-      const deletePaymentResult = await PaymentCollectionModel.deleteMany({ containerId: req.params.id });
-      console.log(`✅ [DELETE CONTAINER] Deleted ${deletePaymentResult.deletedCount} payment collection records`);
+      
+      // STEP 1: Find payment records tied to this container
+      const containerPayments = await PaymentCollectionModel.find({ containerId: req.params.id }).toArray();
+      console.log(`🔍 [DELETE CONTAINER] Found ${containerPayments.length} payment records tied to container`);
+      
+      let preservedCount = 0;
+      let deletedCount = 0;
+      let convertedCount = 0;
+      
+      for (const payment of containerPayments) {
+        // CONVERT order-based payments with received amounts to manual records
+        if (payment.paymentType !== 'MANUAL' && payment.receivedAmount > 0) {
+          console.log(`💰 [DELETE CONTAINER] CONVERTING received payment to manual for ${payment.clientName}: ₹${payment.receivedAmount}`);
+          
+          // Create new manual payment record for ONLY the received amount
+          const manualPayment = {
+            clientId: payment.clientId,
+            clientName: payment.clientName,
+            orderId: null,
+            containerId: null,
+            totalAmount: 0,
+            receivedAmount: payment.receivedAmount,
+            paymentType: 'MANUAL',
+            description: `Manual payment received (from container ${container.realContainerId})`,
+            notes: `Converted from order payment - received amount preserved`,
+            status: 'RECEIVED',
+            createdBy: payment.createdBy,
+            pendingAmount: -payment.receivedAmount, // Negative = credit balance
+            paymentHistory: payment.paymentHistory || [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            __v: 0
+          };
+          
+          // Insert the new manual payment record
+          await PaymentCollectionModel.insertOne(manualPayment);
+          convertedCount++;
+          console.log(`✅ [DELETE CONTAINER] Created manual payment record for received ₹${payment.receivedAmount}`);
+        }
+        // PRESERVE existing manual payments (don't touch them)
+        else if (payment.paymentType === 'MANUAL') {
+          console.log(`💚 [DELETE CONTAINER] SKIPPING existing manual payment for ${payment.clientName}: ₹${payment.receivedAmount}`);
+          
+          // Remove container reference but keep the manual record
+          await PaymentCollectionModel.updateOne(
+            { _id: payment._id },
+            { $unset: { containerId: '', orderId: '' } }
+          );
+          
+          preservedCount++;
+          continue; // Don't delete this one
+        }
+        
+        // DELETE the original payment record (after conversion or if no received amount)
+        await PaymentCollectionModel.deleteOne({ _id: payment._id });
+        deletedCount++;
+        console.log(`🗑️ [DELETE CONTAINER] Deleted original ${payment.paymentType} payment record`);
+      }
+      
+      console.log(`✅ [DELETE CONTAINER] Payment cleanup complete:`);
+      console.log(`   - Converted: ${convertedCount} payments to manual records`);
+      console.log(`   - Preserved: ${preservedCount} existing manual payments`);
+      console.log(`   - Deleted: ${deletedCount} original payment records`);
+      
     } catch (paymentError) {
       console.error(`⚠️ [DELETE CONTAINER] Failed to clean payment records:`, paymentError.message);
       // Don't fail the whole operation, just log the error
