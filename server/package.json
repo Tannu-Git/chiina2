@@ -3,13 +3,17 @@
   "version": "1.0.0",
   "description": "Backend API for Logistics OMS",
   "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed": "node scripts/seed.js",
     "seed:users": "node scripts/seed.js",
     "flush:accounts": "node scripts/flush-and-seed-accounts.js",
-    "reset:accounts": "node scripts/flush-and-seed-accounts.js"
+    "reset:accounts": "node scripts/flush-and-seed-accounts.js",
+    "vercel-build": "echo 'No build step required for serverless function'"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
